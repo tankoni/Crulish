@@ -1,4 +1,120 @@
-# 考研英语无痛阅读APP - 开发文档
+# CruEnglish - 考研英语无痛阅读APP
+
+## 项目简介
+
+CruEnglish 是一款专为考研英语学习设计的智能阅读应用，旨在帮助学生通过真题阅读提升英语水平，实现"无痛"学习体验。
+
+## 核心功能
+
+### 📖 智能阅读
+- 考研英语真题文章库（2004-2024年）
+- 按年份、难度筛选文章
+- 智能文本处理和排版
+- 个性化阅读设置（字体、主题等）
+
+### 📚 词汇管理
+- 点击查词，智能释义匹配
+- 个人词汇本，记录学习轨迹
+- 掌握程度分级（生疏/熟悉/掌握）
+- 智能复习提醒系统
+
+### 📊 学习分析
+- 详细的学习统计数据
+- 阅读时间、查词次数追踪
+- 词汇掌握情况可视化
+- 学习趋势分析
+
+### 🎯 进度跟踪
+- 用户等级系统
+- 经验值和成就系统
+- 学习连续天数统计
+- 个性化学习建议
+
+## 技术架构
+
+### 开发环境
+- **平台**: iOS 17.0+
+- **语言**: Swift 5.9
+- **框架**: SwiftUI + SwiftData
+- **架构**: MVVM
+
+### 项目结构
+```
+en01/
+├── Models/           # 数据模型
+│   ├── Article.swift      # 文章模型
+│   ├── Word.swift         # 词汇模型
+│   ├── UserProgress.swift # 用户进度模型
+│   └── Settings.swift     # 设置模型
+├── Views/            # 视图层
+│   ├── HomeView.swift         # 主页
+│   ├── ReadingView.swift      # 阅读页面
+│   ├── ArticleReaderView.swift # 文章阅读器
+│   ├── VocabularyView.swift   # 词汇管理
+│   ├── ProgressView.swift     # 进度统计
+│   └── SettingsView.swift     # 设置页面
+├── ViewModels/       # 视图模型
+│   └── AppViewModel.swift     # 主应用视图模型
+├── Services/         # 服务层
+│   ├── ArticleService.swift   # 文章服务
+│   ├── DictionaryService.swift # 词典服务
+│   └── UserProgressService.swift # 进度服务
+└── Utils/            # 工具类
+    └── TextProcessor.swift    # 文本处理
+```
+
+## 版本信息
+
+### v1.0.0 (CruEnglish 001)
+- ✅ 基础阅读功能
+- ✅ 词汇查询与管理
+- ✅ 用户进度跟踪
+- ✅ 学习统计分析
+- ✅ 个性化设置
+
+## 安装与运行
+
+1. 克隆项目
+```bash
+git clone [repository-url]
+cd en01
+```
+
+2. 使用 Xcode 打开项目
+```bash
+open en01.xcodeproj
+```
+
+3. 选择目标设备并运行
+
+## 开发指南
+
+### 代码规范
+- 遵循 Swift 官方编码规范
+- 使用 SwiftUI 声明式编程
+- 采用 MVVM 架构模式
+- 注重代码可读性和可维护性
+
+### 数据管理
+- 使用 SwiftData 进行本地数据持久化
+- 支持数据导入导出功能
+- 实现数据备份与恢复
+
+## 贡献指南
+
+欢迎提交 Issue 和 Pull Request 来改进项目！
+
+## 许可证
+
+本项目采用 MIT 许可证。
+
+## 联系方式
+
+如有问题或建议，请通过 GitHub Issues 联系我们。
+
+---
+
+**让考研英语学习变得更加高效和愉快！** 🚀
 
 ## 项目概述
 
