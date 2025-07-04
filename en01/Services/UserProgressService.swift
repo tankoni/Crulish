@@ -8,6 +8,16 @@
 import Foundation
 import SwiftData
 
+enum ExperienceAction {
+    case readArticle
+    case lookupWord
+    case completeReview
+    case consecutiveDay
+    case achievementUnlocked
+    case levelUp
+    case bookmarkArticle
+}
+
 @Observable
 class UserProgressService {
     private var modelContext: ModelContext?
@@ -24,8 +34,12 @@ class UserProgressService {
         initializeUserProgress()
     }
     
+    /// 初始化用户进度（带错误处理优化）
     private func initializeUserProgress() {
-        guard let context = modelContext else { return }
+        guard let context = modelContext else { 
+            print("[ERROR] ModelContext未设置")
+            return 
+        }
         
         do {
             let descriptor = FetchDescriptor<UserProgress>()
@@ -33,15 +47,18 @@ class UserProgressService {
             
             if let progress = existingProgress.first {
                 self.userProgress = progress
+                print("[SUCCESS] 用户进度加载成功")
             } else {
                 // 创建新的用户进度记录
                 let newProgress = UserProgress()
                 context.insert(newProgress)
                 self.userProgress = newProgress
                 try context.save()
+                print("[SUCCESS] 新用户进度创建成功")
             }
         } catch {
-            print("初始化用户进度失败: \(error)")
+            print("[ERROR] 初始化用户进度失败: \(error.localizedDescription)")
+            print("[ERROR] 详细错误信息: \(error)")
         }
     }
     
@@ -431,31 +448,53 @@ class UserProgressService {
     
     // MARK: - 数据管理
     
+    /// 保存用户进度（带错误处理优化）
     private func saveProgress() {
-        guard let context = modelContext else { return }
+        guard let context = modelContext else { 
+            print("[ERROR] ModelContext未设置，无法保存进度")
+            return 
+        }
         
         do {
             try context.save()
+            print("[SUCCESS] 用户进度保存成功")
         } catch {
-            print("保存用户进度失败: \(error)")
+            print("[ERROR] 保存用户进度失败: \(error.localizedDescription)")
+            print("[ERROR] 保存错误详情: \(error)")
         }
     }
     
+    /// 重置用户进度（带错误处理优化）
     func resetProgress() {
-        guard let context = modelContext, let progress = userProgress else { return }
+        guard let context = modelContext else {
+            print("[ERROR] ModelContext未设置，无法重置进度")
+            return
+        }
+        
+        guard let progress = userProgress else {
+            print("[WARNING] 用户进度不存在，无需重置")
+            return
+        }
         
         context.delete(progress)
         
         do {
             try context.save()
+            print("[SUCCESS] 用户进度重置成功")
             initializeUserProgress()
         } catch {
-            print("重置用户进度失败: \(error)")
+            print("[ERROR] 重置用户进度失败: \(error.localizedDescription)")
+            print("[ERROR] 重置错误详情: \(error)")
         }
     }
     
+    /// 导出用户进度数据（带错误处理优化）
+    /// - Returns: 序列化后的进度数据，失败时返回nil
     func exportProgressData() -> Data? {
-        guard let progress = userProgress else { return nil }
+        guard let progress = userProgress else { 
+            print("[ERROR] 用户进度不存在，无法导出")
+            return nil 
+        }
         
         let exportData = ProgressExportData(
             totalReadingTime: progress.totalReadingTime,
@@ -471,18 +510,35 @@ class UserProgressService {
         )
         
         do {
-            return try JSONEncoder().encode(exportData)
+            let data = try JSONEncoder().encode(exportData)
+            print("[SUCCESS] 进度数据导出成功，大小: \(data.count) bytes")
+            return data
         } catch {
-            print("导出进度数据失败: \(error)")
+            print("[ERROR] 导出进度数据失败: \(error.localizedDescription)")
+            if let encodingError = error as? EncodingError {
+                print("[ERROR] 编码错误详情: \(encodingError)")
+            }
             return nil
         }
     }
     
+    /// 导入用户进度数据（带错误处理优化）
+    /// - Parameter data: 要导入的进度数据
+    /// - Returns: 导入是否成功
     func importProgressData(_ data: Data) -> Bool {
+        guard !data.isEmpty else {
+            print("[ERROR] 导入数据为空")
+            return false
+        }
+        
         do {
             let importData = try JSONDecoder().decode(ProgressExportData.self, from: data)
+            print("[SUCCESS] 进度数据解码成功")
             
-            guard let context = modelContext else { return false }
+            guard let context = modelContext else { 
+                print("[ERROR] ModelContext未设置，无法导入数据")
+                return false 
+            }
             
             // 创建新的用户进度
             let newProgress = UserProgress()
@@ -498,32 +554,28 @@ class UserProgressService {
             // 删除旧的进度记录
             if let oldProgress = userProgress {
                 context.delete(oldProgress)
+                print("[INFO] 已删除旧的用户进度")
             }
             
             context.insert(newProgress)
             self.userProgress = newProgress
             
             try context.save()
+            print("[SUCCESS] 用户进度导入成功")
             return true
         } catch {
-            print("导入进度数据失败: \(error)")
+            print("[ERROR] 导入进度数据失败: \(error.localizedDescription)")
+            if let decodingError = error as? DecodingError {
+                print("[ERROR] 数据格式错误: \(decodingError)")
+            } else {
+                print("[ERROR] 保存错误详情: \(error)")
+            }
             return false
         }
     }
 }
 
 // MARK: - 数据结构
-
-// 经验值动作类型
-enum ExperienceAction {
-    case readArticle
-    case lookupWord
-    case completeReview
-    case consecutiveDay
-    case achievementUnlocked
-    case levelUp
-    case bookmarkArticle
-}
 
 // 学习统计信息
 struct StudyStatistics {

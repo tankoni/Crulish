@@ -264,32 +264,50 @@ class ArticleService {
     
     // MARK: - 数据导入
     
-    // 从JSON文件导入文章
+    /// 从JSON文件异步导入文章
+    /// - Parameter fileName: JSON文件名（不包含扩展名）
     func importArticlesFromJSON(fileName: String) {
         guard let url = Bundle.main.url(forResource: fileName, withExtension: "json") else {
-            print("找不到文件: \(fileName).json")
+            print("[ERROR] 找不到文件: \(fileName).json")
             return
         }
         
-        do {
-            let data = try Data(contentsOf: url)
-            let articleData = try JSONDecoder().decode([ArticleData].self, from: data)
-            
-            for data in articleData {
-                let article = Article(
-                    title: data.title,
-                    content: data.content,
-                    year: data.year,
-                    examType: data.examType,
-                    difficulty: data.difficulty,
-                    topic: data.topic
-                )
-                addArticle(article)
+        Task {
+            do {
+                let data = try Data(contentsOf: url)
+                let articleData = try JSONDecoder().decode([ArticleData].self, from: data)
+                
+                // 批量导入以提高性能
+                await MainActor.run {
+                    var importedCount = 0
+                    
+                    for data in articleData {
+                        let article = Article(
+                            title: data.title,
+                            content: data.content,
+                            year: data.year,
+                            examType: data.examType,
+                            difficulty: data.difficulty,
+                            topic: data.topic,
+                            imageName: "image_\(Int.random(in: 1...10))"
+                        )
+                        
+                        // 检查是否已存在相同标题的文章
+                        let existingArticles = self.getAllArticles()
+                        if !existingArticles.contains(where: { $0.title == article.title }) {
+                            self.addArticle(article)
+                            importedCount += 1
+                        }
+                    }
+                    
+                    print("[SUCCESS] 成功导入\(importedCount)篇文章（共\(articleData.count)篇）")
+                }
+            } catch {
+                print("[ERROR] 导入文章失败: \(error.localizedDescription)")
+                if let decodingError = error as? DecodingError {
+                    print("[ERROR] 数据格式错误: \(decodingError)")
+                }
             }
-            
-            print("成功导入\(articleData.count)篇文章")
-        } catch {
-            print("导入文章失败: \(error)")
         }
     }
     
@@ -353,14 +371,16 @@ Teachers must adapt their methods to effectively integrate technology while main
         ]
         
         for articleData in sampleArticles {
-            let article = Article(
-                title: articleData.title,
-                content: articleData.content,
-                year: articleData.year,
-                examType: articleData.examType,
-                difficulty: articleData.difficulty,
-                topic: articleData.topic
-            )
+            let imageName = "image_\(Int.random(in: 1...10))"
+                    let article = Article(
+                        title: articleData.title,
+                        content: articleData.content,
+                        year: articleData.year,
+                        examType: articleData.examType,
+                        difficulty: articleData.difficulty,
+                        topic: articleData.topic,
+                        imageName: imageName
+                    )
             addArticle(article)
         }
     }

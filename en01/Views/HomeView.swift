@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var recommendations: [StudyRecommendation] = []
     @State private var recentArticles: [Article] = []
     @State private var recommendedArticles: [Article] = []
+    @State private var isDataLoaded = false // 防止重复加载
     
     var body: some View {
         NavigationView {
@@ -42,14 +43,18 @@ struct HomeView: View {
                 }
                 .padding(.horizontal)
             }
-            .navigationTitle("考研英语阅读")
+            .navigationTitle("Crulish")
             .navigationBarTitleDisplayMode(.large)
             .refreshable {
                 refreshData()
             }
         }
         .onAppear {
-            refreshData()
+            // 避免重复加载数据
+            if !isDataLoaded {
+                refreshData()
+                isDataLoaded = true
+            }
         }
     }
     
@@ -401,12 +406,56 @@ struct HomeView: View {
     
     // MARK: - 数据刷新
     
+    /// 刷新主页数据（带性能优化）
     private func refreshData() {
-        todaySummary = appViewModel.getTodaySummary()
-        streakStatus = appViewModel.getStreakStatus()
-        recommendations = appViewModel.getStudyRecommendations()
-        recentArticles = appViewModel.getRecentArticles()
-        recommendedArticles = appViewModel.getRecommendedArticles()
+        // 使用异步加载避免阻塞UI
+        Task {
+            // 并行加载数据以提高性能
+            async let summaryTask = loadTodaySummary()
+            async let streakTask = loadStreakStatus()
+            async let recommendationsTask = loadRecommendations()
+            async let recentTask = loadRecentArticles()
+            async let recommendedTask = loadRecommendedArticles()
+            
+            // 等待所有数据加载完成
+            let (summary, streak, recs, recent, recommended) = await (
+                summaryTask, streakTask, recommendationsTask, recentTask, recommendedTask
+            )
+            
+            // 在主线程更新UI
+            await MainActor.run {
+                self.todaySummary = summary
+                self.streakStatus = streak
+                self.recommendations = recs
+                self.recentArticles = recent
+                self.recommendedArticles = recommended
+            }
+        }
+    }
+    
+    /// 异步加载今日摘要
+    private func loadTodaySummary() async -> TodaySummary? {
+        return appViewModel.getTodaySummary()
+    }
+    
+    /// 异步加载连续学习状态
+    private func loadStreakStatus() async -> StreakStatus? {
+        return appViewModel.getStreakStatus()
+    }
+    
+    /// 异步加载学习建议
+    private func loadRecommendations() async -> [StudyRecommendation] {
+        return appViewModel.getStudyRecommendations()
+    }
+    
+    /// 异步加载最近文章
+    private func loadRecentArticles() async -> [Article] {
+        return appViewModel.getRecentArticles()
+    }
+    
+    /// 异步加载推荐文章
+    private func loadRecommendedArticles() async -> [Article] {
+        return appViewModel.getRecommendedArticles()
     }
 }
 

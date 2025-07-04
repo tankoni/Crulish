@@ -10,7 +10,7 @@ import SwiftData
 import SwiftUI
 
 @Model
-final class Article {
+final class Article: @unchecked Sendable {
     var id: UUID
     var title: String
     var content: String
@@ -25,12 +25,13 @@ final class Article {
     var lastReadDate: Date?
     var readingTime: TimeInterval // 总阅读时间（秒）
     var createdDate: Date
+    var imageName: String // 新增图片名称属性
     
     // 关联的用户查词记录
     @Relationship(deleteRule: .cascade, inverse: \UserWordRecord.article)
     var wordRecords: [UserWordRecord] = []
     
-    init(title: String, content: String, year: Int, examType: String, difficulty: ArticleDifficulty, topic: String) {
+    init(title: String, content: String, year: Int, examType: String, difficulty: ArticleDifficulty, topic: String, imageName: String) {
         self.id = UUID()
         self.title = title
         self.content = content
@@ -38,6 +39,7 @@ final class Article {
         self.examType = examType
         self.difficulty = difficulty
         self.topic = topic
+        self.imageName = imageName
         self.wordCount = content.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
         self.isCompleted = false
         self.isBookmarked = false

@@ -11,7 +11,7 @@ import SwiftUI
 
 // 用户学习进度总览
 @Model
-final class UserProgress {
+final class UserProgress: @unchecked Sendable {
     var id: UUID
     var totalReadingTime: TimeInterval // 总阅读时间（秒）
     var totalArticlesRead: Int // 已读文章数
@@ -130,7 +130,7 @@ enum UserLevel: String, CaseIterable, Codable {
 
 // 每日学习记录
 @Model
-final class DailyStudyRecord {
+final class DailyStudyRecord: @unchecked Sendable {
     var id: UUID
     var date: Date
     var readingTime: TimeInterval // 当日阅读时间
@@ -268,6 +268,17 @@ enum AchievementType: String, CaseIterable, Codable {
         case .read100Articles, .lookup1000Words, .master100Words, .study50Hours, .streak30Days: return 100
         case .study100Hours, .streak100Days: return 200
         }
+    }
+}
+
+@Model
+final class UserWordRecord {
+    var word: String
+    var article: Article?
+
+    init(word: String, article: Article?) {
+        self.word = word
+        self.article = article
     }
 }
 

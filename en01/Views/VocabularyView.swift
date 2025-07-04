@@ -14,9 +14,11 @@ struct VocabularyView: View {
     @State private var selectedMastery: MasteryLevel?
     @State private var sortOption: VocabularySortOption = .recent
     @State private var isShowingFilters = false
-    @State private var myWords: [UserWordRecord] = []
-    @State private var filteredWords: [UserWordRecord] = []
+    @State private var myWords: [UserWord] = []
+    @State private var filteredWords: [UserWord] = []
     @State private var vocabularyStats: VocabularyStats?
+    @State private var debounceTask: Task<Void, Never>? // 防抖任务
+    @State private var isDataLoaded = false // 防止重复加载
     
     var body: some View {
         NavigationView {
@@ -30,13 +32,18 @@ struct VocabularyView: View {
                 }
         }
         .onAppear {
-            loadVocabularyData()
+            // 避免重复加载数据
+            if !isDataLoaded {
+                loadVocabularyData()
+                isDataLoaded = true
+            }
         }
         .onChange(of: selectedTab) { _, _ in
             loadVocabularyData()
         }
         .onChange(of: searchText) { _, _ in
-            filterWords()
+            // 防抖处理，避免频繁过滤
+            debounceFilter()
         }
         .onChange(of: selectedMastery) { _, _ in
             filterWords()
@@ -558,10 +565,49 @@ struct VocabularyView: View {
     
     // MARK: - 数据处理
     
+    /// 异步加载词汇数据（带性能优化）
     private func loadVocabularyData() {
-        myWords = appViewModel.getUserWordRecords()
-        vocabularyStats = appViewModel.getVocabularyStats()
-        filterWords()
+        Task {
+            // 并行加载数据以提高性能
+            async let wordsTask = loadUserWords()
+            async let statsTask = loadVocabularyStats()
+            
+            let (words, stats) = await (wordsTask, statsTask)
+            
+            // 在主线程更新UI
+            await MainActor.run {
+                self.myWords = words
+                self.vocabularyStats = stats
+                self.filterWords()
+            }
+        }
+    }
+    
+    /// 异步加载用户单词
+    private func loadUserWords() async -> [UserWord] {
+        return appViewModel.getUserWordRecords()
+    }
+    
+    /// 异步加载词汇统计
+    private func loadVocabularyStats() async -> VocabularyStats? {
+        return appViewModel.getVocabularyStats()
+    }
+    
+    /// 防抖处理搜索，避免频繁过滤
+    private func debounceFilter() {
+        // 取消之前的任务
+        debounceTask?.cancel()
+        
+        // 创建新的延迟任务
+        debounceTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms延迟
+            
+            if !Task.isCancelled {
+                await MainActor.run {
+                    filterWords()
+                }
+            }
+        }
     }
     
     private func filterWords() {
@@ -599,7 +645,7 @@ struct VocabularyView: View {
     
     // MARK: - 辅助方法
     
-    private func getReviewWords() -> [UserWordRecord]? {
+    private func getReviewWords() -> [UserWord]? {
         return myWords.filter { $0.needsReview }
     }
     
@@ -643,7 +689,7 @@ struct VocabularyView: View {
         return max(1, myWords.count / max(1, daysSince))
     }
     
-    private func getFrequentWords() -> [UserWordRecord] {
+    private func getFrequentWords() -> [UserWord] {
         return myWords.sorted { $0.queryCount > $1.queryCount }
     }
 }
@@ -651,7 +697,7 @@ struct VocabularyView: View {
 // MARK: - 子视图组件
 
 struct WordRecordRow: View {
-    let wordRecord: UserWordRecord
+    let wordRecord: UserWord
     let action: () -> Void
     
     var body: some View {
@@ -706,7 +752,7 @@ struct WordRecordRow: View {
 }
 
 struct ReviewWordRow: View {
-    let wordRecord: UserWordRecord
+    let wordRecord: UserWord
     let action: () -> Void
     
     var body: some View {

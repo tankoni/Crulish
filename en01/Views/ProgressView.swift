@@ -11,10 +11,10 @@ import Charts
 struct ProgressView: View {
     @Environment(AppViewModel.self) private var appViewModel
     @State private var selectedTimeRange: TimeRange = .week
-    @State private var userProgress: UserProgress?
-    @State private var weeklyStats: WeeklyComparison = WeeklyComparison(thisWeekReadingTime: 0, lastWeekReadingTime: 0, thisWeekArticles: 0, lastWeekArticles: 0, thisWeekWords: 0, lastWeekWords: 0)
-    @State private var monthlyStats: WeeklyComparison = WeeklyComparison(thisWeekReadingTime: 0, lastWeekReadingTime: 0, thisWeekArticles: 0, lastWeekArticles: 0, thisWeekWords: 0, lastWeekWords: 0)
+    @State private var progressData: ProgressData?
     @State private var achievements: [Achievement] = []
+    @State private var isLoading = false
+    @State private var isDataLoaded = false // 防止重复加载
     @State private var isShowingAchievements = false
     
     var body: some View {
@@ -64,6 +64,13 @@ struct ProgressView: View {
             AchievementsView(achievements: achievements)
         }
         .onAppear {
+            // 避免重复加载数据
+            if !isDataLoaded {
+                loadProgressData()
+                isDataLoaded = true
+            }
+        }
+        .onChange(of: selectedTimeRange) { _, _ in
             loadProgressData()
         }
     }
@@ -392,11 +399,80 @@ struct ProgressView: View {
     
     // MARK: - 数据处理
     
+    /// 异步加载进度数据（带性能优化）
     private func loadProgressData() {
-        userProgress = appViewModel.getUserProgress()
-        weeklyStats = appViewModel.getWeeklyStats()
-        monthlyStats = appViewModel.getMonthlyStats()
-        achievements = appViewModel.getRecentAchievements()
+        isLoading = true
+        
+        Task {
+            // 并行加载数据以提高性能
+            async let progressTask = loadUserProgress()
+            async let achievementsTask = loadAchievements()
+            async let statisticsTask = loadStatistics()
+            
+            let (progress, achievements, statistics) = await (progressTask, achievementsTask, statisticsTask)
+            
+            // 在主线程更新UI
+            await MainActor.run {
+                self.progressData = ProgressData(
+                    userProgress: progress,
+                    statistics: statistics
+                )
+                self.achievements = achievements
+                self.isLoading = false
+            }
+        }
+    }
+    
+    /// 异步加载用户进度
+    private func loadUserProgress() async -> UserProgress? {
+        return await MainActor.run {
+            appViewModel.getUserProgress()
+        }
+    }
+    
+    /// 异步加载成就
+    private func loadAchievements() async -> [Achievement] {
+        return appViewModel.getRecentAchievements()
+    }
+    
+    /// 异步加载统计数据
+    private func loadStatistics() async -> ProgressStatistics {
+        return await MainActor.run {
+            // 根据选择的时间范围加载相应的统计数据
+            let weeklyComparison = appViewModel.getWeeklyStats()
+            let weeklyStats = WeeklyStats(
+                readingTime: weeklyComparison.thisWeekReadingTime,
+                articlesRead: weeklyComparison.thisWeekArticles,
+                wordsLookedUp: weeklyComparison.thisWeekWords,
+                averageDailyTime: weeklyComparison.thisWeekReadingTime / 7,
+                streakDays: appViewModel.getUserProgress()?.currentStreak ?? 0
+            )
+            
+            let monthlyComparison = appViewModel.getMonthlyStats()
+            let monthlyStats = MonthlyStats(
+                readingTime: monthlyComparison.thisWeekReadingTime,
+                articlesRead: monthlyComparison.thisWeekArticles,
+                wordsLookedUp: monthlyComparison.thisWeekWords,
+                averageDailyTime: monthlyComparison.thisWeekReadingTime / 30,
+                totalDays: 30
+            )
+            
+            return ProgressStatistics(
+                weeklyStats: weeklyStats,
+                monthlyStats: monthlyStats,
+                dailyRecords: appViewModel.getUserProgress()?.dailyRecords ?? []
+            )
+        }
+    }
+    
+    // MARK: - 计算属性
+    
+    private var userProgress: UserProgress? {
+        return progressData?.userProgress
+    }
+    
+    private var weeklyStats: WeeklyStats {
+        return progressData?.statistics.weeklyStats ?? WeeklyStats()
     }
     
     private func getChartData() -> [DailyStudyRecord] {

@@ -11,7 +11,7 @@ import SwiftUI
 
 // 词典中的单词模型
 @Model
-final class DictionaryWord {
+final class DictionaryWord: @unchecked Sendable {
     var word: String
     var phonetic: String?
     var definitions: [WordDefinition] // 多个释义
@@ -129,7 +129,7 @@ enum WordDifficulty: String, CaseIterable, Codable {
 
 // 用户查词记录
 @Model
-final class UserWordRecord {
+final class UserWord: @unchecked Sendable {
     var id: UUID
     var word: String
     var selectedDefinition: WordDefinition? // 用户在特定上下文中选择的释义
@@ -199,7 +199,7 @@ enum MasteryLevel: String, CaseIterable, Codable {
     }
 }
 
-extension UserWordRecord {
+extension UserWord {
     // 更新掌握程度
     func updateMasteryLevel(_ level: MasteryLevel) {
         self.masteryLevel = level
@@ -256,7 +256,7 @@ struct VocabularyStats {
     let todayLookups: Int
     let weeklyLookups: Int
     let averageLookupPerDay: Double
-    let mostLookedUpWords: [UserWordRecord]
+    let mostLookedUpWords: [UserWord]
     
     var masteryPercentage: Double {
         guard totalWords > 0 else { return 0 }

@@ -18,6 +18,43 @@ struct ArticleReaderView: View {
     @State private var scrollPosition: CGFloat = 0
     @State private var isShowingSettings = false
     @State private var readingStartTime = Date()
+    @State private var isInitialized = false // 防止重复初始化
+    @State private var lookupTask: Task<Void, Never>? // 查词任务
+    
+    /// 异步查词（带性能优化）
+    private func lookupWord(_ word: String) {
+        selectedWord = word
+        
+        // 取消之前的查词任务
+        lookupTask?.cancel()
+        
+        // 创建新的查词任务
+        lookupTask = Task {
+            // 异步查找单词定义
+            _ = await performWordLookup(word)
+            
+            // 在主线程更新UI
+            await MainActor.run {
+                if !Task.isCancelled {
+                    self.showingWordDefinition = true
+                }
+            }
+            
+            // 异步记录查词行为（不阻塞UI）
+            await recordWordLookupAsync(word: word)
+        }
+    }
+    
+    /// 异步执行单词查找
+    private func performWordLookup(_ word: String) async -> String {
+        // 模拟异步查词
+        return "单词定义"
+    }
+    
+    /// 异步记录查词行为
+    private func recordWordLookupAsync(word: String) async {
+        // 记录查词行为
+    }
     
     private var article: Article? {
         appViewModel.currentArticle
@@ -120,7 +157,11 @@ struct ArticleReaderView: View {
             ReadingSettingsSheet()
         }
         .onAppear {
-            readingStartTime = Date()
+            // 避免重复初始化
+            if !isInitialized {
+                readingStartTime = Date()
+                isInitialized = true
+            }
         }
         .onDisappear {
             if article != nil {
@@ -338,10 +379,12 @@ struct WordDefinitionSheet: View {
     
     @MainActor
     private func loadDefinitions() {
-        Task { @MainActor in
+        Task {
             let results = await appViewModel.lookupWord(word)
-            definitions = results
-            isLoading = false
+            await MainActor.run {
+                definitions = results
+                isLoading = false
+            }
         }
     }
 }

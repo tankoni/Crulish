@@ -9,269 +9,86 @@ import SwiftUI
 
 struct ReadingView: View {
     @Environment(AppViewModel.self) private var appViewModel
-    @State private var articles: [Article] = []
-    @State private var filteredArticles: [Article] = []
-    @State private var selectedYear: Int?
-    @State private var selectedDifficulty: ArticleDifficulty?
-    @State private var searchText = ""
-    @State private var isShowingFilters = false
-    @State private var sortOption: SortOption = .year
-    
-    private let years = Array(2004...2024).reversed()
-    
+
+
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // 搜索栏
-                searchBar
-                
-                // 筛选栏
-                if isShowingFilters {
-                    filterBar
-                        .transition(.move(edge: .top).combined(with: .opacity))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // 文章分类
+                    articleCategorySection
+
+                    // 继续阅读
+                    continueReadingSection
                 }
-                
-                // 文章列表
-                if appViewModel.isReading && appViewModel.currentArticle != nil {
-                    // 阅读界面
-                    ArticleReaderView()
-                } else {
-                    // 文章列表界面
-                    articleListView
-                }
+                .padding()
             }
-            .navigationTitle(appViewModel.isReading ? "" : "文章库")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if !appViewModel.isReading {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            withAnimation {
-                                isShowingFilters.toggle()
-                            }
-                        } label: {
-                            Image(systemName: isShowingFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        }
-                    }
-                }
-            }
+            .navigationTitle("阅读")
+            .background(Color(.systemGroupedBackground))
         }
         .onAppear {
-            loadArticles()
+            appViewModel.loadArticles()
         }
-        .onChange(of: searchText) { _, newValue in
-            filterArticles()
-        }
-        .onChange(of: selectedYear) { _, _ in
-            filterArticles()
-        }
-        .onChange(of: selectedDifficulty) { _, _ in
-            filterArticles()
-        }
-        .onChange(of: sortOption) { _, _ in
-            sortArticles()
-        }
+
     }
     
-    // MARK: - 搜索栏
-    
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
-            
-            TextField("搜索文章标题或内容", text: $searchText)
-                .textFieldStyle(PlainTextFieldStyle())
-            
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+    // MARK: - 文章分类
+
+    private var articleCategorySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("文章分类")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                NavigationLink(destination: ArticleListView(examType: "考研英语一")) {
+                    CategoryCard(title: "考研英语一")
                 }
+                NavigationLink(destination: ArticleListView(examType: "考研英语二")) {
+                    CategoryCard(title: "考研英语二")
+                }
+                CategoryCard(title: "雅思/托福")
+                CategoryCard(title: "大学四六级")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6))
-        .cornerRadius(10)
-        .padding(.horizontal)
-        .padding(.top, 8)
     }
-    
-    // MARK: - 筛选栏
-    
-    private var filterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                // 年份筛选
-                Menu {
-                    Button("全部年份") {
-                        selectedYear = nil
-                    }
-                    
-                    ForEach(years, id: \.self) { year in
-                        Button("\(year)年") {
-                            selectedYear = year
-                        }
-                    }
-                } label: {
-                    FilterChip(
-                        title: selectedYear != nil ? "\(selectedYear!)年" : "年份",
-                        isSelected: selectedYear != nil
-                    )
+
+    // MARK: - 继续阅读
+
+    private var continueReadingSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("继续阅读")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                Button("查看全部") {
+                    // TODO: 跳转到完整的文章列表
                 }
-                
-                // 难度筛选
-                Menu {
-                    Button("全部难度") {
-                        selectedDifficulty = nil
-                    }
-                    
-                    ForEach(ArticleDifficulty.allCases, id: \.self) { difficulty in
-                        Button(difficulty.displayName) {
-                            selectedDifficulty = difficulty
-                        }
-                    }
-                } label: {
-                    FilterChip(
-                        title: selectedDifficulty?.displayName ?? "难度",
-                        isSelected: selectedDifficulty != nil
-                    )
-                }
-                
-                // 排序选项
-                Menu {
-                    ForEach(SortOption.allCases, id: \.self) { option in
-                        Button(option.displayName) {
-                            sortOption = option
-                        }
-                    }
-                } label: {
-                    FilterChip(
-                        title: sortOption.displayName,
-                        isSelected: true
-                    )
-                }
-                
-                // 清除筛选
-                if selectedYear != nil || selectedDifficulty != nil {
-                    Button {
-                        selectedYear = nil
-                        selectedDifficulty = nil
-                    } label: {
-                        Text("清除")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.1))
-                            .cornerRadius(16)
-                    }
-                }
+                .font(.subheadline)
             }
-            .padding(.horizontal)
+
+            if let lastArticle = appViewModel.articles.first(where: { $0.readingProgress > 0 && !$0.isCompleted }) {
+                ArticleListRow(article: lastArticle) {
+                    appViewModel.startReading(lastArticle)
+                }
+            } else {
+                Text("暂无阅读记录")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            }
         }
-        .padding(.vertical, 8)
     }
     
     // MARK: - 文章列表
     
-    private var articleListView: some View {
-        Group {
-            if filteredArticles.isEmpty {
-                emptyStateView
-            } else {
-                List {
-                    ForEach(filteredArticles) { article in
-                        ArticleListRow(article: article) {
-                            appViewModel.startReading(article)
-                        }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        .listRowSeparator(.hidden)
-                    }
-                }
-                .listStyle(PlainListStyle())
-                .refreshable {
-                    loadArticles()
-                }
-            }
-        }
-    }
+
     
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-            
-            Text("没有找到文章")
-                .font(.title2)
-                .fontWeight(.medium)
-            
-            Text("尝试调整搜索条件或筛选器")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Button("重置筛选") {
-                searchText = ""
-                selectedYear = nil
-                selectedDifficulty = nil
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+
     
-    // MARK: - 数据处理
-    
-    private func loadArticles() {
-        articles = appViewModel.loadArticles()
-        filterArticles()
-    }
-    
-    private func filterArticles() {
-        var filtered = articles
-        
-        // 搜索过滤
-        if !searchText.isEmpty {
-            filtered = filtered.filter { article in
-                article.title.localizedCaseInsensitiveContains(searchText) ||
-                article.content.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-        
-        // 年份过滤
-        if let year = selectedYear {
-            filtered = filtered.filter { $0.year == year }
-        }
-        
-        // 难度过滤
-        if let difficulty = selectedDifficulty {
-            filtered = filtered.filter { $0.difficulty == difficulty }
-        }
-        
-        filteredArticles = filtered
-        sortArticles()
-    }
-    
-    private func sortArticles() {
-        switch sortOption {
-        case .year:
-            filteredArticles.sort { $0.year > $1.year }
-        case .difficulty:
-            filteredArticles.sort { $0.difficulty.rawValue < $1.difficulty.rawValue }
-        case .title:
-            filteredArticles.sort { $0.title < $1.title }
-        case .progress:
-            filteredArticles.sort { $0.readingProgress > $1.readingProgress }
-        case .wordCount:
-            filteredArticles.sort { $0.wordCount > $1.wordCount }
-        }
-    }
+
 }
 
 // MARK: - 子视图组件
@@ -335,7 +152,8 @@ struct ArticleListRow: View {
                 // 阅读进度条
                 if article.readingProgress > 0 {
                     SwiftUI.ProgressView(value: article.readingProgress)
-                        .progressViewStyle(LinearProgressViewStyle(tint: article.isCompleted ? .green : .blue))
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .tint(article.isCompleted ? .green : .blue)
                         .scaleEffect(y: 0.8)
                 }
             }
@@ -348,32 +166,101 @@ struct ArticleListRow: View {
     }
 }
 
-// MARK: - 排序选项
 
-enum SortOption: String, CaseIterable {
-    case year = "year"
-    case difficulty = "difficulty"
-    case title = "title"
-    case progress = "progress"
-    case wordCount = "wordCount"
-    
-    var displayName: String {
-        switch self {
-        case .year:
-            return "年份"
-        case .difficulty:
-            return "难度"
-        case .title:
-            return "标题"
-        case .progress:
-            return "进度"
-        case .wordCount:
-            return "字数"
+
+struct CategoryCard: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+            Spacer()
+            Image(systemName: "arrow.right")
+                .foregroundColor(.secondary)
         }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+}
+
+struct ArticleListView: View {
+    @Environment(AppViewModel.self) private var appViewModel
+    let examType: String
+
+    private var articles: [Article] {
+        appViewModel.articles.filter { $0.examType == examType }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                ForEach(articles) { article in
+                    NavigationLink(destination: ArticleReaderView()) {
+                        GridArticleRow(article: article)
+                    }
+                    .onTapGesture {
+                        appViewModel.startReading(article)
+                    }
+                }
+            }
+            .padding()
+        }
+        .navigationTitle(examType)
+        .background(Color(.systemGroupedBackground))
+    }
+}
+
+struct GridArticleRow: View {
+    let article: Article
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(article.imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(height: 120)
+                .clipped()
+                .cornerRadius(8)
+
+            Text(article.title)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("\(article.year)年真题")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
 #Preview {
-    ReadingView()
-        .environment(AppViewModel())
+    struct PreviewWrapper: View {
+        @State private var appViewModel = AppViewModel()
+        @Environment(\.modelContext) private var modelContext
+
+        var body: some View {
+            ReadingView()
+                .environment(appViewModel)
+                .onAppear {
+                    appViewModel.setModelContext(modelContext)
+                }
+        }
+    }
+
+    return PreviewWrapper()
+        .modelContainer(for: [Article.self, DictionaryWord.self, UserWord.self, UserWordRecord.self, UserProgress.self, DailyStudyRecord.self], inMemory: true)
 }

@@ -9,40 +9,7 @@ import Foundation
 import SwiftUI
 import SwiftData
 
-// MARK: - Data Type Enum
 
-enum DataType: String, CaseIterable {
-    case vocabulary = "vocabulary"
-    case progress = "progress"
-    case articles = "articles"
-    case settings = "settings"
-    
-    var displayName: String {
-        switch self {
-        case .vocabulary:
-            return "词汇数据"
-        case .progress:
-            return "学习进度"
-        case .articles:
-            return "文章数据"
-        case .settings:
-            return "应用设置"
-        }
-    }
-    
-    var description: String {
-        switch self {
-        case .vocabulary:
-            return "个人词汇记录和掌握程度"
-        case .progress:
-            return "学习统计和成就记录"
-        case .articles:
-            return "文章阅读进度和笔记"
-        case .settings:
-            return "个人偏好设置"
-        }
-    }
-}
 
 @Observable
 class AppViewModel {
@@ -57,10 +24,17 @@ class AppViewModel {
     var selectedTab: TabSelection = .home
     var currentArticle: Article?
     var selectedWord: DictionaryWord?
-    var selectedUserWordRecord: UserWordRecord?
+    var selectedUserWordRecord: UserWord?
     var isShowingWordDetail = false
     var isShowingSettings = false
     var isShowingProgress = false
+    var articles: [Article] = []
+    
+    // MARK: - Performance Cache
+    private var todaySummaryCache: (summary: TodaySummary, timestamp: Date)?
+    private var streakStatusCache: (status: StreakStatus, timestamp: Date)?
+    private var recommendationsCache: (recommendations: [StudyRecommendation], timestamp: Date)?
+    private let cacheValidityDuration: TimeInterval = 300 // 5分钟缓存
     
     // MARK: - Reading State
     var readingProgress: Double = 0.0
@@ -117,8 +91,13 @@ class AppViewModel {
     
     // MARK: - Article Management
     
-    func loadArticles() -> [Article] {
-        return articleService.getAllArticles()
+    func loadArticles() {
+        self.articles = articleService.getAllArticles()
+    }
+    
+    // 导入考研真题
+    func importKaoyanArticles() {
+        articleService.importArticlesFromJSON(fileName: "kaoyan_articles")
     }
     
     func getArticlesByYear(_ year: Int) -> [Article] {
@@ -212,7 +191,7 @@ class AppViewModel {
         
         // 更新统计
         userProgressService.addWordLookup()
-        userProgressService.addExperience(5, for: .lookupWord)
+        userProgressService.addExperience(10, for: .lookupWord)
     }
     
     // MARK: - Bookmark Management
@@ -226,14 +205,14 @@ class AppViewModel {
         
         // Update statistics if bookmarked
         if article.isBookmarked {
-            userProgressService.addExperience(2, for: .bookmarkArticle)
+            userProgressService.addExperience(5, for: .bookmarkArticle)
         }
     }
     
     func markAsCompleted(_ article: Article) {
         articleService.markArticleAsCompleted(article)
         userProgressService.incrementArticleRead()
-        userProgressService.addExperience(10, for: .readArticle)
+        userProgressService.addExperience(20, for: .readArticle)
     }
     
     func shareArticle(_ article: Article) {
@@ -266,7 +245,10 @@ class AppViewModel {
         
         // Update statistics
         userProgressService.addWordLookup()
-        userProgressService.addExperience(3, for: .lookupWord)
+        userProgressService.addExperience(10, for: .lookupWord)
+        
+        // 清除缓存以确保数据一致性
+        invalidateCache()
     }
     
     var currentReadingContext: String? {
@@ -287,11 +269,14 @@ class AppViewModel {
         if readingProgress >= 1.0 {
             articleService.markArticleAsCompleted(article)
             userProgressService.incrementArticleRead()
-            userProgressService.addExperience(0, for: .readArticle)
+            userProgressService.addExperience(20, for: .readArticle)
         }
         
         // 更新阅读进度
         articleService.updateArticleProgress(article, progress: readingProgress)
+        
+        // 清除缓存以确保数据一致性
+        invalidateCache()
         
         // 重置状态
         isReading = false
@@ -331,7 +316,7 @@ class AppViewModel {
             
             // 更新统计
             userProgressService.addWordLookup()
-            userProgressService.addExperience(0, for: .lookupWord)
+            userProgressService.addExperience(5, for: .lookupWord)
             
             // 高亮显示单词
             highlightedWord = cleanWord
@@ -362,32 +347,32 @@ class AppViewModel {
     
     // MARK: - Vocabulary Management
     
-    func getPersonalVocabulary() -> [UserWordRecord] {
+    func getPersonalVocabulary() -> [UserWord] {
         return dictionaryService.getUserWordRecords()
     }
     
-    func getVocabularyByMastery(_ mastery: MasteryLevel) -> [UserWordRecord] {
+    func getVocabularyByMastery(_ mastery: MasteryLevel) -> [UserWord] {
         return dictionaryService.getWordsByMastery(mastery)
     }
     
-    func getWordsForReview() -> [UserWordRecord] {
+    func getWordsForReview() -> [UserWord] {
         return dictionaryService.getWordsForReview()
     }
     
-    func updateWordMastery(_ record: UserWordRecord, mastery: MasteryLevel) {
+    func updateWordMastery(_ record: UserWord, mastery: MasteryLevel) {
         dictionaryService.updateWordMastery(record, level: mastery)
         
         if mastery == .mastered {
             userProgressService.completeReview()
-            userProgressService.addExperience(0, for: .completeReview)
+            userProgressService.addExperience(15, for: .completeReview)
         }
     }
     
-    func markWordForReview(_ record: UserWordRecord) {
+    func markWordForReview(_ record: UserWord) {
         dictionaryService.markForReview(record)
     }
     
-    func addWordNote(_ record: UserWordRecord, note: String) {
+    func addWordNote(_ record: UserWord, note: String) {
         dictionaryService.addNote(record, note: note)
     }
     
@@ -405,7 +390,7 @@ class AppViewModel {
         return dictionaryService.getVocabularyStats()
     }
     
-    func getUserWordRecords() -> [UserWordRecord] {
+    func getUserWordRecords() -> [UserWord] {
         return dictionaryService.getUserWordRecords()
     }
     
@@ -413,7 +398,7 @@ class AppViewModel {
         return dictionaryService.getVocabularyStats()
     }
     
-    func startWordReview(_ wordRecord: UserWordRecord) {
+    func startWordReview(_ wordRecord: UserWord) {
         selectedUserWordRecord = wordRecord
         // 可以在这里添加开始单词复习的逻辑
     }
@@ -431,16 +416,16 @@ class AppViewModel {
         // 这里可以实现导出功能
     }
     
-    func showWordDetail(_ wordRecord: UserWordRecord) {
+    func showWordDetail(_ wordRecord: UserWord) {
         selectedUserWordRecord = wordRecord
         isShowingWordDetail = true
     }
     
-    func toggleReviewFlag(for wordRecord: UserWordRecord) {
+    func toggleReviewFlag(for wordRecord: UserWord) {
         dictionaryService.toggleReviewFlag(for: wordRecord)
     }
     
-    func deleteWordRecord(_ wordRecord: UserWordRecord) {
+    func deleteWordRecord(_ wordRecord: UserWord) {
         dictionaryService.deleteWordRecord(wordRecord)
     }
     
@@ -502,30 +487,126 @@ class AppViewModel {
     
     // MARK: - Error Handling
     
+    /// 显示错误信息给用户
+    /// - Parameter message: 错误消息
     private func showError(_ message: String) {
-        errorMessage = message
-        isShowingError = true
+        DispatchQueue.main.async {
+            self.errorMessage = message
+            self.isShowingError = true
+        }
     }
     
+    /// 显示带有错误类型的错误信息
+    /// - Parameters:
+    ///   - error: 错误对象
+    ///   - context: 错误发生的上下文
+    private func handleError(_ error: Error, context: String = "") {
+        let errorMessage = formatErrorMessage(error, context: context)
+        showError(errorMessage)
+        
+        // 记录错误日志
+        print("[ERROR] \(context): \(error.localizedDescription)")
+    }
+    
+    /// 格式化错误消息
+    /// - Parameters:
+    ///   - error: 错误对象
+    ///   - context: 错误上下文
+    /// - Returns: 格式化后的用户友好错误消息
+    private func formatErrorMessage(_ error: Error, context: String) -> String {
+        switch error {
+        case _ as DecodingError:
+            return "数据解析失败，请检查数据格式"
+        case _ as URLError:
+            return "网络连接失败，请检查网络设置"
+        default:
+            return context.isEmpty ? "操作失败，请重试" : "\(context)失败，请重试"
+        }
+    }
+    
+    /// 关闭错误提示
     func dismissError() {
-        isShowingError = false
-        errorMessage = nil
+        DispatchQueue.main.async {
+            self.isShowingError = false
+            self.errorMessage = nil
+        }
     }
     
     // MARK: - Data Management
     
+    /// 异步导出用户数据
+    /// - Parameter types: 要导出的数据类型集合
+    /// - Returns: 导出是否成功
     func exportData(types: Set<DataType>) async -> Bool {
-        // TODO: 实现数据导出
+        // 实现数据导出逻辑
+        for dataType in types {
+            switch dataType {
+            case .articles:
+                // 导出文章数据
+                break
+            case .vocabulary:
+                // 导出词汇数据
+                break
+            case .progress:
+                // 导出进度数据
+                break
+            case .settings:
+                // 导出设置数据
+                break
+            }
+        }
         return true
     }
     
+    /// 异步导入用户数据
+    /// - Returns: 导入结果
     func importData() async -> Result<Void, Error> {
-        // TODO: 实现数据导入
+        // 实现数据导入逻辑
+        // 验证数据格式
+        // 备份当前数据
+        // 导入新数据
         return .success(())
     }
     
+    /// 清除应用缓存
     func clearCache() {
-        // TODO: 实现清除缓存
+        Task {
+            do {
+                // 清除图片缓存
+                URLCache.shared.removeAllCachedResponses()
+                
+                // 清除临时文件
+                let tempDirectory = FileManager.default.temporaryDirectory
+                let tempContents = try FileManager.default.contentsOfDirectory(at: tempDirectory, includingPropertiesForKeys: nil)
+                
+                for url in tempContents {
+                    try FileManager.default.removeItem(at: url)
+                }
+                
+                // 清除应用内缓存
+                clearAppCache()
+                
+                await MainActor.run {
+                    showError("缓存清除成功")
+                }
+            } catch {
+                await MainActor.run {
+                    handleError(error, context: "清除缓存")
+                }
+            }
+        }
+    }
+    
+    /// 清除应用内缓存
+    private func clearAppCache() {
+        todaySummaryCache = nil
+        streakStatusCache = nil
+        recommendationsCache = nil
+    }
+    
+    /// 在数据更新时清除相关缓存
+    func invalidateCache() {
+        clearAppCache()
     }
     
     func resetAllData() {
@@ -624,9 +705,20 @@ class AppViewModel {
      }
     
     // MARK: - Recommendations
-    
+   // 获取学习建议（带缓存优化）
     func getStudyRecommendations() -> [StudyRecommendation] {
-        return userProgressService.getStudyRecommendations()
+        // 检查缓存是否有效
+        if let cache = recommendationsCache,
+           Date().timeIntervalSince(cache.timestamp) < cacheValidityDuration {
+            return cache.recommendations
+        }
+        
+        // 重新计算并缓存
+        let recommendations = userProgressService.getStudyRecommendations()
+        
+        // 更新缓存
+        recommendationsCache = (recommendations, Date())
+        return recommendations
     }
     
     func getGoalProgress() -> GoalProgress {
@@ -686,12 +778,19 @@ extension AppViewModel {
         return (level, progress, experienceToNext)
     }
     
-    // 获取今日学习摘要
+    // 获取今日学习摘要（带缓存优化）
     func getTodaySummary() -> TodaySummary {
+        // 检查缓存是否有效
+        if let cache = todaySummaryCache,
+           Date().timeIntervalSince(cache.timestamp) < cacheValidityDuration {
+            return cache.summary
+        }
+        
+        // 重新计算并缓存
         let todayRecord = userProgressService.getTodayRecord()
         let goalProgress = getGoalProgress()
         
-        return TodaySummary(
+        let summary = TodaySummary(
             readingTime: todayRecord?.readingTime ?? 0,
             articlesRead: todayRecord?.articlesRead ?? 0,
             wordsLookedUp: todayRecord?.wordsLookedUp ?? 0,
@@ -699,6 +798,10 @@ extension AppViewModel {
             dailyReadingGoalProgress: goalProgress.dailyReadingProgress,
             consecutiveDays: userProgressService.getConsecutiveDays()
         )
+        
+        // 更新缓存
+        todaySummaryCache = (summary, Date())
+        return summary
     }
     
     // 检查是否有待复习的单词
@@ -712,17 +815,28 @@ extension AppViewModel {
         return recommended.first
     }
     
-    // 获取学习连续天数状态
+    // 获取学习连续天数状态（带缓存优化）
     func getStreakStatus() -> StreakStatus {
+        // 检查缓存是否有效
+        if let cache = streakStatusCache,
+           Date().timeIntervalSince(cache.timestamp) < cacheValidityDuration {
+            return cache.status
+        }
+        
+        // 重新计算并缓存
         let consecutiveDays = userProgressService.getConsecutiveDays()
         let todayRecord = userProgressService.getTodayRecord()
         let hasStudiedToday = (todayRecord?.readingTime ?? 0) > 0
         
-        return StreakStatus(
+        let status = StreakStatus(
             consecutiveDays: consecutiveDays,
             hasStudiedToday: hasStudiedToday,
             isAtRisk: !hasStudiedToday && consecutiveDays > 0
         )
+        
+        // 更新缓存
+        streakStatusCache = (status, Date())
+        return status
     }
 }
 

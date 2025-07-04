@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(AppViewModel.self) private var appViewModel
@@ -13,6 +14,14 @@ struct SettingsView: View {
     @State private var isShowingExportSheet = false
     @State private var isShowingImportSheet = false
     @State private var isShowingAbout = false
+    @State private var settings: AppSettings?
+    @State private var showingExportSheet = false
+    @State private var showingImportSheet = false
+    @State private var showingResetAlert = false
+    @State private var exportData: Data?
+    @State private var isExporting = false
+    @State private var isImporting = false
+    @State private var isDataLoaded = false
     
     var body: some View {
         NavigationView {
@@ -36,7 +45,7 @@ struct SettingsView: View {
                 aboutSection
             }
             .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.large)
+    
         }
         .alert("重置所有数据", isPresented: $isShowingResetAlert) {
             Button("取消", role: .cancel) { }
@@ -54,6 +63,13 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $isShowingAbout) {
             AboutView()
+        }
+        .onAppear {
+            // 避免重复加载数据
+            if !isDataLoaded {
+                loadSettings()
+                isDataLoaded = true
+            }
         }
     }
     
@@ -357,42 +373,34 @@ struct SettingsView: View {
     // MARK: - 关于应用
     
     private var aboutSection: some View {
-        Section("关于") {
-            // 应用版本
-            HStack {
-                Label("版本", systemImage: "info.circle")
-                Spacer()
-                Text("1.0.0")
-                    .foregroundColor(.secondary)
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("关于")
+                .font(.headline)
+                .padding(.horizontal)
             
-            // 关于应用
-            Button {
-                isShowingAbout = true
-            } label: {
-                Label("关于应用", systemImage: "questionmark.circle")
+            VStack(spacing: 8) {
+                // 应用版本
+                HStack {
+                    Text("版本")
+                    Spacer()
+                    Text("1.0.0")
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+                
+                Divider()
+                
+                // 关于应用
+                Button("关于应用") {
+                    isShowingAbout = true
+                }
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
             }
-            
-            // 用户反馈
-            Button {
-                appViewModel.openFeedback()
-            } label: {
-                Label("用户反馈", systemImage: "envelope")
-            }
-            
-            // 评分应用
-            Button {
-                appViewModel.rateApp()
-            } label: {
-                Label("评分应用", systemImage: "star")
-            }
-            
-            // 隐私政策
-            Button {
-                appViewModel.openPrivacyPolicy()
-            } label: {
-                Label("隐私政策", systemImage: "hand.raised")
-            }
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(10)
+            .padding(.horizontal)
         }
     }
 }
@@ -408,68 +416,7 @@ struct ExportDataView: View {
     
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("选择要导出的数据类型")
-                    .font(.headline)
-                    .padding(.horizontal)
-                
-                List {
-                    ForEach(DataType.allCases, id: \.self) { dataType in
-                        HStack {
-                            Image(systemName: selectedDataTypes.contains(dataType) ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(selectedDataTypes.contains(dataType) ? .blue : .secondary)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(dataType.displayName)
-                                    .font(.subheadline)
-                                
-                                Text(dataType.description)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if selectedDataTypes.contains(dataType) {
-                                selectedDataTypes.remove(dataType)
-                            } else {
-                                selectedDataTypes.insert(dataType)
-                            }
-                        }
-                    }
-                }
-                .listStyle(PlainListStyle())
-                
-                Spacer()
-                
-                // 导出按钮
-                Button {
-                    exportData()
-                } label: {
-                    if isExporting {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                            Text("导出中...")
-                        }
-                    } else {
-                        Text("导出数据")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
-                .disabled(selectedDataTypes.isEmpty || isExporting)
-                .padding(.horizontal)
-            }
-            .navigationTitle("导出数据")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
-                        dismiss()
-                    }
-                }
-            }
+            exportContent
         }
         .alert("导出成功", isPresented: $exportSuccess) {
             Button("确定") {
@@ -480,8 +427,97 @@ struct ExportDataView: View {
         }
     }
     
-    private func exportData() {
-        isExporting = true
+    private var exportContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            headerSection
+            dataTypesList
+            exportButton
+            Spacer()
+        }
+        .navigationTitle("导出数据")
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("取消") {
+                    dismiss()
+                }
+            }
+        }
+    }
+    
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 60))
+                .foregroundColor(.blue)
+            
+            Text("导出数据")
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            Text("选择要导出的数据类型")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal)
+    }
+    
+    private var dataTypesList: some View {
+        List {
+            ForEach(DataType.allCases, id: \.self) { dataType in
+                dataTypeRow(dataType)
+            }
+        }
+        .listStyle(PlainListStyle())
+    }
+    
+    private func dataTypeRow(_ dataType: DataType) -> some View {
+        HStack {
+            Image(systemName: selectedDataTypes.contains(dataType) ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(selectedDataTypes.contains(dataType) ? .blue : .secondary)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(dataType.displayName)
+                     .font(.subheadline)
+                 
+                 Text(dataType.description)
+                     .font(.caption)
+                     .foregroundColor(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if selectedDataTypes.contains(dataType) {
+                selectedDataTypes.remove(dataType)
+            } else {
+                selectedDataTypes.insert(dataType)
+            }
+        }
+    }
+    
+    private var exportButton: some View {
+        Button {
+            exportData()
+        } label: {
+            if isExporting {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("导出中...")
+                }
+            } else {
+                Text("导出数据")
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .frame(maxWidth: .infinity)
+        .disabled(selectedDataTypes.isEmpty || isExporting)
+        .padding(.horizontal)
+    }
+    
+
+     
+     private func exportData() {
+         isExporting = true
         
         Task {
             let success = await appViewModel.exportData(types: selectedDataTypes)
@@ -539,9 +575,8 @@ struct ImportDataView: View {
             }
             .padding()
             .navigationTitle("导入数据")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
                         dismiss()
                     }
@@ -647,9 +682,9 @@ struct AboutView: View {
                 .padding()
             }
             .navigationTitle("关于")
-            .navigationBarTitleDisplayMode(.inline)
+
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("完成") {
                         dismiss()
                     }
@@ -684,7 +719,28 @@ struct FeatureRow: View {
     }
 }
 
+// MARK: - SettingsView 扩展
 
+extension SettingsView {
+    // MARK: - 数据操作
+    
+    /// 异步加载设置（带性能优化）
+    private func loadSettings() {
+        Task {
+            let loadedSettings = await loadUserSettings()
+            
+            await MainActor.run {
+                self.settings = loadedSettings
+            }
+        }
+    }
+    
+    /// 异步加载用户设置
+    private func loadUserSettings() async -> AppSettings? {
+        // 模拟异步加载设置
+        return AppSettings()
+    }
+}
 
 #Preview {
     SettingsView()

@@ -12,6 +12,14 @@ class TextProcessor {
     private let tokenizer = NLTokenizer(unit: .word)
     private let tagger = NLTagger(tagSchemes: [.lexicalClass, .lemma])
     
+    // 缓存机制以提高性能
+    private var stemCache: [String: String] = [:]
+    private var keywordCache: [String: [String]] = [:]
+    private var similarityCache: [String: Double] = [:]
+    
+    // 缓存大小限制
+    private let maxCacheSize = 1000
+    
     // MARK: - 文本清理
     
     // 清理单词（移除标点符号等）
@@ -64,20 +72,42 @@ class TextProcessor {
     
     // MARK: - 关键词提取
     
-    // 提取关键词
-    func extractKeywords(from text: String) -> [String] {
+    /// 提取关键词（带缓存优化）
+    /// - Parameters:
+    ///   - text: 要分析的文本
+    ///   - limit: 返回关键词的最大数量
+    /// - Returns: 关键词数组
+    func extractKeywords(from text: String, limit: Int = 10) -> [String] {
+        let cacheKey = "\(text.prefix(100))_\(limit)" // 使用文本前100字符作为缓存键
+        
+        // 检查缓存
+        if let cachedKeywords = keywordCache[cacheKey] {
+            return cachedKeywords
+        }
+        
         let words = extractWords(text)
         let filteredWords = words.filter { word in
             word.count > 2 && !isStopWord(word)
         }
         
         // 计算词频
-        let wordFrequency = Dictionary(grouping: filteredWords, by: { $0 })
-            .mapValues { $0.count }
+        var wordFrequency: [String: Int] = [:]
+        for word in filteredWords {
+            let stem = stemWord(word)
+            wordFrequency[stem, default: 0] += 1
+        }
         
-        // 按频率排序，返回前10个关键词
-        let sortedWords = wordFrequency.sorted { $0.value > $1.value }
-        return Array(sortedWords.prefix(10).map { $0.key })
+        // 按频率排序并返回前N个
+        let result = Array(wordFrequency.sorted { $0.value > $1.value }
+            .prefix(limit)
+            .map { $0.key })
+        
+        // 缓存结果
+        if keywordCache.count < maxCacheSize {
+            keywordCache[cacheKey] = result
+        }
+        
+        return result
     }
     
     // 检查是否为停用词
@@ -106,17 +136,53 @@ class TextProcessor {
     
     // MARK: - 词形还原
     
-    // 获取词根/词干
+    /// 获取词根/词干（带缓存优化）
+    /// - Parameter word: 要处理的单词
+    /// - Returns: 词根或词干
     func stemWord(_ word: String) -> String {
+        let lowercaseWord = word.lowercased()
+        
+        // 检查缓存
+        if let cachedStem = stemCache[lowercaseWord] {
+            return cachedStem
+        }
+        
         tagger.string = word
         let _ = word.startIndex..<word.endIndex
         
+        var result: String
         if let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue {
-            return lemma.lowercased()
+            result = lemma.lowercased()
+        } else {
+            // 如果无法获取词根，使用简单的词干提取
+            result = simpleStem(word)
         }
         
-        // 如果无法获取词根，使用简单的词干提取
-        return simpleStem(word)
+        // 缓存结果（控制缓存大小）
+        if stemCache.count < maxCacheSize {
+            stemCache[lowercaseWord] = result
+        } else if stemCache.count >= maxCacheSize {
+            // 清理部分缓存
+            clearOldCache()
+            stemCache[lowercaseWord] = result
+        }
+        
+        return result
+    }
+    
+    /// 清理旧缓存以控制内存使用
+    private func clearOldCache() {
+        let keysToRemove = Array(stemCache.keys.prefix(maxCacheSize / 2))
+        for key in keysToRemove {
+            stemCache.removeValue(forKey: key)
+        }
+        
+        let keywordKeysToRemove = Array(keywordCache.keys.prefix(maxCacheSize / 2))
+        for key in keywordKeysToRemove {
+            keywordCache.removeValue(forKey: key)
+        }
+        
+        similarityCache.removeAll()
     }
     
     // 简单词干提取
@@ -137,14 +203,32 @@ class TextProcessor {
     
     // MARK: - 相似度计算
     
-    // 计算两个字符串的相似度（Levenshtein距离）
+    /// 计算字符串相似度（Levenshtein距离，带缓存优化）
+    /// - Parameters:
+    ///   - string1: 第一个字符串
+    ///   - string2: 第二个字符串
+    /// - Returns: 相似度（0-1之间）
     func calculateSimilarity(_ string1: String, _ string2: String) -> Double {
+        let cacheKey = "\(string1)_\(string2)"
+        
+        // 检查缓存
+        if let cachedSimilarity = similarityCache[cacheKey] {
+            return cachedSimilarity
+        }
+        
         let distance = levenshteinDistance(string1, string2)
         let maxLength = max(string1.count, string2.count)
         
         guard maxLength > 0 else { return 1.0 }
         
-        return 1.0 - Double(distance) / Double(maxLength)
+        let result = 1.0 - Double(distance) / Double(maxLength)
+        
+        // 缓存结果
+        if similarityCache.count < maxCacheSize {
+            similarityCache[cacheKey] = result
+        }
+        
+        return result
     }
     
     // Levenshtein距离算法
