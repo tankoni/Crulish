@@ -10,44 +10,67 @@ import SwiftUI
 struct ReadingView: View {
     @Environment(AppViewModel.self) private var appViewModel
 
-
-
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // 顶部标题区域
+                    headerSection
+                    
                     // 文章分类
                     articleCategorySection
+                        .padding(.horizontal)
+                        .padding(.top, 24)
 
                     // 继续阅读
                     continueReadingSection
+                        .padding(.horizontal)
+                        .padding(.top, 32)
+                        .padding(.bottom, 24)
                 }
-                .padding()
             }
-            .navigationTitle("阅读")
+            .navigationBarHidden(true)
             .background(Color(.systemGroupedBackground))
         }
         .onAppear {
+            // 加载所有文章
             appViewModel.loadArticles()
         }
-
+    }
+    
+    // MARK: - 顶部标题区域
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("阅读")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+        }
+        .background(Color(.systemGroupedBackground))
     }
     
     // MARK: - 文章分类
-
     private var articleCategorySection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("文章分类")
                 .font(.title2)
                 .fontWeight(.bold)
+                .foregroundColor(.primary)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                NavigationLink(destination: ArticleListView(examType: "考研英语一")) {
-                    CategoryCard(title: "考研英语一")
-                }
-                NavigationLink(destination: ArticleListView(examType: "考研英语二")) {
-                    CategoryCard(title: "考研英语二")
-                }
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                NavigationLink(destination: ArticleListView(examType: "考研一")) {
+                        CategoryCard(title: "考研英语一")
+                    }
+                    
+                    NavigationLink(destination: ArticleListView(examType: "考研二")) {
+                        CategoryCard(title: "考研英语二")
+                    }
                 CategoryCard(title: "雅思/托福")
                 CategoryCard(title: "大学四六级")
             }
@@ -55,18 +78,19 @@ struct ReadingView: View {
     }
 
     // MARK: - 继续阅读
-
     private var continueReadingSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("继续阅读")
                     .font(.title2)
                     .fontWeight(.bold)
+                    .foregroundColor(.primary)
                 Spacer()
                 Button("查看全部") {
                     // TODO: 跳转到完整的文章列表
                 }
                 .font(.subheadline)
+                .foregroundColor(.blue)
             }
 
             if let lastArticle = appViewModel.articles.first(where: { $0.readingProgress > 0 && !$0.isCompleted }) {
@@ -74,10 +98,24 @@ struct ReadingView: View {
                     appViewModel.startReading(lastArticle)
                 }
             } else {
-                Text("暂无阅读记录")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                VStack(spacing: 12) {
+                    Image(systemName: "book.closed")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary.opacity(0.6))
+                    
+                    Text("暂无阅读记录")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("开始阅读第一篇文章吧")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
             }
         }
     }
@@ -175,16 +213,18 @@ struct CategoryCard: View {
         HStack {
             Text(title)
                 .font(.headline)
-                .fontWeight(.bold)
+                .fontWeight(.semibold)
                 .foregroundColor(.primary)
             Spacer()
             Image(systemName: "arrow.right")
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.secondary)
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
+        .background(Color(.systemBackground))
         .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
     }
 }
 
@@ -194,6 +234,17 @@ struct ArticleListView: View {
 
     private var articles: [Article] {
         appViewModel.articles.filter { $0.examType == examType }
+    }
+    
+    private var displayTitle: String {
+        switch examType {
+        case "考研一":
+            return "考研英语一"
+        case "考研二":
+            return "考研英语二"
+        default:
+            return examType
+        }
     }
 
     var body: some View {
@@ -210,7 +261,7 @@ struct ArticleListView: View {
             }
             .padding()
         }
-        .navigationTitle(examType)
+        .navigationTitle(displayTitle)
         .background(Color(.systemGroupedBackground))
     }
 }

@@ -76,11 +76,17 @@ class AppViewModel {
     
     @MainActor
     private func initializeData() async {
-        // 初始化文章数据
+        // 导入考研真题数据
+        articleService.importArticlesFromJSON(fileName: "kaoyan_articles")
+        
+        // 初始化示例文章数据
         articleService.initializeSampleData()
         
         // 初始化词典数据
         dictionaryService.initializeSampleDictionary()
+        
+        // 加载所有文章到内存
+        loadArticles()
     }
     
     // MARK: - Tab Navigation
@@ -98,6 +104,10 @@ class AppViewModel {
     // 导入考研真题
     func importKaoyanArticles() {
         articleService.importArticlesFromJSON(fileName: "kaoyan_articles")
+        // 导入完成后重新加载文章列表
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.loadArticles()
+        }
     }
     
     func getArticlesByYear(_ year: Int) -> [Article] {

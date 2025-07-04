@@ -371,17 +371,21 @@ Teachers must adapt their methods to effectively integrate technology while main
         ]
         
         for articleData in sampleArticles {
-            let imageName = "image_\(Int.random(in: 1...10))"
-                    let article = Article(
-                        title: articleData.title,
-                        content: articleData.content,
-                        year: articleData.year,
-                        examType: articleData.examType,
-                        difficulty: articleData.difficulty,
-                        topic: articleData.topic,
-                        imageName: imageName
-                    )
-            addArticle(article)
+            // 检查是否已存在相同标题的文章
+            let existingArticles = self.getAllArticles()
+            if !existingArticles.contains(where: { $0.title == articleData.title }) {
+                let imageName = "image_\(Int.random(in: 1...10))"
+                let article = Article(
+                    title: articleData.title,
+                    content: articleData.content,
+                    year: articleData.year,
+                    examType: articleData.examType,
+                    difficulty: articleData.difficulty,
+                    topic: articleData.topic,
+                    imageName: imageName
+                )
+                addArticle(article)
+            }
         }
     }
     
