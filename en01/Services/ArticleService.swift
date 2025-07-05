@@ -7,9 +7,11 @@
 
 import Foundation
 import SwiftData
+import PDFKit
 
 @Observable
 class ArticleService {
+    private let pdfService = PDFService()
     private var modelContext: ModelContext?
     
     init(modelContext: ModelContext? = nil) {
@@ -266,6 +268,26 @@ class ArticleService {
     
     /// 从JSON文件异步导入文章
     /// - Parameter fileName: JSON文件名（不包含扩展名）
+        func importArticlesFromPDFs() {
+        guard let resourceURL = Bundle.main.resourceURL else {
+            print("[ERROR] 无法获取资源目录 URL")
+            return
+        }
+
+        do {
+            let fileURLs = try FileManager.default.contentsOfDirectory(at: resourceURL, includingPropertiesForKeys: nil)
+            let pdfURLs = fileURLs.filter { $0.pathExtension == "pdf" }
+
+            for url in pdfURLs {
+                if let article = pdfService.convertPDFToArticle(from: url) {
+                    addArticle(article)
+                }
+            }
+        } catch {
+            print("[ERROR] 无法读取资源目录: \(error)")
+        }
+    }
+
     func importArticlesFromJSON(fileName: String) {
         guard let url = Bundle.main.url(forResource: fileName, withExtension: "json") else {
             print("[ERROR] 找不到文件: \(fileName).json")

@@ -78,6 +78,7 @@ class AppViewModel {
     private func initializeData() async {
         // 导入考研真题数据
         articleService.importArticlesFromJSON(fileName: "kaoyan_articles")
+        articleService.importArticlesFromPDFs()
         
         // 初始化示例文章数据
         articleService.initializeSampleData()
