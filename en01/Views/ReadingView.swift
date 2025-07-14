@@ -75,11 +75,11 @@ struct ReadingView: View {
                 .foregroundColor(.primary)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                NavigationLink(destination: ExamPaperListView(viewModel: viewModel, examType: "考研一")) {
+                NavigationLink(destination: DirectArticleListView(viewModel: viewModel, examType: "考研一")) {
                         CategoryCard(title: "考研英语一")
                     }
                     
-                    NavigationLink(destination: ExamPaperListView(viewModel: viewModel, examType: "考研二")) {
+                    NavigationLink(destination: DirectArticleListView(viewModel: viewModel, examType: "考研二")) {
                         CategoryCard(title: "考研英语二")
                     }
                 CategoryCard(title: "雅思/托福")
@@ -479,6 +479,101 @@ struct ArticleListView: View {
         }
         .navigationTitle(displayTitle)
         .background(Color(.systemGroupedBackground))
+    }
+}
+
+struct DirectArticleListView: View {
+    @ObservedObject var viewModel: ReadingViewModel
+    let examType: String
+    @State private var articles: [Article] = []
+    @State private var isLoading: Bool = true
+    
+    init(viewModel: ReadingViewModel, examType: String) {
+        self.viewModel = viewModel
+        self.examType = examType
+    }
+    
+    private var filteredAndSortedArticles: [Article] {
+        let filtered = articles.filter { article in
+            switch examType {
+            case "考研一":
+                return article.examType.contains("考研") && article.examType.contains("一")
+            case "考研二":
+                return article.examType.contains("考研") && article.examType.contains("二")
+            default:
+                return article.examType == examType
+            }
+        }
+        // 按年份从近到远排序
+        return filtered.sorted { $0.year > $1.year }
+    }
+    
+    private var displayTitle: String {
+        switch examType {
+        case "考研一":
+            return "考研英语一"
+        case "考研二":
+            return "考研英语二"
+        default:
+            return examType
+        }
+    }
+    
+    var body: some View {
+        Group {
+            if isLoading {
+                VStack {
+                    SwiftUI.ProgressView("加载中...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(1.2)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredAndSortedArticles.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary.opacity(0.6))
+                    
+                    Text("暂无\(displayTitle)文章")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("请稍后再试")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                        ForEach(filteredAndSortedArticles) { article in
+                            Button(action: {
+                                viewModel.startReading(article)
+                            }) {
+                                GridArticleRow(article: article)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+        .navigationTitle(displayTitle)
+        .background(Color(.systemGroupedBackground))
+        .onAppear {
+            loadArticles()
+        }
+    }
+    
+    private func loadArticles() {
+        Task {
+            let allArticles = viewModel.articleService.getAllArticles()
+            await MainActor.run {
+                self.articles = allArticles
+                self.isLoading = false
+            }
+        }
     }
 }
 
