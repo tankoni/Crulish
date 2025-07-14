@@ -10,55 +10,117 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var appViewModel = AppViewModel()
+    @State private var appViewModel: AppViewModel?
     
     var body: some View {
-        TabView(selection: $appViewModel.selectedTab) {
-            HomeView()
-                .tabItem {
-                    Image(systemName: TabSelection.home.iconName)
-                    Text(TabSelection.home.title)
-                }
-                .tag(TabSelection.home)
+        Group {
+            if let appViewModel = appViewModel {
+                TabView(selection: Binding(
+                    get: { appViewModel.selectedTab },
+                    set: { appViewModel.selectTab($0) }
+                )) {
+                    if let homeViewModel = appViewModel.homeViewModel {
+                HomeView(viewModel: homeViewModel)
+                    .tabItem {
+                        Image(systemName: TabSelection.home.iconName)
+                        Text(TabSelection.home.title)
+                    }
+                    .tag(TabSelection.home)
+                    } else {
+                        Text("加载中...")
+                            .tabItem {
+                                Image(systemName: TabSelection.home.iconName)
+                                Text(TabSelection.home.title)
+                            }
+                            .tag(TabSelection.home)
+                    }
             
-            ReadingView()
-                .tabItem {
-                    Image(systemName: TabSelection.reading.iconName)
-                    Text(TabSelection.reading.title)
-                }
-                .tag(TabSelection.reading)
+                    if let readingViewModel = appViewModel.readingViewModel {
+                ReadingView(viewModel: readingViewModel)
+                    .tabItem {
+                        Image(systemName: TabSelection.reading.iconName)
+                        Text(TabSelection.reading.title)
+                    }
+                    .tag(TabSelection.reading)
+                    } else {
+                        Text("加载中...")
+                            .tabItem {
+                                Image(systemName: TabSelection.reading.iconName)
+                                Text(TabSelection.reading.title)
+                            }
+                            .tag(TabSelection.reading)
+                    }
             
-            VocabularyView()
-                .tabItem {
-                    Image(systemName: TabSelection.vocabulary.iconName)
-                    Text(TabSelection.vocabulary.title)
-                }
-                .tag(TabSelection.vocabulary)
+                    if let vocabularyViewModel = appViewModel.vocabularyViewModel {
+                VocabularyView(viewModel: vocabularyViewModel)
+                    .tabItem {
+                        Image(systemName: TabSelection.vocabulary.iconName)
+                        Text(TabSelection.vocabulary.title)
+                    }
+                    .tag(TabSelection.vocabulary)
+                    } else {
+                        Text("加载中...")
+                            .tabItem {
+                                Image(systemName: TabSelection.vocabulary.iconName)
+                                Text(TabSelection.vocabulary.title)
+                            }
+                            .tag(TabSelection.vocabulary)
+                    }
             
-            ProgressView()
-                .tabItem {
-                    Image(systemName: TabSelection.progress.iconName)
-                    Text(TabSelection.progress.title)
-                }
-                .tag(TabSelection.progress)
+                    if let progressViewModel = appViewModel.progressViewModel {
+                ProgressView(viewModel: progressViewModel)
+                    .tabItem {
+                        Image(systemName: TabSelection.progress.iconName)
+                        Text(TabSelection.progress.title)
+                    }
+                    .tag(TabSelection.progress)
+                    } else {
+                        Text("加载中...")
+                            .tabItem {
+                                Image(systemName: TabSelection.progress.iconName)
+                                Text(TabSelection.progress.title)
+                            }
+                            .tag(TabSelection.progress)
+                    }
             
-            SettingsView()
-                .tabItem {
-                    Image(systemName: TabSelection.settings.iconName)
-                    Text(TabSelection.settings.title)
+                    if let settingsViewModel = appViewModel.settingsViewModel {
+                SettingsView(viewModel: settingsViewModel)
+                    .tabItem {
+                        Image(systemName: TabSelection.settings.iconName)
+                        Text(TabSelection.settings.title)
+                    }
+                    .tag(TabSelection.settings)
+                    } else {
+                        Text("加载中...")
+                            .tabItem {
+                                Image(systemName: TabSelection.settings.iconName)
+                                Text(TabSelection.settings.title)
+                            }
+                            .tag(TabSelection.settings)
+                    }
                 }
-                .tag(TabSelection.settings)
+                .environment(appViewModel)
+            } else {
+                VStack {
+                    SwiftUI.ProgressView()
+                    Text("初始化中...")
+                        .foregroundColor(.secondary)
+                }
+            }
         }
-        .environment(appViewModel)
         .onAppear {
-            appViewModel.setModelContext(modelContext)
+            if appViewModel == nil {
+                let newAppViewModel = AppViewModel()
+                newAppViewModel.setModelContext(modelContext)
+                appViewModel = newAppViewModel
+            }
         }
-        .alert("错误", isPresented: $appViewModel.isShowingError) {
+        .alert("错误", isPresented: .constant(appViewModel?.hasError ?? false)) {
             Button("确定") {
-                appViewModel.dismissError()
+                // Error dismissal will be handled by coordinator
             }
         } message: {
-            if let errorMessage = appViewModel.errorMessage {
+            if let errorMessage = appViewModel?.currentErrorMessage {
                 Text(errorMessage)
             }
         }
@@ -67,5 +129,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Article.self, DictionaryWord.self, UserWord.self, UserWordRecord.self, UserProgress.self, DailyStudyRecord.self], inMemory: true)
+        .modelContainer(for: [Article.self, DictionaryWord.self, UserWord.self, UserProgress.self, DailyStudyRecord.self], inMemory: true)
 }

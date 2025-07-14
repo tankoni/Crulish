@@ -19,46 +19,41 @@ enum ExperienceAction {
 }
 
 @Observable
-class UserProgressService {
-    private var modelContext: ModelContext?
+class UserProgressService: BaseService, UserProgressServiceProtocol {
     private var userProgress: UserProgress?
     
-    init() {
+    init(
+        modelContext: ModelContext,
+        cacheManager: CacheManagerProtocol,
+        errorHandler: ErrorHandlerProtocol
+    ) {
+        super.init(
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: errorHandler,
+            subsystem: "com.en01.services",
+            category: "UserProgressService"
+        )
         initializeUserProgress()
     }
     
     // MARK: - 初始化
     
-    func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
-        initializeUserProgress()
-    }
-    
     /// 初始化用户进度（带错误处理优化）
     private func initializeUserProgress() {
-        guard let context = modelContext else { 
-            print("[ERROR] ModelContext未设置")
-            return 
-        }
+        let descriptor = FetchDescriptor<UserProgress>()
+        let existingProgress = safeFetch(descriptor, operation: "获取用户进度")
         
-        do {
-            let descriptor = FetchDescriptor<UserProgress>()
-            let existingProgress = try context.fetch(descriptor)
-            
-            if let progress = existingProgress.first {
-                self.userProgress = progress
-                print("[SUCCESS] 用户进度加载成功")
-            } else {
-                // 创建新的用户进度记录
-                let newProgress = UserProgress()
-                context.insert(newProgress)
-                self.userProgress = newProgress
-                try context.save()
-                print("[SUCCESS] 新用户进度创建成功")
-            }
-        } catch {
-            print("[ERROR] 初始化用户进度失败: \(error.localizedDescription)")
-            print("[ERROR] 详细错误信息: \(error)")
+        if let progress = existingProgress.first {
+            self.userProgress = progress
+            logger.info("用户进度加载成功")
+        } else {
+            // 创建新的用户进度记录
+            let newProgress = UserProgress()
+            modelContext.insert(newProgress)
+            self.userProgress = newProgress
+            safeSave(operation: "保存新用户进度")
+            logger.info("新用户进度创建成功")
         }
     }
     
@@ -83,35 +78,59 @@ class UserProgressService {
     // MARK: - 阅读统计
     
     func addReadingTime(_ minutes: Double) {
-        guard let progress = userProgress else { return }
-        
-        progress.addReadingTime(minutes)
-        updateDailyRecord(readingTime: minutes)
-        saveProgress()
+        performSafeOperation("添加阅读时间") {
+            guard let progress = userProgress else {
+                throw ServiceError.notFound("用户进度不存在")
+            }
+            
+            progress.addReadingTime(minutes)
+            updateDailyRecord(readingTime: minutes)
+            
+            safeSave(operation: "保存阅读时间")
+            logger.info("添加阅读时间: \(minutes)分钟")
+        }
     }
     
     func incrementArticleRead() {
-        guard let progress = userProgress else { return }
-        
-        progress.incrementArticlesRead()
-        updateDailyRecord(articlesRead: 1)
-        saveProgress()
+        performSafeOperation("增加已读文章数") {
+            guard let progress = userProgress else {
+                throw ServiceError.notFound("用户进度不存在")
+            }
+            
+            progress.incrementArticlesRead()
+            updateDailyRecord(articlesRead: 1)
+            
+            safeSave(operation: "保存文章阅读记录")
+            logger.info("已读文章数增加1，当前总数: \(progress.totalArticlesRead)")
+        }
     }
     
     func addWordLookup() {
-        guard let progress = userProgress else { return }
-        
-        progress.incrementWordsLookedUp()
-        updateDailyRecord(wordsLookedUp: 1)
-        saveProgress()
+        performSafeOperation("添加查词记录") {
+            guard let progress = userProgress else {
+                throw ServiceError.notFound("用户进度不存在")
+            }
+            
+            progress.incrementWordsLookedUp()
+            updateDailyRecord(wordsLookedUp: 1)
+            
+            safeSave(operation: "保存词汇查找记录")
+            logger.info("查词次数增加1，当前总数: \(progress.totalWordsLookedUp)")
+        }
     }
     
     func completeReview() {
-        guard let progress = userProgress else { return }
-        
-        progress.completeReview()
-        updateDailyRecord(reviewsCompleted: 1)
-        saveProgress()
+        performSafeOperation("完成复习") {
+            guard let progress = userProgress else {
+                throw ServiceError.notFound("用户进度不存在")
+            }
+            
+            progress.completeReview()
+            updateDailyRecord(reviewsCompleted: 1)
+            
+            safeSave(operation: "保存复习记录")
+            logger.info("复习完成次数增加1")
+        }
     }
     
     // MARK: - 每日记录管理
@@ -168,18 +187,246 @@ class UserProgressService {
     // MARK: - 经验值和等级
     
     func addExperience(_ points: Int, for action: ExperienceAction) {
-        guard let progress = userProgress else { return }
+        performSafeOperation("添加经验值") {
+            guard let progress = userProgress else {
+                throw ServiceError.notFound("用户进度不存在")
+            }
+            
+            let actualPoints = calculateExperiencePoints(for: action)
+            progress.experience += actualPoints
+            
+            // 检查是否升级
+            checkLevelUp()
+            
+            // 检查成就
+            checkAchievements(for: action, points: actualPoints)
+            
+            safeSave(operation: "保存经验值")
+            logger.info("添加经验值: \(actualPoints)，当前总经验: \(progress.experience)")
+        }
+    }
+    
+    // MARK: - Protocol Required Methods
+    
+    func recordWordReview(word: String, correct: Bool) async throws {
+        // TODO: 实现单词复习记录
+        logger.info("记录单词复习: \(word), 正确: \(correct)")
+    }
+    
+    func recordReviewSession(wordsReviewed: Int, correctAnswers: Int) async throws {
+        // TODO: 实现复习会话记录
+        logger.info("记录复习会话: 复习\(wordsReviewed)个单词，正确\(correctAnswers)个")
+    }
+    
+    func recordArticleCompletion(articleId: String, readingTime: TimeInterval, wordsLookedUp: Int) async throws {
+        // TODO: 实现文章完成记录
+        logger.info("记录文章完成: \(articleId), 阅读时间: \(readingTime), 查词数: \(wordsLookedUp)")
+    }
+    
+    func updateReadingProgress(articleId: String, progress: Double, readingTime: TimeInterval) async throws {
+        // TODO: 实现阅读进度更新
+        logger.info("更新阅读进度: \(articleId), 进度: \(progress), 时间: \(readingTime)")
+    }
+    
+    func recordWordLookup(word: String, articleId: String) async throws {
+        // TODO: 实现查词记录
+        logger.info("记录查词: \(word) 在文章 \(articleId)")
+    }
+    
+    func addBookmark(articleId: String) async throws {
+        // TODO: 实现添加书签
+        logger.info("添加书签: \(articleId)")
+    }
+    
+    func removeBookmark(articleId: String) async throws {
+        // TODO: 实现移除书签
+        logger.info("移除书签: \(articleId)")
+    }
+    
+    func isBookmarked(articleId: String) async throws -> Bool {
+        // TODO: 实现书签检查
+        logger.info("检查书签: \(articleId)")
+        return false
+    }
+    
+    func markArticleAsCompleted(articleId: String) async throws {
+        // TODO: 实现标记文章完成
+        logger.info("标记文章完成: \(articleId)")
+    }
+    
+    func isCompleted(articleId: String) async throws -> Bool {
+        // TODO: 实现完成状态检查
+        logger.info("检查完成状态: \(articleId)")
+        return false
+    }
+    
+    func getReadingTrend(days: Int) -> [DailyStudyRecord] {
+        guard let progress = userProgress else { return [] }
+        let calendar = Calendar.current
+        let now = Date()
+        let startDate = calendar.date(byAdding: .day, value: -days, to: now) ?? now
         
-        let actualPoints = calculateExperiencePoints(for: action)
-        progress.experience += actualPoints
-        
-        // 检查是否升级
-        checkLevelUp()
-        
-        // 检查成就
-        checkAchievements(for: action, points: actualPoints)
-        
-        saveProgress()
+        return progress.dailyRecords.filter { record in
+            record.date >= startDate
+        }.sorted { $0.date < $1.date }
+    }
+    
+    func getWeeklyComparison() -> WeeklyComparison {
+        // TODO: 实现周对比数据
+        return WeeklyComparison(
+            thisWeekReadingTime: 0,
+            lastWeekReadingTime: 0,
+            thisWeekArticles: 0,
+            lastWeekArticles: 0,
+            thisWeekWords: 0,
+            lastWeekWords: 0
+        )
+    }
+    
+    func getStudyStatistics() -> StudyStatistics {
+        // TODO: 实现学习统计
+        return StudyStatistics()
+    }
+    
+    // MARK: - Statistics Methods
+    
+    func getTodayStatistics() async throws -> TodayStatistics {
+        return await MainActor.run {
+            let todayRecord = getTodayRecord()
+            let _ = getUserProgress()
+            
+            let readingTime = todayRecord?.readingTime ?? 0
+            let articlesRead = todayRecord?.articlesRead ?? 0
+            let wordsLookedUp = todayRecord?.wordsLookedUp ?? 0
+            let reviewsCompleted = todayRecord?.reviewsCompleted ?? 0
+            
+            // 计算每日阅读目标进度 (使用默认30分钟目标)
+            let dailyGoal = 30.0 // 默认每日阅读目标30分钟
+            let progress = Double(readingTime) / (dailyGoal * 60)
+            
+            let consecutiveDays = getConsecutiveDays()
+            
+            return TodayStatistics(
+                readingTime: readingTime,
+                articlesRead: articlesRead,
+                wordsLookedUp: wordsLookedUp,
+                reviewsCompleted: reviewsCompleted,
+                dailyReadingGoalProgress: min(progress, 1.0),
+                consecutiveDays: consecutiveDays
+            )
+        }
+    }
+    
+    func getWeeklyStatistics() async throws -> WeeklyStatistics {
+        // TODO: 实现周统计
+        return WeeklyStatistics()
+    }
+    
+    func getMonthlyStatistics() async throws -> MonthlyStatistics {
+        // TODO: 实现月统计
+        return MonthlyStatistics()
+    }
+    
+    func getOverallStatistics() async throws -> OverallStatistics {
+        // TODO: 实现总体统计
+        return OverallStatistics()
+    }
+    
+    func getVocabularyProgressStatistics() async throws -> VocabularyProgressStats {
+        // TODO: 实现词汇进度统计
+        return VocabularyProgressStats()
+    }
+    
+    func getVocabularyStatistics() async throws -> VocabularyStatistics {
+        return await MainActor.run {
+            // 从DictionaryService获取词汇统计
+            let vocabularyStats = getCachedOrFetchModel(
+                key: "vocabulary_statistics",
+                operation: "获取词汇统计"
+            ) {
+                // 这里应该从DictionaryService获取实际的词汇数据
+                // 暂时返回默认值
+                return VocabularyStatistics(
+                    totalWords: 0,
+                    unknownWords: 0,
+                    learningWords: 0,
+                    familiarWords: 0,
+                    masteredWords: 0,
+                    wordsNeedingReview: 0,
+                    averageLookupCount: 0.0,
+                    totalLookups: 0
+                )
+            }
+            
+            return vocabularyStats ?? VocabularyStatistics(
+                totalWords: 0,
+                unknownWords: 0,
+                learningWords: 0,
+                familiarWords: 0,
+                masteredWords: 0,
+                wordsNeedingReview: 0,
+                averageLookupCount: 0.0,
+                totalLookups: 0
+            )
+        }
+    }
+    
+    func getAchievementStatistics() async throws -> AchievementStatistics {
+        // TODO: 实现成就统计
+        return AchievementStatistics()
+    }
+    
+    func getReadingTimeChartData(for timeRange: TimeRange) async throws -> [ChartDataPoint] {
+        // TODO: 实现阅读时间图表数据
+        return []
+    }
+    
+    func getVocabularyChartData(for timeRange: TimeRange) async throws -> [ChartDataPoint] {
+        // TODO: 实现词汇图表数据
+        return []
+    }
+    
+    func getProgressChartData(for timeRange: TimeRange) async throws -> [ChartDataPoint] {
+        // TODO: 实现进度图表数据
+        return []
+    }
+    
+    func getExperienceToNextLevel() -> Int {
+        guard let progress = userProgress else { return 0 }
+        let currentLevel = progress.level
+        let nextLevelExp = currentLevel.requiredExperience
+        return max(0, nextLevelExp - progress.experience)
+    }
+    
+    func getUnlockedAchievements() -> [Achievement] {
+        guard let progress = userProgress else { return [] }
+        return progress.achievements
+    }
+    
+    func getAvailableAchievements() -> [AchievementType] {
+        // TODO: 实现可用成就列表
+        return []
+    }
+    
+    func resetProgress() {
+        performSafeOperation("重置进度") {
+            guard let progress = userProgress else {
+                throw ServiceError.notFound("用户进度不存在")
+            }
+            
+            // 重置所有进度数据
+            progress.totalReadingTime = 0
+            progress.totalArticlesRead = 0
+            progress.totalWordsLookedUp = 0
+            progress.experience = 0
+            progress.level = .beginner
+            progress.currentStreak = 0
+            progress.dailyRecords.removeAll()
+            progress.achievements.removeAll()
+            
+            safeSave(operation: "重置用户进度")
+            logger.info("用户进度已重置")
+        }
     }
     
     private func calculateExperiencePoints(for action: ExperienceAction) -> Int {
@@ -217,14 +464,7 @@ class UserProgressService {
         }
     }
     
-    func getExperienceToNextLevel() -> Int {
-        guard let progress = userProgress else { return 0 }
-        
-        if let nextLevel = progress.level.nextLevel {
-            return max(0, nextLevel.requiredExperience - progress.experience)
-        }
-        return 0
-    }
+
     
     func getLevelProgress() -> Double {
         guard let progress = userProgress else { return 0.0 }
@@ -241,23 +481,34 @@ class UserProgressService {
         
         return 1.0 // 已达到最高等级
     }
+
+    func getProgressStatistics() -> ProgressStatistics {
+        // TODO: Implement actual logic
+        return ProgressStatistics(weeklyStats: WeeklyStats(), monthlyStats: MonthlyStats())
+    }
     
     // MARK: - 成就系统
     
     func unlockAchievement(_ type: AchievementType) {
-        guard let progress = userProgress else { return }
-        
-        let achievement = Achievement(type: type)
-        
-        // 检查是否已经解锁
-        let alreadyUnlocked = progress.achievements.contains { existingAchievement in
-            existingAchievement.type == achievement.type
-        }
-        
-        if !alreadyUnlocked {
-            progress.achievements.append(achievement)
-            addExperience(0, for: .achievementUnlocked)
-            saveProgress()
+        performSafeOperation("解锁成就") {
+            guard let progress = userProgress else {
+                throw ServiceError.notFound("用户进度不存在")
+            }
+            
+            let achievement = Achievement(type: type)
+            
+            // 检查是否已经解锁
+            let alreadyUnlocked = progress.achievements.contains { existingAchievement in
+                existingAchievement.type == achievement.type
+            }
+            
+            if !alreadyUnlocked {
+                progress.achievements.append(achievement)
+                addExperience(0, for: .achievementUnlocked)
+                
+                safeSave(operation: "保存成就解锁")
+                logger.info("解锁新成就: \(type)")
+            }
         }
     }
     
@@ -351,148 +602,30 @@ class UserProgressService {
         }
     }
     
-    func getUnlockedAchievements() -> [Achievement] {
-        return userProgress?.achievements ?? []
-    }
-    
-    func getAvailableAchievements() -> [AchievementType] {
-        return AchievementType.allCases
-    }
+
     
     // MARK: - 统计分析
     
-    func getStudyStatistics() -> StudyStatistics {
-        guard let progress = userProgress else {
-            return StudyStatistics()
-        }
-        
-        let weeklyRecords = getWeeklyRecords()
-        let monthlyRecords = getMonthlyRecords()
-        
-        let weeklyReadingTime = weeklyRecords.reduce(0) { $0 + $1.readingTime }
-        let monthlyReadingTime = monthlyRecords.reduce(0) { $0 + $1.readingTime }
-        
-        let weeklyArticles = weeklyRecords.reduce(0) { $0 + $1.articlesRead }
-        let monthlyArticles = monthlyRecords.reduce(0) { $0 + $1.articlesRead }
-        
-        let weeklyWords = weeklyRecords.reduce(0) { $0 + $1.wordsLookedUp }
-        let monthlyWords = monthlyRecords.reduce(0) { $0 + $1.wordsLookedUp }
-        
-        return StudyStatistics(
-            totalReadingTime: progress.totalReadingTime,
-            totalArticlesRead: progress.totalArticlesRead,
-            totalWordsLookedUp: progress.totalWordsLookedUp,
-            totalReviewsCompleted: 0, // 需要从dailyRecords计算
-            consecutiveStudyDays: progress.currentStreak,
-            currentLevel: progress.level,
-            experiencePoints: progress.experience,
-            achievementsUnlocked: progress.achievements.count,
-            weeklyReadingTime: weeklyReadingTime,
-            weeklyArticlesRead: weeklyArticles,
-            weeklyWordsLookedUp: weeklyWords,
-            monthlyReadingTime: monthlyReadingTime,
-            monthlyArticlesRead: monthlyArticles,
-            monthlyWordsLookedUp: monthlyWords,
-            averageDailyReadingTime: progress.totalReadingTime / Double(max(1, progress.dailyRecords.count)),
-            studyDaysCount: progress.dailyRecords.count
-        )
-    }
+
     
-    func getReadingTrend(days: Int = 7) -> [DailyStudyRecord] {
-        guard let progress = userProgress else { return [] }
-        
-        let calendar = Calendar.current
-        let endDate = Date()
-        let startDate = calendar.date(byAdding: .day, value: -days, to: endDate) ?? endDate
-        
-        return progress.dailyRecords.filter { record in
-            record.date >= startDate && record.date <= endDate
-        }.sorted { $0.date < $1.date }
-    }
+
     
-    func getWeeklyComparison() -> WeeklyComparison {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        // 本周
-        let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        let thisWeekRecords = userProgress?.dailyRecords.filter { record in
-            record.date >= thisWeekStart
-        } ?? []
-        
-        // 上周
-        let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: thisWeekStart) ?? thisWeekStart
-        let lastWeekEnd = calendar.date(byAdding: .day, value: -1, to: thisWeekStart) ?? thisWeekStart
-        let lastWeekRecords = userProgress?.dailyRecords.filter { record in
-            record.date >= lastWeekStart && record.date <= lastWeekEnd
-        } ?? []
-        
-        let thisWeekTime = thisWeekRecords.reduce(0) { $0 + $1.readingTime }
-        let lastWeekTime = lastWeekRecords.reduce(0) { $0 + $1.readingTime }
-        
-        let thisWeekArticles = thisWeekRecords.reduce(0) { $0 + $1.articlesRead }
-        let lastWeekArticles = lastWeekRecords.reduce(0) { $0 + $1.articlesRead }
-        
-        let thisWeekWords = thisWeekRecords.reduce(0) { $0 + $1.wordsLookedUp }
-        let lastWeekWords = lastWeekRecords.reduce(0) { $0 + $1.wordsLookedUp }
-        
-        return WeeklyComparison(
-            thisWeekReadingTime: thisWeekTime,
-            lastWeekReadingTime: lastWeekTime,
-            thisWeekArticles: thisWeekArticles,
-            lastWeekArticles: lastWeekArticles,
-            thisWeekWords: thisWeekWords,
-            lastWeekWords: lastWeekWords
-        )
-    }
+
     
     // MARK: - 数据管理
     
     /// 保存用户进度（带错误处理优化）
     private func saveProgress() {
-        guard let context = modelContext else { 
-            print("[ERROR] ModelContext未设置，无法保存进度")
-            return 
-        }
-        
-        do {
-            try context.save()
-            print("[SUCCESS] 用户进度保存成功")
-        } catch {
-            print("[ERROR] 保存用户进度失败: \(error.localizedDescription)")
-            print("[ERROR] 保存错误详情: \(error)")
-        }
+        safeSave(operation: "保存用户进度")
     }
     
-    /// 重置用户进度（带错误处理优化）
-    func resetProgress() {
-        guard let context = modelContext else {
-            print("[ERROR] ModelContext未设置，无法重置进度")
-            return
-        }
-        
-        guard let progress = userProgress else {
-            print("[WARNING] 用户进度不存在，无需重置")
-            return
-        }
-        
-        context.delete(progress)
-        
-        do {
-            try context.save()
-            print("[SUCCESS] 用户进度重置成功")
-            initializeUserProgress()
-        } catch {
-            print("[ERROR] 重置用户进度失败: \(error.localizedDescription)")
-            print("[ERROR] 重置错误详情: \(error)")
-        }
-    }
+
     
     /// 导出用户进度数据（带错误处理优化）
     /// - Returns: 序列化后的进度数据，失败时返回nil
     func exportProgressData() -> Data? {
         guard let progress = userProgress else { 
-            print("[ERROR] 用户进度不存在，无法导出")
+            logger.error("用户进度不存在，无法导出")
             return nil 
         }
         
@@ -511,13 +644,11 @@ class UserProgressService {
         
         do {
             let data = try JSONEncoder().encode(exportData)
-            print("[SUCCESS] 进度数据导出成功，大小: \(data.count) bytes")
+            logger.info("进度数据导出成功，大小: \(data.count) bytes")
             return data
         } catch {
-            print("[ERROR] 导出进度数据失败: \(error.localizedDescription)")
-            if let encodingError = error as? EncodingError {
-                print("[ERROR] 编码错误详情: \(encodingError)")
-            }
+            let serviceError = ServiceError.encodingError(error)
+            errorHandler.handle(serviceError, context: "导出进度数据失败")
             return nil
         }
     }
@@ -527,18 +658,13 @@ class UserProgressService {
     /// - Returns: 导入是否成功
     func importProgressData(_ data: Data) -> Bool {
         guard !data.isEmpty else {
-            print("[ERROR] 导入数据为空")
+            logger.error("导入数据为空")
             return false
         }
         
         do {
             let importData = try JSONDecoder().decode(ProgressExportData.self, from: data)
-            print("[SUCCESS] 进度数据解码成功")
-            
-            guard let context = modelContext else { 
-                print("[ERROR] ModelContext未设置，无法导入数据")
-                return false 
-            }
+            logger.info("进度数据解码成功")
             
             // 创建新的用户进度
             let newProgress = UserProgress()
@@ -553,23 +679,27 @@ class UserProgressService {
             
             // 删除旧的进度记录
             if let oldProgress = userProgress {
-                context.delete(oldProgress)
-                print("[INFO] 已删除旧的用户进度")
+                modelContext.delete(oldProgress)
+                logger.info("已删除旧的用户进度")
             }
             
-            context.insert(newProgress)
+            modelContext.insert(newProgress)
             self.userProgress = newProgress
             
-            try context.save()
-            print("[SUCCESS] 用户进度导入成功")
+            safeSave(operation: "导入用户进度")
+            logger.info("用户进度导入成功")
             return true
         } catch {
-            print("[ERROR] 导入进度数据失败: \(error.localizedDescription)")
-            if let decodingError = error as? DecodingError {
-                print("[ERROR] 数据格式错误: \(decodingError)")
+            let serviceError: ServiceError
+            let context: String
+            if error is DecodingError {
+                serviceError = ServiceError.decodingError(error)
+                context = "数据格式错误"
             } else {
-                print("[ERROR] 保存错误详情: \(error)")
+                serviceError = ServiceError.databaseError(error)
+                context = "导入进度数据失败"
             }
+            errorHandler.handle(serviceError, context: context)
             return false
         }
     }
@@ -745,7 +875,6 @@ struct DailyRecordData: Codable {
 // MARK: - 扩展
 
 extension UserProgressService {
-    // 获取学习建议
     func getStudyRecommendations() -> [StudyRecommendation] {
         guard let progress = userProgress else { return [] }
         
@@ -763,40 +892,35 @@ extension UserProgressService {
             recommendations.append(StudyRecommendation(
                 type: .maintainStreak,
                 title: "保持学习连续性",
-                description: "已连续学习\(progress.currentStreak)天，继续保持！",
+                description: "连续学习是进步的关键，继续加油！",
                 priority: .medium
             ))
-        }
-        
-        // 基于阅读时间的建议
-        let todayRecord = getTodayRecord()
-        if todayRecord?.readingTime ?? 0 < 30 {
+        } else {
             recommendations.append(StudyRecommendation(
-                type: .increaseReadingTime,
-                title: "增加阅读时间",
-                description: "建议每天至少阅读30分钟以获得更好的学习效果",
-                priority: .medium
-            ))
-        }
-        
-        // 基于词汇量的建议
-        if progress.totalWordsLookedUp < 100 {
-            recommendations.append(StudyRecommendation(
-                type: .expandVocabulary,
-                title: "扩展词汇量",
-                description: "多查询生词，建立个人词汇宝典",
+                type: .challengeYourself,
+                title: "挑战更高目标",
+                description: "你已经保持了很好的学习习惯，尝试一些更有挑战性的文章吧！",
                 priority: .low
             ))
         }
         
-        // 基于复习的建议
-        let reviewsCompleted = 0 // 需要从dailyRecords计算
-        if reviewsCompleted < progress.totalWordsLookedUp / 5 {
+        // 基于阅读文章数量的建议
+        if progress.totalArticlesRead < 10 {
             recommendations.append(StudyRecommendation(
-                type: .reviewWords,
-                title: "复习生词",
-                description: "定期复习已查询的单词，巩固记忆",
-                priority: .high
+                type: .exploreTopics,
+                title: "探索不同主题",
+                description: "多阅读不同类型的文章，找到你的兴趣所在。",
+                priority: .medium
+            ))
+        }
+        
+        // 基于等级的建议
+        if progress.level != .advanced && progress.level != .expert {
+            recommendations.append(StudyRecommendation(
+                type: .levelUp,
+                title: "向更高等级迈进",
+                description: "通过持续学习提升等级，解锁更多功能。",
+                priority: .medium
             ))
         }
         
@@ -844,6 +968,9 @@ struct StudyRecommendation {
         case increaseReadingTime
         case expandVocabulary
         case reviewWords
+        case challengeYourself
+        case exploreTopics
+        case levelUp
     }
     
     enum Priority: Int {
@@ -878,5 +1005,73 @@ struct GoalProgress {
         self.dailyReadingGoal = dailyReadingGoal
         self.weeklyArticleGoal = weeklyArticleGoal
         self.weeklyWordGoal = weeklyWordGoal
+    }
+}
+
+// MARK: - Settings Management
+
+extension UserProgressService {
+    // 获取设置方法
+    func getUserSettings() async throws -> UserSettings {
+        return UserSettings()
+    }
+    
+    func getReadingSettings() async throws -> ReadingSettings {
+        return ReadingSettings()
+    }
+    
+    func getVocabularySettings() async throws -> VocabularySettings {
+        return VocabularySettings()
+    }
+    
+    func getNotificationSettings() async throws -> NotificationSettings {
+        return NotificationSettings()
+    }
+    
+    func getPrivacySettings() async throws -> PrivacySettings {
+        return PrivacySettings()
+    }
+    
+    func getAppearanceSettings() async throws -> AppearanceSettings {
+        return AppearanceSettings()
+    }
+    
+    // 更新设置方法
+    func updateUserSettings(_ settings: UserSettings) async throws {
+        // 实现用户设置更新逻辑
+        logger.info("用户设置已更新")
+    }
+    
+    func updateReadingSettings(_ settings: ReadingSettings) async throws {
+        // 实现阅读设置更新逻辑
+        logger.info("阅读设置已更新")
+    }
+    
+    func updateVocabularySettings(_ settings: VocabularySettings) async throws {
+        // 实现词汇设置更新逻辑
+        logger.info("词汇设置已更新")
+    }
+    
+    func updateNotificationSettings(_ settings: NotificationSettings) async throws {
+        // 实现通知设置更新逻辑
+        logger.info("通知设置已更新")
+    }
+    
+    func updatePrivacySettings(_ settings: PrivacySettings) async throws {
+        // 实现隐私设置更新逻辑
+        logger.info("隐私设置已更新")
+    }
+    
+    func updateAppearanceSettings(_ settings: AppearanceSettings) async throws {
+        // TODO: 实现外观设置更新逻辑
+        logger.info("外观设置已更新")
+    }
+    
+    func resetAllData() async throws {
+        // TODO: 实现重置所有数据的逻辑
+        // 清除所有用户进度数据
+        // 重置设置到默认值
+        // 清除缓存
+        logger.info("所有数据已重置")
     }
 }

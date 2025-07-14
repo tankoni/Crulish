@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ArticleReaderView: View {
-    @Environment(AppViewModel.self) private var appViewModel
+    @ObservedObject var viewModel: ReadingViewModel
     @State private var selectedWord: String?
     @State private var selectedSentence: String?
     @State private var selectedParagraph: String?
@@ -57,7 +57,7 @@ struct ArticleReaderView: View {
     }
     
     private var article: Article? {
-        appViewModel.currentArticle
+        viewModel.currentArticle
     }
     
     var body: some View {
@@ -76,9 +76,9 @@ struct ArticleReaderView: View {
                                 // 底部间距
                                 Spacer(minLength: 100)
                             }
-                            .padding(.horizontal, appViewModel.settings.readingMargin)
+                            .padding(.horizontal, viewModel.settings.readingMargin)
                         }
-                        .background(appViewModel.settings.backgroundColor)
+                        .background(Color(viewModel.settings.backgroundColor))
                     }
                 } else {
                     Text("未选择文章")
@@ -89,9 +89,9 @@ struct ArticleReaderView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        appViewModel.stopReading()
-                    } label: {
+                    Button(action: {
+                        viewModel.stopReading()
+                    }) {
                         Image(systemName: "chevron.left")
                             .fontWeight(.medium)
                     }
@@ -99,35 +99,39 @@ struct ArticleReaderView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack {
-                        Button {
+                        Button(action: {
                             isShowingSettings = true
-                        } label: {
+                        }) {
                             Image(systemName: "textformat")
                         }
                         
                         if let article = article {
                             Menu {
-                                Button {
-                                    appViewModel.toggleBookmark(article)
-                                } label: {
+                                Button(action: {
+                                    Task {
+                                        await viewModel.toggleBookmark(article)
+                                    }
+                                }) {
                                     Label(
                                         article.isBookmarked ? "取消收藏" : "收藏文章",
                                         systemImage: article.isBookmarked ? "bookmark.fill" : "bookmark"
                                     )
                                 }
                                 
-                                Button {
-                                    appViewModel.markAsCompleted(article)
-                                } label: {
+                                Button(action: {
+                                    Task {
+                                        await viewModel.markAsCompleted(article)
+                                    }
+                                }) {
                                     Label(
                                         article.isCompleted ? "标记为未完成" : "标记为已完成",
                                         systemImage: article.isCompleted ? "checkmark.circle" : "checkmark.circle.fill"
                                     )
                                 }
                                 
-                                Button {
-                                    appViewModel.shareArticle(article)
-                                } label: {
+                                Button(action: {
+                                    viewModel.shareArticle(article)
+                                }) {
                                     Label("分享文章", systemImage: "square.and.arrow.up")
                                 }
                             } label: {
@@ -140,7 +144,7 @@ struct ArticleReaderView: View {
         }
         .sheet(isPresented: $showingWordDefinition) {
             if let word = selectedWord {
-                WordDefinitionSheet(word: word)
+                WordDefinitionSheet(viewModel: viewModel, word: word)
             }
         }
         .sheet(isPresented: $showingSentenceTranslation) {
@@ -154,7 +158,7 @@ struct ArticleReaderView: View {
             }
         }
         .sheet(isPresented: $isShowingSettings) {
-            ReadingSettingsSheet()
+            ReadingSettingsSheet(viewModel: viewModel)
         }
         .onAppear {
             // 避免重复初始化
@@ -166,7 +170,7 @@ struct ArticleReaderView: View {
         .onDisappear {
             if article != nil {
                 let readingTime = Date().timeIntervalSince(readingStartTime)
-                appViewModel.addReadingTime(readingTime / 60.0)
+                viewModel.addReadingTime(readingTime / 60.0)
             }
         }
     }
@@ -238,7 +242,7 @@ struct ArticleReaderView: View {
     // MARK: - 文章内容
     
     private func articleContent(_ article: Article) -> some View {
-        VStack(alignment: .leading, spacing: appViewModel.settings.paragraphSpacing) {
+        VStack(alignment: .leading, spacing: viewModel.settings.paragraphSpacing) {
             ForEach(Array(article.paragraphs.enumerated()), id: \.offset) { index, paragraph in
                 paragraphView(paragraph, index: index)
             }
@@ -246,7 +250,7 @@ struct ArticleReaderView: View {
     }
     
     private func paragraphView(_ paragraph: ArticleParagraph, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: appViewModel.settings.lineSpacing) {
+        VStack(alignment: .leading, spacing: viewModel.settings.lineSpacing) {
             ForEach(Array(paragraph.sentences.enumerated()), id: \.offset) { sentenceIndex, sentence in
                 sentenceView(sentence.text, paragraphIndex: index, sentenceIndex: sentenceIndex)
             }
@@ -259,9 +263,9 @@ struct ArticleReaderView: View {
     
     private func sentenceView(_ sentence: String, paragraphIndex: Int, sentenceIndex: Int) -> some View {
         Text(attributedSentence(sentence))
-            .font(.system(size: appViewModel.settings.fontSize, design: .default))
-            .lineSpacing(appViewModel.settings.lineSpacing)
-            .foregroundColor(appViewModel.settings.textColor)
+            .font(.system(size: viewModel.settings.fontSize, design: .default))
+            .lineSpacing(viewModel.settings.lineSpacing)
+            .foregroundColor(Color(viewModel.settings.textColor))
             .textSelection(.enabled)
             .onTapGesture {
                 selectedSentence = sentence
@@ -273,17 +277,17 @@ struct ArticleReaderView: View {
         var attributedString = AttributedString(sentence)
         
         // 分词并添加点击事件
-        let words = appViewModel.textProcessor.tokenize(sentence)
+        let words = viewModel.textProcessor.tokenize(sentence)
         var currentIndex = attributedString.startIndex
         
         for word in words {
             if let range = attributedString[currentIndex...].range(of: word) {
                 // 检查是否为单词（非标点符号）
                 if word.rangeOfCharacter(from: .letters) != nil {
-                    attributedString[range].foregroundColor = appViewModel.settings.linkColor
+                    attributedString[range].foregroundColor = Color(viewModel.settings.linkColor)
                     attributedString[range].underlineStyle = .single
                     // Note: underlineColor is not available in AttributedString on all platforms
-                    // attributedString[range].underlineColor = appViewModel.settings.linkColor.opacity(0.3)
+                    // attributedString[range].underlineColor = Color(viewModel.settings.linkColor).opacity(0.3)
                 }
                 currentIndex = range.upperBound
             }
@@ -296,7 +300,7 @@ struct ArticleReaderView: View {
 // MARK: - 单词定义弹窗
 
 struct WordDefinitionSheet: View {
-    @Environment(AppViewModel.self) private var appViewModel
+    @ObservedObject var viewModel: ReadingViewModel
     @Environment(\.dismiss) private var dismiss
     let word: String
     @State private var definitions: [DictionaryWord] = []
@@ -346,7 +350,7 @@ struct WordDefinitionSheet: View {
                 .multilineTextAlignment(.center)
             
             Button("添加到生词本") {
-                appViewModel.addUnknownWord(word)
+                viewModel.addUnknownWord(word)
                 dismiss()
             }
             .buttonStyle(.borderedProminent)
@@ -364,10 +368,10 @@ struct WordDefinitionSheet: View {
                         isSelected: selectedDefinition?.id == definition.id
                     ) {
                         selectedDefinition = definition
-                        appViewModel.recordWordLookup(
+                        viewModel.recordWordLookup(
                             word: dictWord.word,
                             definition: definition,
-                            context: appViewModel.currentReadingContext
+                            context: viewModel.currentReadingContext
                         )
                         dismiss()
                     }
@@ -380,7 +384,7 @@ struct WordDefinitionSheet: View {
     @MainActor
     private func loadDefinitions() {
         Task {
-            let results = await appViewModel.lookupWord(word)
+            let results = await viewModel.lookupWord(word)
             await MainActor.run {
                 definitions = results
                 isLoading = false
@@ -601,7 +605,7 @@ struct ParagraphTranslationSheet: View {
 // MARK: - 阅读设置弹窗
 
 struct ReadingSettingsSheet: View {
-    @Environment(AppViewModel.self) private var appViewModel
+    @ObservedObject var viewModel: ReadingViewModel
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -611,14 +615,14 @@ struct ReadingSettingsSheet: View {
                     HStack {
                         Text("字体大小")
                         Spacer()
-                        Text("\(Int(appViewModel.settings.fontSize))")
+                        Text("\(Int(viewModel.settings.fontSize))")
                             .foregroundColor(.secondary)
                     }
                     
                     Slider(
                         value: Binding(
-                            get: { appViewModel.settings.fontSize },
-                            set: { appViewModel.settings.fontSize = $0 }
+                            get: { viewModel.settings.fontSize },
+                            set: { viewModel.settings.fontSize = $0 }
                         ),
                         in: 12...24,
                         step: 1
@@ -627,14 +631,14 @@ struct ReadingSettingsSheet: View {
                     HStack {
                         Text("行间距")
                         Spacer()
-                        Text("\(Int(appViewModel.settings.lineSpacing))")
+                        Text("\(Int(viewModel.settings.lineSpacing))")
                             .foregroundColor(.secondary)
                     }
                     
                     Slider(
                         value: Binding(
-                            get: { appViewModel.settings.lineSpacing },
-                            set: { appViewModel.settings.lineSpacing = $0 }
+                            get: { viewModel.settings.lineSpacing },
+                            set: { viewModel.settings.lineSpacing = $0 }
                         ),
                         in: 4...12,
                         step: 1
@@ -643,8 +647,12 @@ struct ReadingSettingsSheet: View {
                 
                 Section("主题设置") {
                     Picker("主题", selection: Binding(
-                        get: { appViewModel.settings.colorScheme },
-                        set: { appViewModel.settings.colorScheme = $0 }
+                        get: { 
+                            AppColorScheme(rawValue: viewModel.settings.colorScheme) ?? .auto
+                        },
+                        set: { 
+                            viewModel.settings.colorScheme = $0.rawValue
+                        }
                     )) {
                         ForEach(AppColorScheme.allCases, id: \.self) { scheme in
                             Text(scheme.displayName).tag(scheme)
@@ -667,6 +675,19 @@ struct ReadingSettingsSheet: View {
 }
 
 #Preview {
-    ArticleReaderView()
-        .environment(AppViewModel())
+    let mockArticleService = MockArticleService()
+    let mockUserProgressService = MockUserProgressService()
+    let mockDictionaryService = MockDictionaryService()
+    let mockTextProcessor = TextProcessor()
+    let mockErrorHandler = MockErrorHandler()
+    
+    let viewModel = ReadingViewModel(
+        articleService: mockArticleService,
+        userProgressService: mockUserProgressService,
+        dictionaryService: mockDictionaryService,
+        textProcessor: mockTextProcessor,
+        errorHandler: mockErrorHandler
+    )
+    
+    ArticleReaderView(viewModel: viewModel)
 }

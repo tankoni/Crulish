@@ -8,7 +8,7 @@
 import Foundation
 import NaturalLanguage
 
-class TextProcessor {
+class TextProcessor: TextProcessorProtocol {
     private let tokenizer = NLTokenizer(unit: .word)
     private let tagger = NLTagger(tagSchemes: [.lexicalClass, .lemma])
     
@@ -201,6 +201,41 @@ class TextProcessor {
         return lowercaseWord
     }
     
+    // MARK: - 句子提取
+    
+    /// 从文本中提取包含指定单词的句子
+    /// - Parameters:
+    ///   - word: 要查找的单词
+    ///   - text: 源文本
+    /// - Returns: 包含该单词的句子，如果未找到则返回nil
+    func extractSentence(containing word: String, from text: String) -> String? {
+        let sentences = splitIntoSentences(text)
+        let cleanWord = cleanWord(word)
+        
+        for sentence in sentences {
+            let sentenceWords = extractWords(sentence)
+            if sentenceWords.contains(cleanWord) {
+                return sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        return nil
+    }
+    
+    /// 将文本分割为句子
+    /// - Parameter text: 要分割的文本
+    /// - Returns: 句子数组
+    func splitIntoSentences(_ text: String) -> [String] {
+        let cleanedText = cleanText(text)
+        
+        // 使用正则表达式分割句子
+        let sentences = cleanedText.components(separatedBy: .init(charactersIn: ".!?"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        
+        return sentences
+    }
+    
     // MARK: - 相似度计算
     
     /// 计算字符串相似度（Levenshtein距离，带缓存优化）
@@ -268,18 +303,7 @@ class TextProcessor {
     
     // MARK: - 句子分析
     
-    // 分割句子
-    func splitIntoSentences(_ text: String) -> [String] {
-        let cleanedText = cleanText(text)
-        
-        // 使用正则表达式分割句子
-        let _ = "[.!?]+\\s+" // sentencePattern未使用，保留以备将来使用
-        let sentences = cleanedText.components(separatedBy: .init(charactersIn: ".!?"))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        
-        return sentences
-    }
+
     
     // 获取单词在文本中的上下文
     func getWordContext(_ word: String, in text: String, contextLength: Int = 50) -> String {

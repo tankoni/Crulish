@@ -9,23 +9,62 @@ import Foundation
 import SwiftData
 import NaturalLanguage
 
-@Observable
-class DictionaryService {
-    private var modelContext: ModelContext?
+class DictionaryService: BaseService, DictionaryServiceProtocol {
+    func getWordsForReview(filter: ReviewFilter) -> [UserWord] {
+        return []
+    }
+    
+    func getWordsByMastery(level: MasteryLevel) -> [UserWord] {
+        return []
+    }
+    
+    func getWordHistory(limit: Int) -> [UserWord] {
+        return []
+    }
+    
+    func getVocabularyStats() -> VocabularyStats {
+        return VocabularyStats(
+            totalWords: 0,
+            unfamiliarWords: 0,
+            familiarWords: 0,
+            masteredWords: 0,
+            todayLookups: 0,
+            weeklyLookups: 0,
+            averageLookupPerDay: 0.0,
+            mostLookedUpWords: []
+        )
+    }
+    
+    func clearWordHistory() {
+        
+    }
+    
     private var dictionaryWords: [String: DictionaryWord] = [:]
     private let textProcessor = TextProcessor()
     
-    init(modelContext: ModelContext? = nil) {
-        self.modelContext = modelContext
-        loadDictionary()
+    init(
+        modelContext: ModelContext,
+        cacheManager: CacheManagerProtocol,
+        errorHandler: ErrorHandlerProtocol
+    ) {
+        super.init(
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: errorHandler,
+            subsystem: "com.en01.services",
+            category: "DictionaryService"
+        )
+        Task {
+            await loadDictionary()
+        }
     }
     
     // MARK: - 词典管理
     
     // 加载词典数据
-    private func loadDictionary() {
+    private func loadDictionary() async {
         // 从本地JSON文件加载词典数据
-        loadDictionaryFromJSON()
+        await loadDictionaryFromJSON()
         
         // 从数据库加载用户自定义词汇
         loadUserDictionary()
@@ -33,7 +72,7 @@ class DictionaryService {
     
     /// 从JSON文件加载词典数据
     /// 使用异步加载以避免阻塞主线程
-    private func loadDictionaryFromJSON() {
+    private func loadDictionaryFromJSON() async {
         guard let url = Bundle.main.url(forResource: "dictionary", withExtension: "json") else {
             print("[WARNING] 找不到词典文件，使用示例数据")
             initializeSampleDictionary()
@@ -51,10 +90,21 @@ class DictionaryService {
                     tempDictionary.reserveCapacity(dictionaryData.count)
                     
                     for wordData in dictionaryData {
+                        // 转换WordDefinitionData为WordDefinition
+                        let definitions = wordData.definitions.map { defData in
+                            WordDefinition(
+                                partOfSpeech: defData.partOfSpeech,
+                                meaning: defData.meaning,
+                                englishMeaning: defData.englishMeaning,
+                                examples: defData.examples,
+                                contextKeywords: defData.contextKeywords
+                            )
+                        }
+                        
                         let word = DictionaryWord(
                             word: wordData.word,
                             phonetic: wordData.phonetic,
-                            definitions: wordData.definitions,
+                            definitions: definitions,
                             frequency: wordData.frequency,
                             difficulty: wordData.difficulty,
                             tags: wordData.tags
@@ -76,17 +126,13 @@ class DictionaryService {
     
     // 从数据库加载用户词典
     private func loadUserDictionary() {
-        guard let context = modelContext else { return }
-        
-        let descriptor = FetchDescriptor<DictionaryWord>()
-        
-        do {
-            let userWords = try context.fetch(descriptor)
+        self.performSafeOperation("加载用户词典") {
+            let descriptor = FetchDescriptor<DictionaryWord>()
+            let userWords = self.safeFetch(descriptor, operation: "获取用户词汇")
             for word in userWords {
-                dictionaryWords[word.word.lowercased()] = word
+                self.dictionaryWords[word.word.lowercased()] = word
             }
-        } catch {
-            print("加载用户词典失败: \(error)")
+            self.logger.info("用户词典加载完成，共 \(userWords.count) 个词汇")
         }
     }
     
@@ -98,14 +144,14 @@ class DictionaryService {
     ///   - context: 上下文信息
     /// - Returns: 词典中的单词定义，如果未找到则返回nil
     func lookupWord(_ word: String, context: String = "") -> DictionaryWord? {
-        let cleanWord = textProcessor.cleanWord(word)
+        let cleanWord = self.textProcessor.cleanWord(word)
         let lowercaseWord = cleanWord.lowercased()
         
         // 性能优化：首先检查空字符串
         guard !lowercaseWord.isEmpty else { return nil }
         
         // 首先尝试精确匹配（最快）
-        if let exactMatch = dictionaryWords[lowercaseWord] {
+        if let exactMatch = self.dictionaryWords[lowercaseWord] {
             return exactMatch
         }
         
@@ -143,7 +189,7 @@ class DictionaryService {
     private func selectBestDefinition(from definitions: [WordDefinition], context: String) -> WordDefinition? {
         guard !definitions.isEmpty else { return nil }
         
-        let contextWords = textProcessor.extractKeywords(from: context)
+        let contextWords = self.textProcessor.extractKeywords(from: context)
         var bestDefinition = definitions.first!
         var bestScore = 0.0
         
@@ -170,7 +216,7 @@ class DictionaryService {
         }
         
         // 检查释义中的关键词
-        let definitionWords = textProcessor.extractKeywords(from: definition.meaning)
+        let definitionWords = self.textProcessor.extractKeywords(from: definition.meaning)
         for word in contextWords {
             if definitionWords.contains(word) {
                 score += 1.0
@@ -179,7 +225,7 @@ class DictionaryService {
         
         // 检查例句中的关键词
         for example in definition.examples {
-            let exampleWords = textProcessor.extractKeywords(from: example)
+            let exampleWords = self.textProcessor.extractKeywords(from: example)
             for word in contextWords {
                 if exampleWords.contains(word) {
                     score += 0.5
@@ -192,10 +238,10 @@ class DictionaryService {
     
     // 词根匹配
     private func findByStem(_ word: String) -> DictionaryWord? {
-        let stem = textProcessor.stemWord(word)
+        let stem = self.textProcessor.stemWord(word)
         
-        for (key, dictionaryWord) in dictionaryWords {
-            if textProcessor.stemWord(key) == stem {
+        for (key, dictionaryWord) in self.dictionaryWords {
+            if self.textProcessor.stemWord(key) == stem {
                 return dictionaryWord
             }
         }
@@ -209,8 +255,8 @@ class DictionaryService {
         var bestMatch: DictionaryWord?
         var bestSimilarity = 0.0
         
-        for (key, dictionaryWord) in dictionaryWords {
-            let similarity = textProcessor.calculateSimilarity(word, key)
+        for (key, dictionaryWord) in self.dictionaryWords {
+            let similarity = self.textProcessor.calculateSimilarity(word, key)
             if similarity > threshold && similarity > bestSimilarity {
                 bestSimilarity = similarity
                 bestMatch = dictionaryWord
@@ -222,68 +268,107 @@ class DictionaryService {
     
     // MARK: - 用户词汇记录
     
-    // 记录用户查词
-    func recordWordLookup(word: String, context: String, sentence: String, article: Article?) -> UserWord? {
-        guard let context = modelContext else { return nil }
-        
-        let cleanWord = textProcessor.cleanWord(word)
-        
-        // 检查是否已存在记录
-        let lowercaseWord = cleanWord.lowercased()
-        let predicate = #Predicate<UserWord> { record in
-            record.word == lowercaseWord
-        }
-        
-        let descriptor = FetchDescriptor<UserWord>(predicate: predicate)
-        
-        do {
-            let existingRecords = try context.fetch(descriptor)
+    // 记录用户查词 - 协议要求的方法
+    func recordWordLookup(word: String, context: String, sentence: String, article: Article) -> UserWord {
+        return self.performSafeOperation("记录查词") {
+            let cleanWord = self.textProcessor.cleanWord(word)
+            let lowercaseWord = cleanWord.lowercased()
+            
+            // 检查是否已存在记录
+            let predicate = #Predicate<UserWord> { record in
+                record.word == lowercaseWord
+            }
+            
+            let descriptor = FetchDescriptor<UserWord>(predicate: predicate)
+            let existingRecords = self.safeFetch(descriptor, operation: "获取现有词汇记录")
             
             if let existingRecord = existingRecords.first {
                 // 更新现有记录
                 existingRecord.incrementLookupCount()
-                existingRecord.context = sentence
+                existingRecord.context = context
                 existingRecord.sentence = sentence
-                existingRecord.article = article
                 
-                try context.save()
+                self.safeSave(operation: "更新词汇记录")
                 return existingRecord
             } else {
                 // 创建新记录
-                let definition = getContextualDefinition(for: cleanWord, in: sentence)
+                let definition = self.getContextualDefinition(for: cleanWord, in: context)
                 let newRecord = UserWord(
                     word: cleanWord,
-                    context: sentence,
+                    context: context,
                     sentence: sentence,
                     selectedDefinition: definition
                 )
-                newRecord.article = article
+                newRecord.articleID = article.id.uuidString
                 
-                context.insert(newRecord)
-                try context.save()
+                self.modelContext.insert(newRecord)
+                self.safeSave(operation: "保存新词汇记录")
                 
                 return newRecord
             }
-        } catch {
-            print("记录查词失败: \(error)")
-            return nil
+        } ?? UserWord(word: word, context: context, sentence: sentence, selectedDefinition: nil)
+    }
+    
+    // 协议要求的异步查词方法
+    func lookupWord(_ word: String) async throws -> UserWord {
+        let cleanWord = self.textProcessor.cleanWord(word)
+        let definition = self.getContextualDefinition(for: cleanWord, in: "")
+        
+        return UserWord(
+            word: cleanWord,
+            context: "",
+            sentence: "",
+            selectedDefinition: definition
+        )
+    }
+    
+    // 记录用户查词 - 异步版本
+    private func recordWordLookupAsync(for word: String, context: String?) async {
+        self.performSafeOperation("记录查词") {
+            let cleanWord = self.textProcessor.cleanWord(word)
+
+            // 检查是否已存在记录
+            let lowercaseWord = cleanWord.lowercased()
+            let predicate = #Predicate<UserWord> { record in
+                record.word == lowercaseWord
+            }
+
+            let descriptor = FetchDescriptor<UserWord>(predicate: predicate)
+            let existingRecords = self.safeFetch(descriptor, operation: "获取词汇记录")
+
+            if let existingRecord = existingRecords.first {
+                // 更新现有记录
+                existingRecord.incrementLookupCount()
+                existingRecord.context = context ?? ""
+
+                self.safeSave(operation: "更新词汇复习记录")
+                return existingRecord
+            } else {
+                // 创建新记录
+                let definition = self.getContextualDefinition(for: cleanWord, in: context ?? "")
+                let newRecord = UserWord(
+                    word: cleanWord,
+                    context: context ?? "",
+                    sentence: context ?? "",
+                    selectedDefinition: definition
+                )
+
+                self.modelContext.insert(newRecord)
+                self.safeSave(operation: "保存新复习记录")
+
+                return newRecord
+            }
         }
     }
     
     // 获取用户词汇记录
     func getUserWordRecords() -> [UserWord] {
-        guard let context = modelContext else { return [] }
-        
-        let descriptor = FetchDescriptor<UserWord>(
-            sortBy: [SortDescriptor(\UserWord.lastLookupDate, order: .reverse)]
-        )
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("获取用户词汇记录失败: \(error)")
-            return []
-        }
+        return self.performSafeOperation("获取用户词汇记录") {
+            let descriptor = FetchDescriptor<UserWord>(
+                sortBy: [SortDescriptor(\UserWord.lastLookupDate, order: .reverse)]
+            )
+            return self.safeFetch(descriptor, operation: "获取用户词汇列表")
+        } ?? []
     }
     
     // 获取需要复习的单词
@@ -313,14 +398,72 @@ class DictionaryService {
     
     // 添加单词笔记
     func addNote(_ record: UserWord, note: String) {
-        record.notes = note
-        saveContext()
+        self.performSafeOperation("添加笔记") {
+            if let existingNotes = record.notes, !existingNotes.isEmpty {
+                record.notes = existingNotes + "\n" + note
+            } else {
+                record.notes = note
+            }
+            self.safeSave(operation: "更新词汇熟练度")
+        }
     }
-    
+
+    func addUnknownWord(_ word: UserWord) async throws {
+        self.modelContext.insert(word)
+            self.safeSave(operation: "保存新词汇")
+    }
+
+    func addWord(_ word: UserWord) async throws {
+        self.modelContext.insert(word)
+        try self.modelContext.save()
+    }
+
+    func updateWordMastery(_ record: UserWord, level: MasteryLevel, correct: Bool) {
+        
+    }
+
+    func toggleReviewFlag(for record: UserWord) {
+        record.isMarkedForReview.toggle()
+        if record.isMarkedForReview {
+            record.nextReviewDate = Date()
+        } else {
+            record.nextReviewDate = nil
+        }
+        self.saveContext()
+    }
+
+    func deleteWordRecord(_ record: UserWord) {
+        self.performSafeOperation("删除词汇记录") {
+            self.modelContext.delete(record)
+            self.safeSave(operation: "删除词汇记录")
+        }
+    }
+
+    func clearAllRecords() {
+        self.performSafeOperation("清除所有词汇记录") {
+            // 删除所有用户词汇记录
+            try self.modelContext.delete(model: UserWord.self)
+            self.safeSave(operation: "清空词汇记录")
+            self.logger.info("成功清除所有词汇记录")
+        }
+    }
+
+    func updateMasteryLevel(_ record: UserWord, level: MasteryLevel) {
+        self.performSafeOperation("更新掌握水平") {
+            record.masteryLevel = level
+            record.updateReviewDate(basedOn: level)
+            self.safeSave(operation: "切换复习标记")
+        }
+    }
+
+    func initializeDictionary() async throws {
+        await loadDictionary()
+    }
+
     // MARK: - 搜索功能
     
     // 搜索词汇
-    func searchWords(query: String) -> [DictionaryWord] {
+        func searchWords(_ query: String) -> [DictionaryWord] {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return []
         }
@@ -328,7 +471,7 @@ class DictionaryService {
         let lowercaseQuery = query.lowercased()
         var results: [DictionaryWord] = []
         
-        for (key, word) in dictionaryWords {
+        for (key, word) in self.dictionaryWords {
             // 精确匹配
             if key.hasPrefix(lowercaseQuery) {
                 results.append(word)
@@ -376,7 +519,7 @@ class DictionaryService {
     // MARK: - 统计功能
     
     // 获取词汇统计
-    func getVocabularyStats() -> VocabularyStats {
+    func getVocabularyStats() -> VocabularyStats? {
         let userRecords = getUserWordRecords()
         
         let totalWords = userRecords.count
@@ -417,56 +560,15 @@ class DictionaryService {
     
     // 添加自定义词汇
     func addCustomWord(_ word: DictionaryWord) {
-        guard let context = modelContext else { return }
-        
-        dictionaryWords[word.word.lowercased()] = word
-        context.insert(word)
-        
-        do {
-            try context.save()
-        } catch {
-            print("添加自定义词汇失败: \(error)")
+        self.performSafeOperation("添加自定义词汇") {
+            self.dictionaryWords[word.word.lowercased()] = word
+            self.modelContext.insert(word)
+            self.safeSave(operation: "保存词汇")
+            self.logger.info("成功添加自定义词汇: \(word.word)")
         }
     }
     
-    // 删除用户词汇记录
-    func deleteUserWordRecord(_ record: UserWord) {
-        guard let context = modelContext else { return }
-        
-        context.delete(record)
-        
-        do {
-            try context.save()
-        } catch {
-            print("删除词汇记录失败: \(error)")
-        }
-    }
-    
-    func deleteWordRecord(_ record: UserWord) {
-        deleteUserWordRecord(record)
-    }
-    
-    func toggleReviewFlag(for record: UserWord) {
-        record.isMarkedForReview.toggle()
-        if record.isMarkedForReview {
-            record.nextReviewDate = Date()
-        } else {
-            record.nextReviewDate = nil
-        }
-        saveContext()
-    }
-    
-    func clearAllRecords() {
-        guard let modelContext = modelContext else { return }
-        
-        do {
-            // 删除所有用户词汇记录
-            try modelContext.delete(model: UserWord.self)
-            saveContext()
-        } catch {
-            print("清除词汇记录失败: \(error)")
-        }
-    }
+
     
     // 初始化示例词典
     func initializeSampleDictionary() {
@@ -475,7 +577,7 @@ class DictionaryService {
                 word: "artificial",
                 phonetic: "/ˌɑːrtɪˈfɪʃl/",
                 definitions: [
-                    WordDefinition(
+                    WordDefinitionData(
                         partOfSpeech: .adjective,
                         meaning: "人工的，人造的",
                         englishMeaning: "made by humans, not natural",
@@ -491,14 +593,14 @@ class DictionaryService {
                 word: "intelligence",
                 phonetic: "/ɪnˈtelɪdʒəns/",
                 definitions: [
-                    WordDefinition(
+                    WordDefinitionData(
                         partOfSpeech: .noun,
                         meaning: "智力，智能",
                         englishMeaning: "the ability to learn and understand",
                         examples: ["human intelligence", "artificial intelligence"],
                         contextKeywords: ["brain", "mind", "smart", "cognitive"]
                     ),
-                    WordDefinition(
+                    WordDefinitionData(
                         partOfSpeech: .noun,
                         meaning: "情报，信息",
                         englishMeaning: "secret information",
@@ -514,7 +616,7 @@ class DictionaryService {
                 word: "transform",
                 phonetic: "/trænsˈfɔːrm/",
                 definitions: [
-                    WordDefinition(
+                    WordDefinitionData(
                         partOfSpeech: .verb,
                         meaning: "转变，改变",
                         englishMeaning: "to change completely",
@@ -529,29 +631,34 @@ class DictionaryService {
         ]
         
         for wordData in sampleWords {
+            // 转换WordDefinitionData为WordDefinition
+            let definitions = wordData.definitions.map { defData in
+                WordDefinition(
+                    partOfSpeech: defData.partOfSpeech,
+                    meaning: defData.meaning,
+                    englishMeaning: defData.englishMeaning,
+                    examples: defData.examples,
+                    contextKeywords: defData.contextKeywords
+                )
+            }
+            
             let word = DictionaryWord(
                 word: wordData.word,
                 phonetic: wordData.phonetic,
-                definitions: wordData.definitions,
+                definitions: definitions,
                 frequency: wordData.frequency,
                 difficulty: wordData.difficulty,
                 tags: wordData.tags
             )
-            dictionaryWords[wordData.word.lowercased()] = word
+            self.dictionaryWords[wordData.word.lowercased()] = word
         }
     }
     
     // MARK: - 私有方法
-    
-    private func saveContext() {
-        guard let context = modelContext else { return }
-        
-        do {
-            try context.save()
-        } catch {
-            print("保存上下文失败: \(error)")
-        }
-    }
+     
+     private func saveContext() {
+         self.safeSave(operation: "保存词典上下文")
+     }
 }
 
 // MARK: - 数据结构
@@ -560,46 +667,58 @@ class DictionaryService {
 struct DictionaryWordData: Codable {
     let word: String
     let phonetic: String?
-    let definitions: [WordDefinition]
+    let definitions: [WordDefinitionData]
     let frequency: Int
     let difficulty: WordDifficulty
     let tags: [String]
 }
 
+// 词汇释义数据结构（用于JSON导入）
+struct WordDefinitionData: Codable {
+    let partOfSpeech: PartOfSpeech
+    let meaning: String
+    let englishMeaning: String?
+    let examples: [String]
+    let contextKeywords: [String]
+    
+    init(partOfSpeech: PartOfSpeech, meaning: String, englishMeaning: String? = nil, examples: [String] = [], contextKeywords: [String] = []) {
+        self.partOfSpeech = partOfSpeech
+        self.meaning = meaning
+        self.englishMeaning = englishMeaning
+        self.examples = examples
+        self.contextKeywords = contextKeywords
+    }
+}
+
 // MARK: - 扩展
 
 extension DictionaryService {
-    // 设置模型上下文
-    func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
-        loadUserDictionary()
-    }
     
     // 获取词典大小
     var dictionarySize: Int {
-        return dictionaryWords.count
+        return self.dictionaryWords.count
     }
     
     // 检查单词是否存在
     func wordExists(_ word: String) -> Bool {
-        let cleanWord = textProcessor.cleanWord(word)
-        return dictionaryWords[cleanWord.lowercased()] != nil
+        let cleanWord = self.textProcessor.cleanWord(word)
+        return self.dictionaryWords[cleanWord.lowercased()] != nil
     }
     
     // 获取随机单词（用于学习）
     func getRandomWords(count: Int = 10) -> [DictionaryWord] {
-        let allWords = Array(dictionaryWords.values)
+        let allWords = Array(self.dictionaryWords.values)
         return Array(allWords.shuffled().prefix(count))
     }
     
     // 根据难度获取单词
     func getWordsByDifficulty(_ difficulty: WordDifficulty, limit: Int = 50) -> [DictionaryWord] {
-        let filteredWords = dictionaryWords.values.filter { $0.difficulty == difficulty }
+        let filteredWords = self.dictionaryWords.values.filter { $0.difficulty == difficulty }
         return Array(filteredWords.prefix(limit))
     }
     
     // 根据标签获取单词
     func getWordsByTag(_ tag: String) -> [DictionaryWord] {
-        return dictionaryWords.values.filter { $0.tags.contains(tag) }
+        return self.dictionaryWords.values.filter { $0.tags.contains(tag) }
     }
 }

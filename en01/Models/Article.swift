@@ -25,11 +25,10 @@ final class Article: @unchecked Sendable {
     var lastReadDate: Date?
     var readingTime: TimeInterval // 总阅读时间（秒）
     var createdDate: Date
+    var completedDate: Date? // 完成日期
     var imageName: String // 新增图片名称属性
     
-    // 关联的用户查词记录
-    @Relationship(deleteRule: .cascade, inverse: \UserWordRecord.article)
-    var wordRecords: [UserWordRecord] = []
+    // 注意：用户查词记录通过UserWord模型管理，不需要直接关联
     
     init(title: String, content: String, year: Int, examType: String, difficulty: ArticleDifficulty, topic: String, imageName: String) {
         self.id = UUID()
@@ -47,6 +46,7 @@ final class Article: @unchecked Sendable {
         self.lastReadDate = nil
         self.readingTime = 0
         self.createdDate = Date()
+        self.completedDate = nil
     }
 }
 
@@ -79,6 +79,10 @@ enum ArticleDifficulty: String, CaseIterable, Codable {
         case .hard:
             return 3
         }
+    }
+    
+    static func from(string: String) -> ArticleDifficulty? {
+        return ArticleDifficulty.allCases.first { $0.rawValue == string }
     }
 }
 

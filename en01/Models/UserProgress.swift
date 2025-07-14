@@ -271,16 +271,7 @@ enum AchievementType: String, CaseIterable, Codable {
     }
 }
 
-@Model
-final class UserWordRecord {
-    var word: String
-    var article: Article?
-
-    init(word: String, article: Article?) {
-        self.word = word
-        self.article = article
-    }
-}
+// UserWordRecord 已移除 - 用户查词记录通过 UserWord 模型管理
 
 extension UserProgress {
     // 添加阅读时间

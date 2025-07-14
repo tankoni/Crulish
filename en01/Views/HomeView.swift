@@ -8,13 +8,12 @@
 import SwiftUI
 
 struct HomeView: View {
-    @Environment(AppViewModel.self) private var appViewModel
-    @State private var todaySummary: TodaySummary?
-    @State private var streakStatus: StreakStatus?
-    @State private var recommendations: [StudyRecommendation] = []
-    @State private var recentArticles: [Article] = []
-    @State private var recommendedArticles: [Article] = []
+    @ObservedObject var viewModel: HomeViewModel
     @State private var isDataLoaded = false // 防止重复加载
+    
+    init(viewModel: HomeViewModel) {
+        self.viewModel = viewModel
+    }
     
     var body: some View {
         NavigationView {
@@ -105,19 +104,19 @@ struct HomeView: View {
     }
     
     private var levelBadge: some View {
-        let levelInfo = appViewModel.getCurrentLevelInfo()
+        let _ = viewModel.currentLevelInfo
         
         return VStack(spacing: 4) {
-            Text(levelInfo.level.displayName)
+            Text(viewModel.currentLevelInfo.levelTitle)
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundColor(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(levelInfo.level.color)
+                .background(.blue)
                 .cornerRadius(8)
             
-            Text("\(Int(levelInfo.progress * 100))%")
+            Text("\(Int(viewModel.currentLevelInfo.progressPercentage * 100))%")
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
@@ -134,44 +133,44 @@ struct HomeView: View {
                 
                 Spacer()
                 
-                if let summary = todaySummary, summary.isGoalAchieved {
+                if let summary = viewModel.todaySummary, summary.isGoalAchieved {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
                 }
             }
             
-            if let summary = todaySummary {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
-                    StatItem(
-                        title: "今日阅读",
-                        value: "\(summary.readingTime)分钟",
-                        icon: "book.fill",
-                        color: .blue
-                    )
-                    
-                    StatItem(
-                        title: "文章数",
-                        value: "\(summary.articlesRead)",
-                        icon: "book",
-                        color: .green
-                    )
-                    
-                    StatItem(
-                        title: "查词数",
-                        value: "\(summary.wordsLookedUp)",
-                        icon: "text.magnifyingglass",
-                        color: .orange
-                    )
-                    
-                    StatItem(
-                        title: "复习数",
-                        value: "\(summary.reviewsCompleted)",
-                        icon: "repeat",
-                        color: .purple
-                    )
-                }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
+                StatItem(
+                    title: "今日阅读",
+                    value: "\(viewModel.todaySummary?.readingTime ?? 0)分钟",
+                    icon: "book.fill",
+                    color: .blue
+                )
                 
-                // 目标进度条
+                StatItem(
+                    title: "文章数",
+                    value: "\(viewModel.todaySummary?.articlesRead ?? 0)",
+                    icon: "book",
+                    color: .green
+                )
+                
+                StatItem(
+                    title: "查词数",
+                    value: "\(viewModel.todaySummary?.wordsLookedUp ?? 0)",
+                    icon: "text.magnifyingglass",
+                    color: .orange
+                )
+                
+                StatItem(
+                    title: "复习数",
+                    value: "\(viewModel.todaySummary?.reviewsCompleted ?? 0)",
+                    icon: "repeat",
+                    color: .purple
+                )
+            }
+            
+            // 目标进度条
+            if let summary = viewModel.todaySummary {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("每日目标进度")
@@ -203,31 +202,34 @@ struct HomeView: View {
     // MARK: - 连续学习卡片
     
     private var streakCard: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Image(systemName: "flame.fill")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("学习连续")
+                .font(.headline)
+                .fontWeight(.semibold)
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(viewModel.streakStatus?.consecutiveDays ?? 0)")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
                         .foregroundColor(.orange)
                     
-                    Text("学习连续天数")
+                    Text("连续天数")
                         .font(.subheadline)
-                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
                 }
                 
-                if let status = streakStatus {
-                    Text(status.statusMessage)
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Image(systemName: viewModel.streakStatus?.hasStudiedToday == true ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(viewModel.streakStatus?.statusColor ?? .gray)
+                    
+                    Text(viewModel.streakStatus?.statusMessage ?? "继续保持")
                         .font(.caption)
-                        .foregroundColor(status.statusColor)
+                        .foregroundColor(.secondary)
                 }
-            }
-            
-            Spacer()
-            
-            if let status = streakStatus {
-                Text("\(status.consecutiveDays)")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(status.statusColor)
             }
         }
         .padding()
@@ -251,8 +253,8 @@ struct HomeView: View {
                     icon: "book.fill",
                     color: .blue
                 ) {
-                    if let article = appViewModel.getRecentArticles().first {
-                        appViewModel.startReading(article)
+                    if let article = viewModel.recentArticles.first {
+                        viewModel.startReading(article)
                     }
                 }
                 
@@ -262,18 +264,18 @@ struct HomeView: View {
                     icon: "star.fill",
                     color: .yellow
                 ) {
-                    if let article = appViewModel.getNextRecommendedArticle() {
-                        appViewModel.startReading(article)
+                    if let article = viewModel.nextRecommendedArticle {
+                        viewModel.startReading(article)
                     }
                 }
                 
                 QuickActionButton(
                     title: "词汇复习",
-                    subtitle: "\(appViewModel.getWordsForReview().count)个待复习",
+                    subtitle: "\(viewModel.wordsForReviewCount)个待复习",
                     icon: "repeat.circle.fill",
                     color: .green
                 ) {
-                    appViewModel.selectTab(.vocabulary)
+                    viewModel.selectVocabularyTab()
                 }
                 
                 QuickActionButton(
@@ -282,7 +284,7 @@ struct HomeView: View {
                     icon: "chart.bar.fill",
                     color: .purple
                 ) {
-                    appViewModel.selectTab(.progress)
+                    viewModel.selectProgressTab()
                 }
             }
         }
@@ -304,22 +306,22 @@ struct HomeView: View {
                 Spacer()
                 
                 Button("查看全部") {
-                    appViewModel.selectTab(.reading)
+                    viewModel.selectReadingTab()
                 }
                 .font(.subheadline)
                 .foregroundColor(.blue)
             }
             
-            if recommendedArticles.isEmpty {
+            if viewModel.recommendedArticles.isEmpty {
                 Text("暂无推荐文章")
                     .foregroundColor(.secondary)
                     .padding()
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(recommendedArticles.prefix(5)) { article in
+                        ForEach(Array(viewModel.recommendedArticles.prefix(5)), id: \.id) { article in
                             ArticleCard(article: article) {
-                                appViewModel.startReading(article)
+                                viewModel.startReading(article)
                             }
                         }
                     }
@@ -341,13 +343,13 @@ struct HomeView: View {
                 Spacer()
                 
                 Button("查看全部") {
-                    appViewModel.selectTab(.reading)
+                    viewModel.selectReadingTab()
                 }
                 .font(.subheadline)
                 .foregroundColor(.blue)
             }
             
-            if recentArticles.isEmpty {
+            if viewModel.recentArticles.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "book")
                         .font(.largeTitle)
@@ -364,9 +366,9 @@ struct HomeView: View {
                 .padding()
             } else {
                 LazyVStack(spacing: 8) {
-                    ForEach(recentArticles.prefix(3)) { article in
+                    ForEach(Array(viewModel.recentArticles.prefix(3)), id: \.id) { article in
                         RecentArticleRow(article: article) {
-                            appViewModel.startReading(article)
+                            viewModel.startReading(article)
                         }
                     }
                 }
@@ -386,13 +388,13 @@ struct HomeView: View {
                 .font(.headline)
                 .fontWeight(.semibold)
             
-            if recommendations.isEmpty {
+            if viewModel.recommendations.isEmpty {
                 Text("暂无建议")
                     .foregroundColor(.secondary)
                     .padding()
             } else {
                 LazyVStack(spacing: 8) {
-                    ForEach(recommendations.prefix(3), id: \.title) { recommendation in
+                    ForEach(Array(viewModel.recommendations.prefix(3)), id: \.title) { recommendation in
                         RecommendationCard(recommendation: recommendation)
                     }
                 }
@@ -406,56 +408,9 @@ struct HomeView: View {
     
     // MARK: - 数据刷新
     
-    /// 刷新主页数据（带性能优化）
+    /// 刷新主页数据
     private func refreshData() {
-        // 使用异步加载避免阻塞UI
-        Task {
-            // 并行加载数据以提高性能
-            async let summaryTask = loadTodaySummary()
-            async let streakTask = loadStreakStatus()
-            async let recommendationsTask = loadRecommendations()
-            async let recentTask = loadRecentArticles()
-            async let recommendedTask = loadRecommendedArticles()
-            
-            // 等待所有数据加载完成
-            let (summary, streak, recs, recent, recommended) = await (
-                summaryTask, streakTask, recommendationsTask, recentTask, recommendedTask
-            )
-            
-            // 在主线程更新UI
-            await MainActor.run {
-                self.todaySummary = summary
-                self.streakStatus = streak
-                self.recommendations = recs
-                self.recentArticles = recent
-                self.recommendedArticles = recommended
-            }
-        }
-    }
-    
-    /// 异步加载今日摘要
-    private func loadTodaySummary() async -> TodaySummary? {
-        return appViewModel.getTodaySummary()
-    }
-    
-    /// 异步加载连续学习状态
-    private func loadStreakStatus() async -> StreakStatus? {
-        return appViewModel.getStreakStatus()
-    }
-    
-    /// 异步加载学习建议
-    private func loadRecommendations() async -> [StudyRecommendation] {
-        return appViewModel.getStudyRecommendations()
-    }
-    
-    /// 异步加载最近文章
-    private func loadRecentArticles() async -> [Article] {
-        return appViewModel.getRecentArticles()
-    }
-    
-    /// 异步加载推荐文章
-    private func loadRecommendedArticles() async -> [Article] {
-        return appViewModel.getRecommendedArticles()
+        viewModel.refreshData()
     }
 }
 
@@ -668,6 +623,15 @@ struct RecommendationCard: View {
 }
 
 #Preview {
-    HomeView()
-        .environment(AppViewModel())
+    let mockArticleService = MockArticleService()
+    let mockUserProgressService = MockUserProgressService()
+    let mockErrorHandler = MockErrorHandler()
+    
+    let viewModel = HomeViewModel(
+        articleService: mockArticleService,
+        userProgressService: mockUserProgressService,
+        errorHandler: mockErrorHandler
+    )
+    
+    HomeView(viewModel: viewModel)
 }

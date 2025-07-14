@@ -8,7 +8,11 @@
 import SwiftUI
 
 struct VocabularyView: View {
-    @Environment(AppViewModel.self) private var appViewModel
+    @ObservedObject var viewModel: VocabularyViewModel
+    
+    init(viewModel: VocabularyViewModel) {
+        self.viewModel = viewModel
+    }
     @State private var selectedTab: VocabularyTab = .myWords
     @State private var searchText = ""
     @State private var selectedMastery: MasteryLevel?
@@ -38,17 +42,17 @@ struct VocabularyView: View {
                 isDataLoaded = true
             }
         }
-        .onChange(of: selectedTab) { _, _ in
+        .onChange(of: selectedTab) {
             loadVocabularyData()
         }
-        .onChange(of: searchText) { _, _ in
+        .onChange(of: searchText) {
             // 防抖处理，避免频繁过滤
             debounceFilter()
         }
-        .onChange(of: selectedMastery) { _, _ in
+        .onChange(of: selectedMastery) {
             filterWords()
         }
-        .onChange(of: sortOption) { _, _ in
+        .onChange(of: sortOption) {
             sortWords()
         }
     }
@@ -78,13 +82,13 @@ struct VocabularyView: View {
             }
             
             Button {
-                appViewModel.exportVocabulary()
+                let _ = viewModel.exportVocabulary()
             } label: {
                 Label("导出词汇", systemImage: "square.and.arrow.up")
             }
             
             Button {
-                appViewModel.startVocabularyReview()
+                viewModel.startReview()
             } label: {
                 Label("开始复习", systemImage: "brain.head.profile")
             }
@@ -235,20 +239,20 @@ struct VocabularyView: View {
                 List {
                     ForEach(filteredWords) { wordRecord in
                         WordRecordRow(wordRecord: wordRecord) {
-                            appViewModel.showWordDetail(wordRecord)
+                            viewModel.showWordDetail(wordRecord)
                         }
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
-                                appViewModel.toggleReviewFlag(for: wordRecord)
+                                viewModel.toggleReviewFlag(for: wordRecord)
                             } label: {
                                 Image(systemName: wordRecord.needsReview ? "flag.slash" : "flag")
                             }
                             .tint(.orange)
                             
                             Button {
-                                appViewModel.deleteWordRecord(wordRecord)
+                                viewModel.deleteWordRecord(wordRecord)
                                 loadVocabularyData()
                             } label: {
                                 Image(systemName: "trash")
@@ -281,7 +285,9 @@ struct VocabularyView: View {
                 .multilineTextAlignment(.center)
             
             Button("开始阅读") {
-                appViewModel.selectedTab = .reading
+                // Navigate to reading view - this should be handled by coordinator
+                // For now, we'll just refresh the data
+                viewModel.refreshVocabulary()
             }
             .buttonStyle(.borderedProminent)
         }
@@ -314,14 +320,14 @@ struct VocabularyView: View {
                     LazyVStack(spacing: 8) {
                         ForEach(reviewWords.prefix(10)) { wordRecord in
                             ReviewWordRow(wordRecord: wordRecord) {
-                                appViewModel.startWordReview(wordRecord)
+                                viewModel.markWordForReview(wordRecord)
                             }
                         }
                     }
                     
                     if reviewWords.count > 10 {
                         Button("查看全部 \(reviewWords.count) 个单词") {
-                            appViewModel.showAllReviewWords()
+                            viewModel.showAllReviewWords()
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 8)
@@ -365,7 +371,7 @@ struct VocabularyView: View {
                 Spacer()
                 
                 Button("开始复习") {
-                    appViewModel.startVocabularyReview()
+                    viewModel.startReview()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -565,32 +571,21 @@ struct VocabularyView: View {
     
     // MARK: - 数据处理
     
-    /// 异步加载词汇数据（带性能优化）
+    /// 加载词汇数据
     private func loadVocabularyData() {
-        Task {
-            // 并行加载数据以提高性能
-            async let wordsTask = loadUserWords()
-            async let statsTask = loadVocabularyStats()
-            
-            let (words, stats) = await (wordsTask, statsTask)
-            
-            // 在主线程更新UI
-            await MainActor.run {
-                self.myWords = words
-                self.vocabularyStats = stats
-                self.filterWords()
-            }
-        }
-    }
-    
-    /// 异步加载用户单词
-    private func loadUserWords() async -> [UserWord] {
-        return appViewModel.getUserWordRecords()
-    }
-    
-    /// 异步加载词汇统计
-    private func loadVocabularyStats() async -> VocabularyStats? {
-        return appViewModel.getVocabularyStats()
+        viewModel.loadVocabulary()
+        myWords = viewModel.vocabulary
+        vocabularyStats = VocabularyStats(
+            totalWords: viewModel.vocabularyStats.totalWords,
+            unfamiliarWords: viewModel.vocabularyStats.unknownWords,
+            familiarWords: viewModel.vocabularyStats.familiarWords,
+            masteredWords: viewModel.vocabularyStats.masteredWords,
+            todayLookups: 0,
+            weeklyLookups: 0,
+            averageLookupPerDay: 0.0,
+            mostLookedUpWords: []
+        )
+        filterWords()
     }
     
     /// 防抖处理搜索，避免频繁过滤
@@ -640,6 +635,8 @@ struct VocabularyView: View {
             filteredWords.sort(by: { $0.queryCount > $1.queryCount })
         case .mastery:
             filteredWords.sort(by: { $0.masteryLevel.rawValue < $1.masteryLevel.rawValue })
+        case .dateAdded:
+            filteredWords.sort(by: { $0.firstQueryDate > $1.firstQueryDate })
         }
     }
     
@@ -871,27 +868,12 @@ enum VocabularyTab: String, CaseIterable {
     }
 }
 
-enum VocabularySortOption: String, CaseIterable {
-    case recent = "recent"
-    case alphabetical = "alphabetical"
-    case frequency = "frequency"
-    case mastery = "mastery"
-    
-    var displayName: String {
-        switch self {
-        case .recent:
-            return "最近查询"
-        case .alphabetical:
-            return "字母顺序"
-        case .frequency:
-            return "查询频率"
-        case .mastery:
-            return "掌握程度"
-        }
-    }
-}
+
 
 #Preview {
-    VocabularyView()
-        .environment(AppViewModel())
+    VocabularyView(viewModel: VocabularyViewModel(
+        dictionaryService: MockDictionaryService(),
+        userProgressService: MockUserProgressService(),
+        errorHandler: MockErrorHandler()
+    ))
 }

@@ -9,199 +9,221 @@ import Foundation
 import SwiftData
 import PDFKit
 
-@Observable
-class ArticleService {
-    private let pdfService = PDFService()
-    private var modelContext: ModelContext?
+/// 文章服务实现
+class ArticleService: BaseService, ArticleServiceProtocol {
+    private let pdfService: PDFServiceProtocol
     
-    init(modelContext: ModelContext? = nil) {
-        self.modelContext = modelContext
+    // 缓存键
+    private enum CacheKeys {
+        static let allArticles = "articles_all"
+        static let articlesByYear = "articles_year_"
+        static let articlesByDifficulty = "articles_difficulty_"
+        static let articlesByExamType = "articles_exam_"
+        static let recentArticles = "articles_recent"
+        static let recommendedArticles = "articles_recommended"
+        static let articleStats = "article_stats"
+        static let availableYears = "available_years"
+        static let availableTopics = "available_topics"
+        static let availableExamTypes = "available_exam_types"
+    }
+    
+    init(
+        modelContext: ModelContext,
+        cacheManager: CacheManagerProtocol,
+        errorHandler: ErrorHandlerProtocol,
+        pdfService: PDFServiceProtocol
+    ) {
+        self.pdfService = pdfService
+        super.init(
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: errorHandler,
+            subsystem: "com.en01.services",
+            category: "ArticleService"
+        )
     }
     
     // MARK: - 文章管理
     
-    // 获取所有文章
+    // MARK: - 文章获取
+    
     func getAllArticles() -> [Article] {
-        guard let context = modelContext else { return [] }
-        
-        let descriptor = FetchDescriptor<Article>(sortBy: [SortDescriptor(\Article.year, order: .reverse)])
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("获取文章失败: \(error)")
-            return []
-        }
+        return getCachedOrFetchModel(
+            key: CacheKeys.allArticles,
+            expiration: 300,
+            operation: "获取所有文章"
+        ) {
+            let descriptor = FetchDescriptor<Article>(sortBy: [SortDescriptor(\Article.year, order: .reverse)])
+            return safeFetch(descriptor, operation: "获取所有文章")
+        } ?? []
     }
     
-    // 根据年份获取文章
     func getArticlesByYear(_ year: Int) -> [Article] {
-        guard let context = modelContext else { return [] }
-        
-        let predicate = #Predicate<Article> { article in
-            article.year == year
-        }
-        
-        let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.title)])
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("获取\(year)年文章失败: \(error)")
-            return []
-        }
+        let cacheKey = CacheKeys.articlesByYear + "\(year)"
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 600,
+            operation: "获取\(year)年文章"
+        ) {
+            let predicate = #Predicate<Article> { article in
+                article.year == year
+            }
+            let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.title)])
+            return safeFetch(descriptor, operation: "获取\(year)年文章")
+        } ?? []
     }
     
-    // 根据难度获取文章
     func getArticlesByDifficulty(_ difficulty: ArticleDifficulty) -> [Article] {
-        guard let context = modelContext else { return [] }
-        
-        let predicate = #Predicate<Article> { article in
-            article.difficulty == difficulty
-        }
-        
-        let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.title)])
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("获取\(difficulty.rawValue)难度文章失败: \(error)")
-            return []
-        }
+        let cacheKey = CacheKeys.articlesByDifficulty + difficulty.rawValue
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 600,
+            operation: "获取\(difficulty.rawValue)难度文章"
+        ) {
+            let predicate = #Predicate<Article> { article in
+                article.difficulty == difficulty
+            }
+            let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.title)])
+            return safeFetch(descriptor, operation: "获取\(difficulty.rawValue)难度文章")
+        } ?? []
     }
     
     // 根据主题获取文章
     func getArticlesByTopic(_ topic: String) -> [Article] {
-        guard let context = modelContext else { return [] }
-        
-        let predicate = #Predicate<Article> { article in
-            article.topic == topic
-        }
-        
-        let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.title)])
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("获取\(topic)主题文章失败: \(error)")
-            return []
-        }
+        let cacheKey = "articles_topic_" + topic
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 600,
+            operation: "获取主题\(topic)文章"
+        ) {
+            let predicate = #Predicate<Article> { article in
+                article.topic == topic
+            }
+            let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.title)])
+            return safeFetch(descriptor, operation: "获取主题\(topic)文章")
+        } ?? []
     }
     
     // 获取未完成的文章
     func getUnfinishedArticles() -> [Article] {
-        guard let context = modelContext else { return [] }
-        
-        let predicate = #Predicate<Article> { article in
-            !article.isCompleted
-        }
-        
-        let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.lastReadDate, order: .reverse)])
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("获取未完成文章失败: \(error)")
-            return []
-        }
+        return getCachedOrFetchModel(
+            key: "articles_unfinished",
+            expiration: 300,
+            operation: "获取未完成文章"
+        ) {
+            let predicate = #Predicate<Article> { article in
+                !article.isCompleted
+            }
+            let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.lastReadDate, order: .reverse)])
+            return safeFetch(descriptor, operation: "获取未完成文章")
+        } ?? []
     }
     
     // 获取最近阅读的文章
     func getRecentlyReadArticles(limit: Int = 10) -> [Article] {
-        guard let context = modelContext else { return [] }
-        
-        let predicate = #Predicate<Article> { article in
-            article.lastReadDate != nil
-        }
-        
-        var descriptor = FetchDescriptor<Article>(
-            predicate: predicate,
-            sortBy: [SortDescriptor(\Article.lastReadDate, order: .reverse)]
-        )
-        descriptor.fetchLimit = limit
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("获取最近阅读文章失败: \(error)")
-            return []
-        }
+        let cacheKey = "articles_recently_read_\(limit)"
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 300,
+            operation: "获取最近阅读文章"
+        ) {
+            let predicate = #Predicate<Article> { article in
+                article.lastReadDate != nil
+            }
+            var descriptor = FetchDescriptor<Article>(
+                predicate: predicate,
+                sortBy: [SortDescriptor(\Article.lastReadDate, order: .reverse)]
+            )
+            descriptor.fetchLimit = limit
+            return safeFetch(descriptor, operation: "获取最近阅读文章")
+        } ?? []
     }
     
-    // 搜索文章
-    func searchArticles(query: String) -> [Article] {
-        guard let context = modelContext else { return [] }
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
-        
-        let lowercaseQuery = query.lowercased()
-        
-        let predicate = #Predicate<Article> { article in
-            article.title.localizedStandardContains(lowercaseQuery) ||
-            article.content.localizedStandardContains(lowercaseQuery) ||
-            article.topic.localizedStandardContains(lowercaseQuery)
-        }
-        
-        let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.year, order: .reverse)])
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("搜索文章失败: \(error)")
+    func searchArticles(_ query: String) -> [Article] {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return []
         }
+        
+        let cacheKey = "search_results_" + query.lowercased()
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 300,
+            operation: "搜索文章: \(query)"
+        ) {
+            let searchQuery = query.lowercased()
+            let descriptor = FetchDescriptor<Article>(
+                predicate: #Predicate { article in
+                    article.title.localizedStandardContains(searchQuery) ||
+                    article.content.localizedStandardContains(searchQuery) ||
+                    article.topic.localizedStandardContains(searchQuery)
+                },
+                sortBy: [SortDescriptor(\.title)]
+            )
+            return safeFetch(descriptor, operation: "搜索文章: \(query)")
+        } ?? []
     }
     
     // MARK: - 文章操作
     
     // 添加文章
     func addArticle(_ article: Article) {
-        guard let context = modelContext else { return }
-        
-        context.insert(article)
-        
-        do {
-            try context.save()
-        } catch {
-            print("添加文章失败: \(error)")
+        performSafeOperation("添加文章") {
+            modelContext.insert(article)
+            safeSave(operation: "保存新文章")
+        }
+        invalidateArticleCaches()
+    }
+    
+    func updateArticleProgress(_ article: Article, progress: Double) {
+        performSafeOperation("更新文章进度") {
+            let clampedProgress = max(0.0, min(1.0, progress))
+            article.readingProgress = clampedProgress
+            article.lastReadDate = Date()
+            
+            if clampedProgress >= 1.0 {
+                article.isCompleted = true
+                article.completedDate = Date()
+                article.readingProgress = 1.0
+            }
+            
+            safeSave(operation: "更新文章")
+            invalidateArticleCaches()
         }
     }
     
-    // 更新文章阅读进度
-    func updateArticleProgress(_ article: Article, progress: Double) {
-        article.updateProgress(progress)
-        saveContext()
+    func addReadingTime(to article: Article, time: Double) {
+        performSafeOperation("添加阅读时间") {
+            article.readingTime += time
+            article.lastReadDate = Date()
+            try modelContext.save()
+            invalidateArticleCaches()
+        }
     }
     
-    // 增加文章阅读时间
-    func addReadingTime(to article: Article, time: TimeInterval) {
-        article.addReadingTime(time)
-        saveContext()
-    }
-    
-    // 标记文章为已完成
     func markArticleAsCompleted(_ article: Article) {
-        article.isCompleted = true
-        article.readingProgress = 1.0
-        article.lastReadDate = Date()
-        saveContext()
+        performSafeOperation("标记文章完成") {
+            article.isCompleted = true
+            article.completedDate = Date()
+            article.readingProgress = 1.0
+            try modelContext.save()
+            invalidateArticleCaches()
+        }
     }
     
-    // 更新文章
     func updateArticle(_ article: Article) {
-        saveContext()
+        performSafeOperation("更新文章") {
+            try modelContext.save()
+            invalidateArticleCaches()
+        }
     }
     
     // 删除文章
     func deleteArticle(_ article: Article) {
-        guard let context = modelContext else { return }
-        
-        context.delete(article)
-        
-        do {
-            try context.save()
-        } catch {
-            print("删除文章失败: \(error)")
+        performSafeOperation("删除文章") {
+            modelContext.delete(article)
+            safeSave(operation: "删除文章")
         }
+        invalidateArticleCaches()
     }
     
     // MARK: - 统计信息
@@ -249,42 +271,157 @@ class ArticleService {
         )
     }
     
+    func getArticlesByExamType(_ examType: String) -> [Article] {
+        let cacheKey = CacheKeys.articlesByExamType + examType
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 600,
+            operation: "获取\(examType)考试类型文章"
+        ) {
+            let predicate = #Predicate<Article> { article in
+                article.examType == examType
+            }
+            let descriptor = FetchDescriptor<Article>(predicate: predicate, sortBy: [SortDescriptor(\Article.title)])
+            return safeFetch(descriptor, operation: "获取\(examType)考试类型文章")
+        } ?? []
+    }
+    
+    func getRecentArticles(limit: Int = 10) -> [Article] {
+        let cacheKey = CacheKeys.recentArticles + "_\(limit)"
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 180,
+            operation: "获取最近文章"
+        ) {
+            // 简化查询以避免SwiftData崩溃
+            let descriptor = FetchDescriptor<Article>(
+                sortBy: [SortDescriptor(\Article.createdDate, order: .reverse)]
+            )
+            let allArticles = safeFetch(descriptor, operation: "获取最近文章")
+            
+            // 在内存中过滤有阅读记录的文章并限制数量
+            let recentArticles = allArticles.filter { $0.lastReadDate != nil }
+                .sorted { ($0.lastReadDate ?? Date.distantPast) > ($1.lastReadDate ?? Date.distantPast) }
+            return Array(recentArticles.prefix(limit))
+        } ?? []
+    }
+    
     // 获取推荐文章
     func getRecommendedArticles(limit: Int = 5) -> [Article] {
-        let unfinishedArticles = getUnfinishedArticles()
-        
-        // 简单的推荐算法：优先推荐有进度但未完成的文章，然后是未开始的文章
-        let inProgress = unfinishedArticles.filter { $0.readingProgress > 0 }
-        let unread = unfinishedArticles.filter { $0.readingProgress == 0 }
-        
-        var recommended: [Article] = []
-        recommended.append(contentsOf: inProgress.prefix(limit / 2))
-        recommended.append(contentsOf: unread.prefix(limit - recommended.count))
-        
-        return Array(recommended.prefix(limit))
+        let cacheKey = CacheKeys.recommendedArticles + "_\(limit)"
+        return getCachedOrFetchModel(
+            key: cacheKey,
+            expiration: 300,
+            operation: "获取推荐文章"
+        ) {
+            // 简化查询以避免SwiftData崩溃
+            let descriptor = FetchDescriptor<Article>(
+                sortBy: [
+                    SortDescriptor(\Article.readingProgress, order: .reverse),
+                    SortDescriptor(\Article.createdDate, order: .reverse)
+                ]
+            )
+            let allArticles = safeFetch(descriptor, operation: "获取推荐文章")
+            
+            // 在内存中过滤未完成的文章并限制数量
+            let incompleteArticles = allArticles.filter { !$0.isCompleted }
+            return Array(incompleteArticles.prefix(limit))
+        } ?? []
     }
     
     // MARK: - 数据导入
+
+    // MARK: - Protocol Required Methods
     
+    func importArticlesFromJSON() async throws {
+        // Implementation for protocol conformance
+        importArticlesFromJSON(fileName: "articles")
+    }
+    
+    func getReadingStatistics() async throws -> ReadingStatistics {
+        // Implementation for protocol conformance
+        let stats = getArticleStats()
+        return ReadingStatistics(
+            completedArticles: Int(stats.completedArticles),
+            inProgressArticles: Int(stats.inProgressArticles),
+            bookmarkedArticles: 0,
+            averageReadingTime: TimeInterval(stats.averageReadingTimePerArticle),
+            favoriteTopics: Array(stats.topicStats.keys.prefix(5)),
+            difficultyDistribution: Dictionary(uniqueKeysWithValues: stats.difficultyStats.map { (key, value) in (key.rawValue, Int(value.total)) }),
+            yearDistribution: Dictionary(uniqueKeysWithValues: stats.yearStats.map { (key, value) in (String(key), Int(value.total)) })
+        )
+    }
+
     /// 从JSON文件异步导入文章
     /// - Parameter fileName: JSON文件名（不包含扩展名）
         func importArticlesFromPDFs() {
-        guard let resourceURL = Bundle.main.resourceURL else {
-            print("[ERROR] 无法获取资源目录 URL")
+        // 获取项目的Resources文件夹路径
+        let fileManager = FileManager.default
+        
+        // 尝试多个可能的Resources路径
+        var resourcesPaths: [String] = []
+        
+        // 1. 当前工作目录下的Resources文件夹
+        let currentDir = fileManager.currentDirectoryPath
+        resourcesPaths.append("\(currentDir)/Resources")
+        
+        // 2. 用户文档目录下的en01/Resources
+        if let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+            resourcesPaths.append("\(documentsPath.path)/en01/Resources")
+        }
+        
+        // 3. iCloud Drive中的en01/Resources
+        if let iCloudPath = fileManager.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents/xcode/Crulish/en01/Resources") {
+            resourcesPaths.append(iCloudPath.path)
+        }
+        
+        // 4. 直接指定的路径（基于用户提供的信息）
+        resourcesPaths.append("/Users/tankonitk/Library/Mobile Documents/com~apple~CloudDocs/xcode/Crulish/en01/Resources")
+        
+        var foundResourcesPath: String?
+        
+        // 查找存在的Resources文件夹
+        for path in resourcesPaths {
+            if fileManager.fileExists(atPath: path) {
+                foundResourcesPath = path
+                print("[INFO] 找到Resources文件夹: \(path)")
+                break
+            }
+        }
+        
+        guard let resourcesPath = foundResourcesPath else {
+            print("[ERROR] 找不到Resources文件夹，尝试的路径:")
+            for path in resourcesPaths {
+                print("  - \(path)")
+            }
             return
         }
-
+        
+        // 读取Resources文件夹中的PDF文件
         do {
-            let fileURLs = try FileManager.default.contentsOfDirectory(at: resourceURL, includingPropertiesForKeys: nil)
+            let resourcesURL = URL(fileURLWithPath: resourcesPath)
+            let fileURLs = try fileManager.contentsOfDirectory(at: resourcesURL, includingPropertiesForKeys: nil)
             let pdfURLs = fileURLs.filter { $0.pathExtension == "pdf" }
-
+            
+            print("[INFO] 在Resources文件夹中找到\(pdfURLs.count)个PDF文件")
+            
             for url in pdfURLs {
+                print("[INFO] 正在处理PDF文件: \(url.lastPathComponent)")
                 if let article = pdfService.convertPDFToArticle(from: url) {
-                    addArticle(article)
+                    // 检查是否已存在相同标题的文章
+                    let existingArticles = self.getAllArticles()
+                    if !existingArticles.contains(where: { $0.title == article.title }) {
+                        addArticle(article)
+                        print("[SUCCESS] 成功导入PDF文章: \(article.title)")
+                    } else {
+                        print("[INFO] PDF文章已存在，跳过: \(article.title)")
+                    }
+                } else {
+                    print("[ERROR] 无法转换PDF文件: \(url.lastPathComponent)")
                 }
             }
         } catch {
-            print("[ERROR] 无法读取资源目录: \(error)")
+            print("[ERROR] 无法读取Resources目录: \(error)")
         }
     }
 
@@ -414,13 +551,21 @@ Teachers must adapt their methods to effectively integrate technology while main
     // MARK: - 私有方法
     
     private func saveContext() {
-        guard let context = modelContext else { return }
-        
-        do {
-            try context.save()
-        } catch {
-            print("保存上下文失败: \(error)")
-        }
+        safeSave(operation: "保存文章上下文")
+    }
+    
+    private func invalidateArticleCaches() {
+        cacheManager.remove(CacheKeys.allArticles)
+        cacheManager.removeByPrefix(CacheKeys.articlesByYear)
+        cacheManager.removeByPrefix(CacheKeys.articlesByDifficulty)
+        cacheManager.removeByPrefix(CacheKeys.articlesByExamType)
+        cacheManager.remove(CacheKeys.recentArticles)
+        cacheManager.remove(CacheKeys.recommendedArticles)
+        cacheManager.remove(CacheKeys.articleStats)
+        cacheManager.removeByPrefix("articles_topic_")
+        cacheManager.remove("articles_unfinished")
+        cacheManager.removeByPrefix("articles_recently_read_")
+        cacheManager.removeByPrefix("search_results_")
     }
 }
 

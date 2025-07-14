@@ -14,8 +14,8 @@ struct en01App: App {
         let schema = Schema([
             Article.self,
             DictionaryWord.self,
+            WordDefinition.self,
             UserWord.self,
-            UserWordRecord.self,
             UserProgress.self,
             DailyStudyRecord.self
         ])

@@ -9,18 +9,17 @@ import SwiftUI
 import SwiftData
 
 struct SettingsView: View {
-    @Environment(AppViewModel.self) private var appViewModel
+    @ObservedObject var viewModel: SettingsViewModel
+    
+    init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
+    }
     @State private var isShowingResetAlert = false
     @State private var isShowingExportSheet = false
     @State private var isShowingImportSheet = false
     @State private var isShowingAbout = false
     @State private var settings: AppSettings?
-    @State private var showingExportSheet = false
-    @State private var showingImportSheet = false
-    @State private var showingResetAlert = false
     @State private var exportData: Data?
-    @State private var isExporting = false
-    @State private var isImporting = false
     @State private var isDataLoaded = false
     
     var body: some View {
@@ -50,16 +49,16 @@ struct SettingsView: View {
         .alert("重置所有数据", isPresented: $isShowingResetAlert) {
             Button("取消", role: .cancel) { }
             Button("重置", role: .destructive) {
-                appViewModel.resetAllData()
+                viewModel.resetAllData()
             }
         } message: {
             Text("此操作将删除所有学习数据，包括词汇记录、阅读进度和统计信息。此操作不可撤销。")
         }
         .sheet(isPresented: $isShowingExportSheet) {
-            ExportDataView()
+            ExportDataView(viewModel: viewModel)
         }
         .sheet(isPresented: $isShowingImportSheet) {
-            ImportDataView()
+            ImportDataView(viewModel: viewModel)
         }
         .sheet(isPresented: $isShowingAbout) {
             AboutView()
@@ -81,28 +80,22 @@ struct SettingsView: View {
             HStack {
                 Label("字体大小", systemImage: "textformat.size")
                 Spacer()
-                Text("\(Int(appViewModel.settings.fontSize))")
+                Text("\(Int(viewModel.readingSettings.fontSize))")
                     .foregroundColor(.secondary)
             }
             
             Slider(
-                value: Binding(
-                    get: { appViewModel.settings.fontSize },
-                    set: { appViewModel.settings.fontSize = $0 }
-                ),
+                value: $viewModel.readingSettings.fontSize,
                 in: 12...24,
                 step: 1
             )
             .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
             
             // 字体家族
-            Picker("字体", selection: Binding(
-                get: { appViewModel.settings.fontFamily },
-                set: { appViewModel.settings.fontFamily = $0 }
-            )) {
-                ForEach(FontFamily.allCases, id: \.self) { font in
-                    Text(font.displayName).tag(font)
-                }
+            Picker("字体", selection: $viewModel.readingSettings.fontFamily) {
+                Text("系统字体").tag("System")
+                Text("苹方").tag("PingFang SC")
+                Text("宋体").tag("Songti SC")
             }
             .pickerStyle(MenuPickerStyle())
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -111,66 +104,40 @@ struct SettingsView: View {
             HStack {
                 Label("行间距", systemImage: "line.3.horizontal")
                 Spacer()
-                Text("\(Int(appViewModel.settings.lineSpacing))")
+                Text("\(viewModel.readingSettings.lineSpacing, specifier: "%.1f")")
                     .foregroundColor(.secondary)
             }
             
             Slider(
-                value: Binding(
-                    get: { appViewModel.settings.lineSpacing },
-                    set: { appViewModel.settings.lineSpacing = $0 }
-                ),
+                value: $viewModel.readingSettings.lineSpacing,
                 in: 4...12,
                 step: 1
             )
             .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
             
-            // 段落间距
+            // 自动滚动速度
             HStack {
-                Label("段落间距", systemImage: "text.alignleft")
+                Label("自动滚动速度", systemImage: "speedometer")
                 Spacer()
-                Text("\(Int(appViewModel.settings.paragraphSpacing))")
+                Text("\(viewModel.readingSettings.autoScrollSpeed, specifier: "%.1f")")
                     .foregroundColor(.secondary)
             }
             
             Slider(
-                value: Binding(
-                    get: { appViewModel.settings.paragraphSpacing },
-                    set: { appViewModel.settings.paragraphSpacing = $0 }
-                ),
-                in: 8...24,
-                step: 2
+                value: $viewModel.readingSettings.autoScrollSpeed,
+                in: 0.5...3.0,
+                step: 0.1
             )
             .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
             
-            // 页边距
-            HStack {
-                Label("页边距", systemImage: "rectangle.inset.filled")
-                Spacer()
-                Text("\(Int(appViewModel.settings.readingMargin))")
-                    .foregroundColor(.secondary)
-            }
+            // 启用自动滚动
+            Toggle("启用自动滚动", isOn: $viewModel.readingSettings.enableAutoScroll)
             
-            Slider(
-                value: Binding(
-                    get: { appViewModel.settings.readingMargin },
-                    set: { appViewModel.settings.readingMargin = $0 }
-                ),
-                in: 16...32,
-                step: 4
-            )
-            .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
+            // 显示字数统计
+            Toggle("显示字数统计", isOn: $viewModel.readingSettings.showWordCount)
             
-            // 文本对齐
-            Picker("文本对齐", selection: Binding(
-                get: { appViewModel.settings.textAlignment },
-                set: { appViewModel.settings.textAlignment = $0 }
-            )) {
-                ForEach(TextAlignment.allCases, id: \.self) { alignment in
-                    Label(alignment.displayName, systemImage: alignment.iconName).tag(alignment)
-                }
-            }
-            .pickerStyle(MenuPickerStyle())
+            // 显示阅读时间
+            Toggle("显示阅读时间", isOn: $viewModel.readingSettings.showReadingTime)
         }
     }
     
@@ -179,44 +146,21 @@ struct SettingsView: View {
     private var themeSection: some View {
         Section("主题设置") {
             // 颜色方案
-            Picker("外观", selection: Binding(
-                get: { appViewModel.settings.colorScheme },
-                set: { appViewModel.settings.colorScheme = $0 }
-            )) {
-                ForEach(AppColorScheme.allCases, id: \.self) { scheme in
-                    Label(scheme.displayName, systemImage: scheme.iconName).tag(scheme)
-                }
+            Picker("外观", selection: $viewModel.appearanceSettings.colorScheme) {
+                Text("跟随系统").tag(ColorSchemePreference.system)
+                Text("浅色模式").tag(ColorSchemePreference.light)
+                Text("深色模式").tag(ColorSchemePreference.dark)
             }
             .pickerStyle(MenuPickerStyle())
             
-            // 主题色
-            Picker("主题色", selection: Binding(
-                get: { appViewModel.settings.accentColor },
-                set: { appViewModel.settings.accentColor = $0 }
-            )) {
-                ForEach(AccentColor.allCases, id: \.self) { color in
-                    HStack {
-                        Circle()
-                            .fill(color.color)
-                            .frame(width: 16, height: 16)
-                        Text(color.displayName)
-                    }
-                    .tag(color)
-                }
-            }
-            .pickerStyle(MenuPickerStyle())
+            // 启用动态字体
+            Toggle("启用动态字体", isOn: $viewModel.appearanceSettings.enableDynamicType)
             
-            // 护眼模式
-            Toggle("护眼模式", isOn: Binding(
-                get: { appViewModel.settings.eyeCareMode },
-                set: { appViewModel.settings.eyeCareMode = $0 }
-            ))
+            // 启用减少动画
+            Toggle("减少动画效果", isOn: $viewModel.appearanceSettings.enableReduceMotion)
             
-            // 自动夜间模式
-            Toggle("自动夜间模式", isOn: Binding(
-                get: { appViewModel.settings.autoNightMode },
-                set: { appViewModel.settings.autoNightMode = $0 }
-            ))
+            // 启用高对比度
+            Toggle("高对比度", isOn: $viewModel.appearanceSettings.enableHighContrast)
         }
     }
     
@@ -224,56 +168,33 @@ struct SettingsView: View {
     
     private var learningSection: some View {
         Section("学习设置") {
-            // 释义语言
-            Picker("释义语言", selection: Binding(
-                get: { appViewModel.settings.definitionLanguage },
-                set: { appViewModel.settings.definitionLanguage = $0 }
-            )) {
-                ForEach(DefinitionLanguage.allCases, id: \.self) { language in
-                    Text(language.displayName).tag(language)
-                }
-            }
-            .pickerStyle(MenuPickerStyle())
+            // 启用自动查词
+            Toggle("启用自动查词", isOn: $viewModel.vocabularySettings.enableAutoLookup)
             
-            // 自动保存查词
-            Toggle("自动保存查词", isOn: Binding(
-                get: { appViewModel.settings.autoSaveWords },
-                set: { appViewModel.settings.autoSaveWords = $0 }
-            ))
-            
-            // 智能复习提醒
-            Toggle("智能复习提醒", isOn: Binding(
-                get: { appViewModel.settings.smartReviewReminder },
-                set: { appViewModel.settings.smartReviewReminder = $0 }
-            ))
-            
-            // 显示词性
-            Toggle("显示词性", isOn: Binding(
-                get: { appViewModel.settings.showPartOfSpeech },
-                set: { appViewModel.settings.showPartOfSpeech = $0 }
-            ))
+            // 显示发音
+            Toggle("显示发音", isOn: $viewModel.vocabularySettings.showPronunciation)
             
             // 显示例句
-            Toggle("显示例句", isOn: Binding(
-                get: { appViewModel.settings.showExamples },
-                set: { appViewModel.settings.showExamples = $0 }
-            ))
+            Toggle("显示例句", isOn: $viewModel.vocabularySettings.showExamples)
             
-            // 每日学习目标
+            // 启用间隔重复
+            Toggle("启用间隔重复", isOn: $viewModel.vocabularySettings.enableSpacedRepetition)
+            
+            // 每日新词数量
             HStack {
-                Label("每日学习目标", systemImage: "target")
+                Label("每日新词数量", systemImage: "target")
                 Spacer()
-                Text("\(appViewModel.settings.dailyGoalMinutes)分钟")
+                Text("\(viewModel.vocabularySettings.maxNewWordsPerDay)个")
                     .foregroundColor(.secondary)
             }
             
             Slider(
                 value: Binding(
-                    get: { Double(appViewModel.settings.dailyGoalMinutes) },
-                    set: { appViewModel.settings.dailyGoalMinutes = Int($0) }
+                    get: { Double(viewModel.vocabularySettings.maxNewWordsPerDay) },
+                    set: { viewModel.vocabularySettings.maxNewWordsPerDay = Int($0) }
                 ),
-                in: 15...120,
-                step: 15
+                in: 5...50,
+                step: 5
             )
             .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
         }
@@ -284,34 +205,22 @@ struct SettingsView: View {
     private var notificationSection: some View {
         Section("通知设置") {
             // 学习提醒
-            Toggle("学习提醒", isOn: Binding(
-                get: { appViewModel.settings.studyReminder },
-                set: { appViewModel.settings.studyReminder = $0 }
-            ))
+            Toggle("学习提醒", isOn: $viewModel.notificationSettings.enableDailyReminder)
             
-            if appViewModel.settings.studyReminder {
+            if viewModel.notificationSettings.enableDailyReminder {
                 DatePicker(
                     "提醒时间",
-                    selection: Binding(
-                        get: { appViewModel.settings.reminderTime },
-                        set: { appViewModel.settings.reminderTime = $0 }
-                    ),
+                    selection: $viewModel.notificationSettings.dailyReminderTime,
                     displayedComponents: .hourAndMinute
                 )
                 .listRowInsets(EdgeInsets(top: 8, leading: 32, bottom: 8, trailing: 16))
             }
             
             // 复习提醒
-            Toggle("复习提醒", isOn: Binding(
-                get: { appViewModel.settings.reviewReminder },
-                set: { appViewModel.settings.reviewReminder = $0 }
-            ))
+            Toggle("复习提醒", isOn: $viewModel.notificationSettings.enableReviewReminder)
             
             // 成就通知
-            Toggle("成就通知", isOn: Binding(
-                get: { appViewModel.settings.achievementNotification },
-                set: { appViewModel.settings.achievementNotification = $0 }
-            ))
+            Toggle("成就通知", isOn: $viewModel.notificationSettings.enableAchievementNotifications)
         }
     }
     
@@ -319,6 +228,11 @@ struct SettingsView: View {
     
     private var dataSection: some View {
         Section("数据管理") {
+            // 性能监控
+            NavigationLink(destination: PerformanceMonitorView()) {
+                Label("性能监控", systemImage: "speedometer")
+            }
+            
             // 导出数据
             Button {
                 isShowingExportSheet = true
@@ -334,19 +248,13 @@ struct SettingsView: View {
             }
             
             // 自动备份
-            Toggle("自动备份", isOn: Binding(
-                get: { appViewModel.settings.autoBackup },
-                set: { appViewModel.settings.autoBackup = $0 }
-            ))
+            Toggle("自动备份", isOn: $viewModel.dataSettings.enableAutoBackup)
             
-            if appViewModel.settings.autoBackup {
-                Picker("备份频率", selection: Binding(
-                    get: { appViewModel.settings.backupFrequency },
-                    set: { appViewModel.settings.backupFrequency = $0 }
-                )) {
-                    ForEach(BackupFrequency.allCases, id: \.self) { frequency in
-                        Text(frequency.displayName).tag(frequency)
-                    }
+            if viewModel.dataSettings.enableAutoBackup {
+                Picker("备份频率", selection: $viewModel.dataSettings.backupFrequency) {
+                    Text("每日").tag(BackupFrequency.daily)
+                    Text("每周").tag(BackupFrequency.weekly)
+                    Text("每月").tag(BackupFrequency.monthly)
                 }
                 .pickerStyle(MenuPickerStyle())
                 .listRowInsets(EdgeInsets(top: 8, leading: 32, bottom: 8, trailing: 16))
@@ -354,7 +262,9 @@ struct SettingsView: View {
             
             // 清除缓存
             Button {
-                appViewModel.clearCache()
+                Task {
+                    await viewModel.clearCache()
+                }
             } label: {
                 Label("清除缓存", systemImage: "trash")
                     .foregroundColor(.orange)
@@ -408,7 +318,7 @@ struct SettingsView: View {
 // MARK: - 导出数据视图
 
 struct ExportDataView: View {
-    @Environment(AppViewModel.self) private var appViewModel
+    @ObservedObject var viewModel: SettingsViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedDataTypes: Set<DataType> = []
     @State private var isExporting = false
@@ -500,7 +410,7 @@ struct ExportDataView: View {
         } label: {
             if isExporting {
                 HStack {
-                    ProgressView()
+                    SwiftUI.ProgressView()
                         .scaleEffect(0.8)
                     Text("导出中...")
                 }
@@ -520,7 +430,7 @@ struct ExportDataView: View {
          isExporting = true
         
         Task {
-            let success = await appViewModel.exportData(types: selectedDataTypes)
+            let success = await viewModel.exportData(types: selectedDataTypes)
             await MainActor.run {
                 isExporting = false
                 exportSuccess = success
@@ -532,7 +442,7 @@ struct ExportDataView: View {
 // MARK: - 导入数据视图
 
 struct ImportDataView: View {
-    @Environment(AppViewModel.self) private var appViewModel
+    @ObservedObject var viewModel: SettingsViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var isImporting = false
     @State private var importSuccess = false
@@ -560,7 +470,7 @@ struct ImportDataView: View {
                 } label: {
                     if isImporting {
                         HStack {
-                            ProgressView()
+                            SwiftUI.ProgressView()
                                 .scaleEffect(0.8)
                             Text("导入中...")
                         }
@@ -603,7 +513,9 @@ struct ImportDataView: View {
         isImporting = true
         
         Task {
-            let result = await appViewModel.importData()
+            // 这里应该使用文件选择器获取URL，暂时使用模拟URL
+            let mockURL = URL(fileURLWithPath: "/tmp/mock_data.json")
+            let result = await viewModel.importData(from: mockURL)
             await MainActor.run {
                 isImporting = false
                 switch result {
@@ -724,25 +636,32 @@ struct FeatureRow: View {
 extension SettingsView {
     // MARK: - 数据操作
     
-    /// 异步加载设置（带性能优化）
+    /// 加载设置
     private func loadSettings() {
-        Task {
-            let loadedSettings = await loadUserSettings()
-            
-            await MainActor.run {
-                self.settings = loadedSettings
-            }
-        }
-    }
-    
-    /// 异步加载用户设置
-    private func loadUserSettings() async -> AppSettings? {
-        // 模拟异步加载设置
-        return AppSettings()
+        viewModel.loadSettings()
     }
 }
 
 #Preview {
-    SettingsView()
-        .environment(AppViewModel())
+    SettingsView(viewModel: SettingsViewModel(
+        userProgressService: MockUserProgressService(),
+        errorHandler: MockErrorHandler(),
+        cacheManager: MockCacheManager()
+    ))
+}
+
+#Preview("ExportDataView") {
+    ExportDataView(viewModel: SettingsViewModel(
+        userProgressService: MockUserProgressService(),
+        errorHandler: MockErrorHandler(),
+        cacheManager: MockCacheManager()
+    ))
+}
+
+#Preview("ImportDataView") {
+    ImportDataView(viewModel: SettingsViewModel(
+        userProgressService: MockUserProgressService(),
+        errorHandler: MockErrorHandler(),
+        cacheManager: MockCacheManager()
+    ))
 }
