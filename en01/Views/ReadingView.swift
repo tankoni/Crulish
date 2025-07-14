@@ -242,6 +242,8 @@ struct CategoryCard: View {
 struct ExamPaperListView: View {
     @ObservedObject var viewModel: ReadingViewModel
     let examType: String
+    @State private var articles: [Article] = []
+    @State private var isLoading: Bool = true
     
     init(viewModel: ReadingViewModel, examType: String) {
         self.viewModel = viewModel
@@ -249,8 +251,16 @@ struct ExamPaperListView: View {
     }
 
     private var examPapersByYear: [Int: [Article]] {
-        // 需要从外部传入文章数据，暂时返回空字典
-        return [:]
+        Dictionary(grouping: articles.filter { article in
+            switch examType {
+            case "考研一":
+                return article.examType.contains("考研") && article.examType.contains("一")
+            case "考研二":
+                return article.examType.contains("考研") && article.examType.contains("二")
+            default:
+                return article.examType == examType
+            }
+        }, by: { $0.year })
     }
     
     private var sortedYears: [Int] {
@@ -269,21 +279,66 @@ struct ExamPaperListView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
-                ForEach(sortedYears, id: \.self) { year in
-                    if let articles = examPapersByYear[year] {
-                        NavigationLink(destination: ArticleListView(viewModel: viewModel, examType: examType, year: year, articles: articles)) {
-                            ExamPaperCard(year: year, examType: examType, articles: articles)
+        Group {
+            if isLoading {
+                VStack {
+                    SwiftUI.ProgressView("加载中...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(1.2)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if articles.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary.opacity(0.6))
+                    
+                    Text("暂无\(displayTitle)文章")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("请稍后再试")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                        ForEach(sortedYears, id: \.self) { year in
+                            if let articles = examPapersByYear[year] {
+                                NavigationLink(destination: ArticleListView(viewModel: viewModel, examType: examType, year: year, articles: articles)) {
+                                    ExamPaperCard(year: year, examType: examType, articles: articles)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
                         }
-                        .buttonStyle(PlainButtonStyle())
                     }
+                    .padding()
                 }
             }
-            .padding()
         }
         .navigationTitle(displayTitle)
         .background(Color(.systemGroupedBackground))
+        .onAppear {
+            loadArticles()
+        }
+    }
+    
+    private func loadArticles() {
+        Task {
+            do {
+                let allArticles = try await viewModel.articleService.getAllArticles()
+                await MainActor.run {
+                    self.articles = allArticles
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
+        }
     }
 }
 

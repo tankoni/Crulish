@@ -31,7 +31,7 @@ class ReadingViewModel: ObservableObject {
     @Published var completed: Bool = false
     
     // MARK: - Services
-    private let articleService: ArticleServiceProtocol
+    let articleService: ArticleServiceProtocol
     private let userProgressService: UserProgressServiceProtocol
     private let dictionaryService: DictionaryServiceProtocol
     let textProcessor: TextProcessor
