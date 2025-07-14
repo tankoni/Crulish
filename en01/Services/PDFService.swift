@@ -22,7 +22,7 @@ class PDFService: BaseService, PDFServiceProtocol {
     func extractText(from url: URL) -> String? {
         return performSafeOperation("提取PDF文本") {
             guard let pdfDocument = PDFDocument(url: url) else {
-                throw ServiceError.notFound("无法加载 PDF 文件: \(url.lastPathComponent)")
+                throw ServiceError.notFound("无法加载 PDF 文件")
             }
             
             guard let text = pdfDocument.string else {
@@ -37,7 +37,7 @@ class PDFService: BaseService, PDFServiceProtocol {
     func convertPDFToArticle(from url: URL) -> Article? {
         return performSafeOperation("转换PDF为文章") {
             guard let content = extractText(from: url) else {
-                throw ServiceError.validationError("无法提取PDF文本内容: \(url.lastPathComponent)")
+                throw ServiceError.validationError("无法提取PDF文本内容")
             }
             
             // 从文件名中提取标题、年份、考试类型等信息

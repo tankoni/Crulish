@@ -19,7 +19,7 @@ struct ReadingView: View {
             Group {
                 if viewModel.isReading && viewModel.currentArticle != nil {
                     // 显示文章阅读视图
-                    ArticleReaderView(viewModel: viewModel)
+                    ArticleReaderView(article: viewModel.currentArticle!)
                 } else {
                     // 显示文章列表和分类
                     ScrollView {

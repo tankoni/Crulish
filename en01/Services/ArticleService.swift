@@ -230,7 +230,7 @@ class ArticleService: BaseService, ArticleServiceProtocol {
     func clearAllArticles() {
         performSafeOperation("清除所有文章") {
             let descriptor = FetchDescriptor<Article>()
-            let allArticles = safeFetch(descriptor, operation: "获取所有文章") ?? []
+            let allArticles = safeFetch(descriptor, operation: "获取所有文章")
             
             for article in allArticles {
                 modelContext.delete(article)
@@ -405,16 +405,13 @@ class ArticleService: BaseService, ArticleServiceProtocol {
             for path in resourcesPaths {
                 if fileManager.fileExists(atPath: path) {
                     foundResourcesPath = path
-                    print("[INFO] 找到Resources文件夹: \(path)")
+                    print("[INFO] 找到Resources文件夹")
                     break
                 }
             }
             
             guard let resourcesPath = foundResourcesPath else {
-                print("[ERROR] 找不到Resources文件夹，尝试的路径:")
-                for path in resourcesPaths {
-                    print("  - \(path)")
-                }
+                print("[INFO] 未找到PDF资源文件夹，跳过PDF导入")
                 return
             }
         
@@ -456,7 +453,7 @@ class ArticleService: BaseService, ArticleServiceProtocol {
                 invalidateArticleCaches()
                 
             } catch {
-                print("[ERROR] 无法读取Resources目录: \(error)")
+                print("[INFO] 无法访问PDF资源目录")
             }
         }
     }

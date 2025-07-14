@@ -8,438 +8,335 @@
 import SwiftUI
 
 struct ArticleReaderView: View {
-    @ObservedObject var viewModel: ReadingViewModel
-    @State private var selectedWord: String?
-    @State private var selectedSentence: String?
-    @State private var selectedParagraph: String?
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var appCoordinator: AppCoordinator
     @State private var showingWordDefinition = false
+    @State private var selectedWord = ""
     @State private var showingSentenceTranslation = false
+    @State private var selectedSentence = ""
     @State private var showingParagraphTranslation = false
-    @State private var scrollPosition: CGFloat = 0
-    @State private var isShowingSettings = false
+    @State private var selectedParagraph = ""
+    @State private var showingSettings = false
+    @State private var fontSize: CGFloat = 16
+    @State private var lineSpacing: CGFloat = 6
+    @State private var colorScheme: ColorScheme = .light
     @State private var readingStartTime = Date()
-    @State private var isInitialized = false // 防止重复初始化
-    @State private var lookupTask: Task<Void, Never>? // 查词任务
+    @State private var readingTimer: Timer?
     
-    /// 异步查词（带性能优化）
-    private func lookupWord(_ word: String) {
-        selectedWord = word
-        
-        // 取消之前的查词任务
-        lookupTask?.cancel()
-        
-        // 创建新的查词任务
-        lookupTask = Task {
-            // 异步查找单词定义
-            _ = await performWordLookup(word)
-            
-            // 在主线程更新UI
-            await MainActor.run {
-                if !Task.isCancelled {
-                    self.showingWordDefinition = true
-                }
-            }
-            
-            // 异步记录查词行为（不阻塞UI）
-            await recordWordLookupAsync(word: word)
-        }
-    }
-    
-    /// 异步执行单词查找
-    private func performWordLookup(_ word: String) async -> String {
-        // 模拟异步查词
-        return "单词定义"
-    }
-    
-    /// 异步记录查词行为
-    private func recordWordLookupAsync(word: String) async {
-        // 记录查词行为
-    }
-    
-    private var article: Article? {
-        viewModel.currentArticle
-    }
+    let article: Article
     
     var body: some View {
         NavigationView {
-            ZStack {
-                if let article = article {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 0) {
-                                // 文章标题
-                                articleHeader(article)
-                                
-                                // 文章内容
-                                articleContent(article)
-                                
-                                // 底部间距
-                                Spacer(minLength: 100)
-                            }
-                            .padding(.horizontal, viewModel.settings.readingMargin)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // 顶部标题区域 - 模拟真题文档样式
+                    VStack(alignment: HorizontalAlignment.center, spacing: 8) {
+                        Text("\(article.year)年全国硕士研究生入学统一考试英语（\(article.examType == "考研英语一" ? "一" : "二")）试题")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        Text("Section I Use of English")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+                            .padding(.top, 4)
+                        
+                        Text("Directions:")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.primary)
+                            .padding(.top, 8)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Read the following text.")
+                            Text("Choose the best word (s) for each numbered")
+                            Text("blank and mark A, B, C or D on the ANSWER SHEET.")
+                            Text("(10 points)")
                         }
-                        .background(Color.from(string: viewModel.settings.backgroundColor))
+                        .font(.system(size: 11))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+                        .padding(.top, 4)
                     }
-                } else {
-                    Text("未选择文章")
-                        .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    
+                    // 分隔线
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 1)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                    
+                    // 文章正文 - 真题文档样式
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(article.paragraphs.enumerated()), id: \.element.id) { index, paragraph in
+                            VStack(alignment: .leading, spacing: 8) {
+                                // 段落内容 - 使用更紧凑的排版
+                                Text(paragraph.content)
+                                    .font(.system(size: fontSize, weight: .regular))
+                                    .lineSpacing(lineSpacing)
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .onTapGesture {
+                                        selectedParagraph = paragraph.content
+                                        showingParagraphTranslation = true
+                                    }
+                                
+                                // 段落翻译（如果可见）
+                                if paragraph.isTranslationVisible, let translation = paragraph.translation {
+                                    Text(translation)
+                                        .font(.system(size: fontSize - 2))
+                                        .foregroundColor(.secondary)
+                                        .italic()
+                                        .padding(.top, 4)
+                                }
+                            }
+                            .padding(.bottom, index < article.paragraphs.count - 1 ? 16 : 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
                 }
             }
-            .navigationTitle("")
+            .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        viewModel.stopReading()
+                        stopReading()
+                        dismiss()
                     }) {
-                        Image(systemName: "chevron.left")
-                            .fontWeight(.medium)
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("返回")
+                                .font(.system(size: 16))
+                        }
+                        .foregroundColor(.primary)
                     }
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack {
+                    HStack(spacing: 16) {
                         Button(action: {
-                            isShowingSettings = true
+                            showingSettings = true
                         }) {
-                            Image(systemName: "textformat")
+                            Image(systemName: "textformat.size")
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
                         }
                         
-                        if let article = article {
-                            Menu {
-                                Button(action: {
-                                    Task {
-                                        await viewModel.toggleBookmark(article)
-                                    }
-                                }) {
-                                    Label(
-                                        article.isBookmarked ? "取消收藏" : "收藏文章",
-                                        systemImage: article.isBookmarked ? "bookmark.fill" : "bookmark"
-                                    )
-                                }
-                                
-                                Button(action: {
-                                    Task {
-                                        await viewModel.markAsCompleted(article)
-                                    }
-                                }) {
-                                    Label(
-                                        article.isCompleted ? "标记为未完成" : "标记为已完成",
-                                        systemImage: article.isCompleted ? "checkmark.circle" : "checkmark.circle.fill"
-                                    )
-                                }
-                                
-                                Button(action: {
-                                    viewModel.shareArticle(article)
-                                }) {
-                                    Label("分享文章", systemImage: "square.and.arrow.up")
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
-                            }
+                        Button(action: {
+                            article.isBookmarked.toggle()
+                            try? modelContext.save()
+                        }) {
+                            Image(systemName: article.isBookmarked ? "bookmark.fill" : "bookmark")
+                                .font(.system(size: 16))
+                                .foregroundColor(article.isBookmarked ? .orange : .primary)
+                        }
+                        
+                        Button(action: {
+                            shareArticle()
+                        }) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
                         }
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showingWordDefinition) {
-            if let word = selectedWord {
-                WordDefinitionSheet(viewModel: viewModel, word: word)
-            }
-        }
-        .sheet(isPresented: $showingSentenceTranslation) {
-            if let sentence = selectedSentence {
-                SentenceTranslationSheet(sentence: sentence)
-            }
-        }
-        .sheet(isPresented: $showingParagraphTranslation) {
-            if let paragraph = selectedParagraph {
-                ParagraphTranslationSheet(paragraph: paragraph)
-            }
-        }
-        .sheet(isPresented: $isShowingSettings) {
-            ReadingSettingsSheet(viewModel: viewModel)
         }
         .onAppear {
-            // 避免重复初始化
-            if !isInitialized {
-                readingStartTime = Date()
-                isInitialized = true
-            }
+            startReading()
         }
         .onDisappear {
-            if article != nil {
-                let readingTime = Date().timeIntervalSince(readingStartTime)
-                viewModel.addReadingTime(readingTime / 60.0)
+            stopReading()
+        }
+        .sheet(isPresented: $showingWordDefinition) { 
+            if let progressViewModel = appCoordinator.progressViewModel {
+                WordDefinitionSheet(word: selectedWord, viewModel: progressViewModel)
+                    .environmentObject(appCoordinator)
             }
+        }
+        .sheet(isPresented: $showingSentenceTranslation) { 
+            if let progressViewModel = appCoordinator.progressViewModel {
+                SentenceTranslationSheet(sentence: selectedSentence, viewModel: progressViewModel)
+                    .environmentObject(appCoordinator)
+            }
+        }
+        .sheet(isPresented: $showingParagraphTranslation) { 
+            if let progressViewModel = appCoordinator.progressViewModel {
+                ParagraphTranslationSheet(paragraph: selectedParagraph, viewModel: progressViewModel)
+                    .environmentObject(appCoordinator)
+            }
+        }
+        .sheet(isPresented: $showingSettings) {
+            ReadingSettingsSheet(
+                fontSize: $fontSize,
+                lineSpacing: $lineSpacing,
+                colorScheme: $colorScheme
+            )
+        }
+        .preferredColorScheme(colorScheme)
+    }
+    
+    private func startReading() {
+        readingStartTime = Date()
+        // 开始阅读计时
+        readingTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+            // 每分钟更新一次阅读时间
         }
     }
     
-    // MARK: - 文章标题
-    
-    private func articleHeader(_ article: Article) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 文章元信息
-            HStack {
-                Text("\(article.year)年")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text("•")
-                    .foregroundColor(.secondary)
-                
-                Text(article.examType)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text("•")
-                    .foregroundColor(.secondary)
-                
-                Text(article.difficulty.displayName)
-                    .font(.caption)
-                    .foregroundColor(article.difficulty.color)
-                
-                Spacer()
-                
-                Text("\(article.wordCount)词")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            // 文章标题
-            Text(article.title)
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.primary)
-                .lineLimit(nil)
-            
-            // 阅读进度
-            if article.readingProgress > 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("阅读进度")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                        
-                        Text("\(Int(article.readingProgress * 100))%")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
-                    
-                    SwiftUI.ProgressView(value: article.readingProgress)
-                        .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                }
-            }
-            
-            Divider()
-        }
-        .padding(.top, 20)
-        .padding(.bottom, 10)
-    }
-    
-    // MARK: - 文章内容
-    
-    private func articleContent(_ article: Article) -> some View {
-        VStack(alignment: .leading, spacing: viewModel.settings.paragraphSpacing) {
-            ForEach(Array(article.paragraphs.enumerated()), id: \.offset) { index, paragraph in
-                paragraphView(paragraph, index: index)
-            }
-        }
-    }
-    
-    private func paragraphView(_ paragraph: ArticleParagraph, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: viewModel.settings.lineSpacing) {
-            ForEach(Array(paragraph.sentences.enumerated()), id: \.offset) { sentenceIndex, sentence in
-                sentenceView(sentence.text, paragraphIndex: index, sentenceIndex: sentenceIndex)
-            }
-        }
-        .onTapGesture {
-            selectedParagraph = paragraph.text
-            showingParagraphTranslation = true
-        }
-    }
-    
-    private func sentenceView(_ sentence: String, paragraphIndex: Int, sentenceIndex: Int) -> some View {
-        Text(attributedSentence(sentence))
-            .font(.system(size: viewModel.settings.fontSize, design: .default))
-            .lineSpacing(viewModel.settings.lineSpacing)
-            .foregroundColor(Color.from(string: viewModel.settings.textColor))
-            .textSelection(.enabled)
-            .onTapGesture {
-                selectedSentence = sentence
-                showingSentenceTranslation = true
-            }
-    }
-    
-    private func attributedSentence(_ sentence: String) -> AttributedString {
-        var attributedString = AttributedString(sentence)
+    private func stopReading() {
+        readingTimer?.invalidate()
+        readingTimer = nil
         
-        // 分词并添加点击事件
-        let words = viewModel.textProcessor.tokenize(sentence)
-        var currentIndex = attributedString.startIndex
-        
-        for word in words {
-            if let range = attributedString[currentIndex...].range(of: word) {
-                // 检查是否为单词（非标点符号）
-                if word.rangeOfCharacter(from: .letters) != nil {
-                    attributedString[range].foregroundColor = Color.from(string: viewModel.settings.linkColor)
-                    attributedString[range].underlineStyle = .single
-                    // Note: underlineColor is not available in AttributedString on all platforms
-                    // attributedString[range].underlineColor = Color(viewModel.settings.linkColor).opacity(0.3)
-                }
-                currentIndex = range.upperBound
-            }
-        }
-        
-        return attributedString
+        let readingTime = Date().timeIntervalSince(readingStartTime)
+        article.addReadingTime(readingTime)
+        try? modelContext.save()
+    }
+    
+    private func shareArticle() {
+        // 分享文章功能
+    }
+    
+    private func markAsCompleted() {
+        article.isCompleted = true
+        article.readingProgress = 1.0
+        article.completedDate = Date()
+        try? modelContext.save()
     }
 }
 
 // MARK: - 单词定义弹窗
 
 struct WordDefinitionSheet: View {
-    @ObservedObject var viewModel: ReadingViewModel
     @Environment(\.dismiss) private var dismiss
     let word: String
-    @State private var definitions: [DictionaryWord] = []
-    @State private var selectedDefinition: WordDefinition?
+    let viewModel: ProgressViewModel
+    @State private var definition: String = ""
     @State private var isLoading = true
+    @State private var pronunciation: String = ""
+    @State private var examples: [String] = []
+    @State private var isAddedToVocabulary = false
     
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 20) {
                 if isLoading {
-                    SwiftUI.ProgressView("查找释义...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if definitions.isEmpty {
-                    emptyStateView
+                    VStack {
+                        SwiftUI.ProgressView()
+                            .scaleEffect(1.2)
+                        Text("查询中...")
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    definitionsList
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            // 单词和发音
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(word)
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                
+                                if !pronunciation.isEmpty {
+                                    Text(pronunciation)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            // 定义
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("释义")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                
+                                Text(definition)
+                                    .font(.body)
+                                    .lineSpacing(4)
+                            }
+                            
+                            // 例句
+                            if !examples.isEmpty {
+                                Divider()
+                                
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("例句")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                    
+                                    ForEach(examples, id: \.self) { example in
+                                        Text("• \(example)")
+                                            .font(.body)
+                                            .lineSpacing(4)
+                                            .padding(.leading, 8)
+                                    }
+                                }
+                            }
+                            
+                            Spacer(minLength: 20)
+                        }
+                        .padding()
+                    }
                 }
             }
-            .navigationTitle(word)
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("单词释义")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("关闭") {
                         dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        Task {
+                            await addToVocabulary()
+                        }
+                    }) {
+                        Image(systemName: isAddedToVocabulary ? "heart.fill" : "heart")
+                            .foregroundColor(isAddedToVocabulary ? .red : .primary)
                     }
                 }
             }
         }
         .onAppear {
-            loadDefinitions()
-        }
-    }
-    
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "book.closed")
-                .font(.system(size: 50))
-                .foregroundColor(.secondary)
-            
-            Text("未找到释义")
-                .font(.title2)
-                .fontWeight(.medium)
-            
-            Text("词典中没有找到 \"\(word)\" 的释义")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Button("添加到生词本") {
-                viewModel.addUnknownWord(word)
-                dismiss()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    private var definitionsList: some View {
-        List {
-            ForEach(definitions) { dictWord in
-                ForEach(dictWord.definitions, id: \.id) { definition in
-                    DefinitionRow(
-                        definition: definition,
-                        isSelected: selectedDefinition?.id == definition.id
-                    ) {
-                        selectedDefinition = definition
-                        viewModel.recordWordLookup(
-                            word: dictWord.word,
-                            definition: definition,
-                            context: viewModel.currentReadingContext
-                        )
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .listStyle(PlainListStyle())
-    }
-    
-    @MainActor
-    private func loadDefinitions() {
-        Task {
-            let results = await viewModel.lookupWord(word)
-            await MainActor.run {
-                definitions = results
-                isLoading = false
+            Task {
+                await loadDefinition()
             }
         }
     }
-}
-
-struct DefinitionRow: View {
-    let definition: WordDefinition
-    let isSelected: Bool
-    let action: () -> Void
     
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(definition.partOfSpeech.displayName)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(definition.partOfSpeech.color))
-                        .cornerRadius(6)
-                    
-                    Spacer()
-                    
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
-                    }
-                }
-                
-                Text(definition.meaning)
-                    .font(.body)
-                    .foregroundColor(.primary)
-                
-                if let englishMeaning = definition.englishMeaning, !englishMeaning.isEmpty {
-                    Text(englishMeaning)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .italic()
-                }
-                
-                if !definition.examples.isEmpty {
-                    Text(definition.examples.first ?? "")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                        .padding(.top, 4)
-                }
-            }
-            .padding(.vertical, 4)
+    private func loadDefinition() async {
+        // 模拟网络请求延迟
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        
+        await MainActor.run {
+            // 模拟查词结果
+            definition = "这是单词 '\(word)' 的释义。在实际应用中，这里会显示从词典API获取的真实定义。"
+            pronunciation = "/\(word)/"
+            examples = [
+                "This is an example sentence with \(word).",
+                "Another example showing how to use \(word) in context."
+            ]
+            isLoading = false
         }
-        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private func addToVocabulary() async {
+        // 添加到生词本的逻辑
+        await MainActor.run {
+            isAddedToVocabulary.toggle()
+        }
     }
 }
 
@@ -448,6 +345,7 @@ struct DefinitionRow: View {
 struct SentenceTranslationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let sentence: String
+    let viewModel: ProgressViewModel
     @State private var translation = ""
     @State private var analysis = ""
     @State private var isLoading = true
@@ -536,6 +434,7 @@ struct SentenceTranslationSheet: View {
 struct ParagraphTranslationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let paragraph: String
+    let viewModel: ProgressViewModel
     @State private var translation = ""
     @State private var isLoading = true
     
@@ -605,8 +504,10 @@ struct ParagraphTranslationSheet: View {
 // MARK: - 阅读设置弹窗
 
 struct ReadingSettingsSheet: View {
-    @ObservedObject var viewModel: ReadingViewModel
     @Environment(\.dismiss) private var dismiss
+    @Binding var fontSize: CGFloat
+    @Binding var lineSpacing: CGFloat
+    @Binding var colorScheme: ColorScheme
     
     var body: some View {
         NavigationView {
@@ -615,15 +516,12 @@ struct ReadingSettingsSheet: View {
                     HStack {
                         Text("字体大小")
                         Spacer()
-                        Text("\(Int(viewModel.settings.fontSize))")
+                        Text("\(Int(fontSize))")
                             .foregroundColor(.secondary)
                     }
                     
                     Slider(
-                        value: Binding(
-                            get: { viewModel.settings.fontSize },
-                            set: { viewModel.settings.fontSize = $0 }
-                        ),
+                        value: $fontSize,
                         in: 12...24,
                         step: 1
                     )
@@ -631,32 +529,21 @@ struct ReadingSettingsSheet: View {
                     HStack {
                         Text("行间距")
                         Spacer()
-                        Text("\(Int(viewModel.settings.lineSpacing))")
+                        Text("\(Int(lineSpacing))")
                             .foregroundColor(.secondary)
                     }
                     
                     Slider(
-                        value: Binding(
-                            get: { viewModel.settings.lineSpacing },
-                            set: { viewModel.settings.lineSpacing = $0 }
-                        ),
+                        value: $lineSpacing,
                         in: 4...12,
                         step: 1
                     )
                 }
                 
                 Section("主题设置") {
-                    Picker("主题", selection: Binding(
-                        get: { 
-                            AppColorScheme(rawValue: viewModel.settings.colorScheme) ?? .auto
-                        },
-                        set: { 
-                            viewModel.settings.colorScheme = $0.rawValue
-                        }
-                    )) {
-                        ForEach(AppColorScheme.allCases, id: \.self) { scheme in
-                            Text(scheme.displayName).tag(scheme)
-                        }
+                    Picker("主题", selection: $colorScheme) {
+                        Text("浅色").tag(ColorScheme.light)
+                        Text("深色").tag(ColorScheme.dark)
                     }
                     .pickerStyle(SegmentedPickerStyle())
                 }
@@ -675,19 +562,15 @@ struct ReadingSettingsSheet: View {
 }
 
 #Preview {
-    let mockArticleService = MockArticleService()
-    let mockUserProgressService = MockUserProgressService()
-    let mockDictionaryService = MockDictionaryService()
-    let mockTextProcessor = TextProcessor()
-    let mockErrorHandler = MockErrorHandler()
-    
-    let viewModel = ReadingViewModel(
-        articleService: mockArticleService,
-        userProgressService: mockUserProgressService,
-        dictionaryService: mockDictionaryService,
-        textProcessor: mockTextProcessor,
-        errorHandler: mockErrorHandler
+    let sampleArticle = Article(
+        title: "2023年考研一真题",
+        content: "Artificial intelligence (AI) is transforming work, and another like Siri, autonomous vehicles and sophisticated data analysis tools. AI technologies are increasingly becoming part of our daily lives.\n\nOne of the most significant impacts of AI is in the workplace. Automation and AI-powered systems are changing how we work, creating new opportunities while also presenting challenges for workers and organizations.",
+        year: 2023,
+        examType: "考研英语一",
+        difficulty: .medium,
+        topic: "人工智能",
+        imageName: "ai_article"
     )
     
-    ArticleReaderView(viewModel: viewModel)
+    return ArticleReaderView(article: sampleArticle).modelContainer(for: [Article.self, UserProgress.self])
 }

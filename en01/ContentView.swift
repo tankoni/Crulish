@@ -100,6 +100,7 @@ struct ContentView: View {
                     }
                 }
                 .environment(appViewModel)
+                .environmentObject(appViewModel.coordinator)
             } else {
                 VStack {
                     SwiftUI.ProgressView()

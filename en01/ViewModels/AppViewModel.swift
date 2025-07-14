@@ -13,7 +13,7 @@ import SwiftData
 @Observable
 class AppViewModel {
     // MARK: - Dependencies
-    private let coordinator: AppCoordinator
+    let coordinator: AppCoordinator
     
     // MARK: - State
     var selectedTab: TabSelection = .home
