@@ -25,9 +25,11 @@ protocol ArticleServiceProtocol {
     func markArticleAsCompleted(_ article: Article)
     func updateArticleProgress(_ article: Article, progress: Double)
     func addReadingTime(to article: Article, time: Double)
+    func clearAllArticles()
     
     // 数据导入
     func importArticlesFromJSON() async throws
+    func importArticlesFromPDFs()
     func initializeSampleData()
     
     // 统计信息

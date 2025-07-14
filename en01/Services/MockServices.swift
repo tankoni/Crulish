@@ -64,7 +64,16 @@ class MockArticleService: ArticleServiceProtocol {
         // Mock implementation
     }
     
+    func clearAllArticles() {
+        // Mock implementation
+        print("[MOCK] 清除所有文章数据")
+    }
+    
     func importArticlesFromJSON() async throws {
+        // Mock implementation
+    }
+    
+    func importArticlesFromPDFs() {
         // Mock implementation
     }
     

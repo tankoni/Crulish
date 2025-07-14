@@ -78,7 +78,7 @@ struct ArticleReaderView: View {
                             }
                             .padding(.horizontal, viewModel.settings.readingMargin)
                         }
-                        .background(Color(viewModel.settings.backgroundColor))
+                        .background(Color.from(string: viewModel.settings.backgroundColor))
                     }
                 } else {
                     Text("未选择文章")
@@ -265,7 +265,7 @@ struct ArticleReaderView: View {
         Text(attributedSentence(sentence))
             .font(.system(size: viewModel.settings.fontSize, design: .default))
             .lineSpacing(viewModel.settings.lineSpacing)
-            .foregroundColor(Color(viewModel.settings.textColor))
+            .foregroundColor(Color.from(string: viewModel.settings.textColor))
             .textSelection(.enabled)
             .onTapGesture {
                 selectedSentence = sentence
@@ -284,7 +284,7 @@ struct ArticleReaderView: View {
             if let range = attributedString[currentIndex...].range(of: word) {
                 // 检查是否为单词（非标点符号）
                 if word.rangeOfCharacter(from: .letters) != nil {
-                    attributedString[range].foregroundColor = Color(viewModel.settings.linkColor)
+                    attributedString[range].foregroundColor = Color.from(string: viewModel.settings.linkColor)
                     attributedString[range].underlineStyle = .single
                     // Note: underlineColor is not available in AttributedString on all platforms
                     // attributedString[range].underlineColor = Color(viewModel.settings.linkColor).opacity(0.3)

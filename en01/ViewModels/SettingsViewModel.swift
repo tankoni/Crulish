@@ -36,17 +36,27 @@ class SettingsViewModel: ObservableObject {
     private let errorHandler: ErrorHandlerProtocol
     private let cacheManager: CacheManagerProtocol
     
+    // MARK: - Coordinator Reference
+    private weak var coordinator: AppCoordinator?
+    
     // MARK: - Initialization
     init(
         userProgressService: UserProgressServiceProtocol,
         errorHandler: ErrorHandlerProtocol,
-        cacheManager: CacheManagerProtocol
+        cacheManager: CacheManagerProtocol,
+        coordinator: AppCoordinator? = nil
     ) {
         self.userProgressService = userProgressService
         self.errorHandler = errorHandler
         self.cacheManager = cacheManager
+        self.coordinator = coordinator
         
         loadAllSettings()
+    }
+    
+    // MARK: - Coordinator Setup
+    func setCoordinator(_ coordinator: AppCoordinator) {
+        self.coordinator = coordinator
     }
     
     // MARK: - Settings Loading
@@ -357,6 +367,26 @@ class SettingsViewModel: ObservableObject {
         settingsCache.removeAll()
     }
     
+    // MARK: - PDF Import
+    func reimportPDFs() async {
+        guard let coordinator = coordinator else {
+            errorHandler.handle(SettingsError.coordinatorNotSet, context: "SettingsViewModel.reimportPDFs")
+            return
+        }
+        
+        await MainActor.run {
+            self.isLoading = true
+        }
+        
+        coordinator.reimportPDFs()
+        
+        await MainActor.run {
+            self.isLoading = false
+        }
+        
+        errorHandler.logSuccess("PDF文章重新导入完成")
+    }
+    
     // MARK: - Error Handling
     func clearError() {
         errorMessage = nil
@@ -378,6 +408,18 @@ class SettingsViewModel: ObservableObject {
     var totalCacheSize: String {
         // 计算缓存大小的逻辑
         return "计算中..."
+    }
+}
+
+// MARK: - Settings Errors
+enum SettingsError: Error, LocalizedError {
+    case coordinatorNotSet
+    
+    var errorDescription: String? {
+        switch self {
+        case .coordinatorNotSet:
+            return "应用协调器未设置"
+        }
     }
 }
 

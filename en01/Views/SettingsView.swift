@@ -228,6 +228,16 @@ struct SettingsView: View {
     
     private var dataSection: some View {
         Section("数据管理") {
+            // 重新导入PDF
+            Button {
+                Task {
+                    await reimportPDFs()
+                }
+            } label: {
+                Label("重新导入PDF文章", systemImage: "doc.text.fill")
+                    .foregroundColor(.blue)
+            }
+            
             // 性能监控
             NavigationLink(destination: PerformanceMonitorView()) {
                 Label("性能监控", systemImage: "speedometer")
@@ -639,6 +649,11 @@ extension SettingsView {
     /// 加载设置
     private func loadSettings() {
         viewModel.loadSettings()
+    }
+    
+    /// 重新导入PDF文章
+    private func reimportPDFs() async {
+        await viewModel.reimportPDFs()
     }
 }
 

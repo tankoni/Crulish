@@ -327,16 +327,10 @@ struct ExamPaperListView: View {
     
     private func loadArticles() {
         Task {
-            do {
-                let allArticles = try await viewModel.articleService.getAllArticles()
-                await MainActor.run {
-                    self.articles = allArticles
-                    self.isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                }
+            let allArticles = viewModel.articleService.getAllArticles()
+            await MainActor.run {
+                self.articles = allArticles
+                self.isLoading = false
             }
         }
     }

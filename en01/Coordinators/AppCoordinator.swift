@@ -69,11 +69,15 @@ class AppCoordinator: ObservableObject {
         self.settingsViewModel = SettingsViewModel(
             userProgressService: serviceContainer.getUserProgressService(),
             errorHandler: serviceContainer.getErrorHandler(),
-            cacheManager: serviceContainer.getCacheManager()
+            cacheManager: serviceContainer.getCacheManager(),
+            coordinator: self
         )
         
         isConfigured = true
         setupCoordination()
+        
+        // 检查并执行PDF导入
+        checkAndImportPDFs()
     }
     
     // MARK: - Setup
@@ -81,6 +85,104 @@ class AppCoordinator: ObservableObject {
         // 错误处理将通过各个ViewModel直接处理
         
         // 阅读和复习完成事件将通过直接调用方法处理
+    }
+    
+    // MARK: - PDF Import
+    
+    /// 检查并导入PDF文件
+    private func checkAndImportPDFs() {
+        // 检查是否已经导入过PDF
+        let hasImportedPDFs = UserDefaults.standard.bool(forKey: "hasImportedPDFs")
+        
+        if !hasImportedPDFs {
+            // 显示加载状态
+            isLoading = true
+            
+            Task {
+                await importPDFsWithProgress()
+                
+                await MainActor.run {
+                    // 标记已导入
+                    UserDefaults.standard.set(true, forKey: "hasImportedPDFs")
+                    
+                    // 隐藏加载状态
+                    isLoading = false
+                    
+                    // 刷新首页数据
+                    homeViewModel?.refreshData()
+                }
+            }
+        } else {
+            // 即使已经导入过，也要检查是否有文章数据
+            let articles = serviceContainer.getArticleService().getAllArticles()
+            if articles.isEmpty {
+                // 如果没有文章数据，重新导入
+                print("检测到没有文章数据，重新导入PDF...")
+                reimportPDFs()
+            }
+        }
+    }
+    
+    /// 异步导入PDF文件并显示进度
+    private func importPDFsWithProgress() async {
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        // 在后台线程执行PDF导入
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            
+            print("开始导入PDF文章...")
+            
+            // 执行PDF导入
+            self.serviceContainer.getArticleService().importArticlesFromPDFs()
+            
+            // 检查导入结果
+            let articles = self.serviceContainer.getArticleService().getAllArticles()
+            print("PDF导入完成，共导入 \(articles.count) 篇文章")
+            
+            // 如果没有PDF文件或导入失败，则导入示例数据
+            if articles.isEmpty {
+                print("未找到PDF文章，导入示例数据...")
+                await MainActor.run {
+                    self.serviceContainer.getArticleService().initializeSampleData()
+                    let sampleArticles = self.serviceContainer.getArticleService().getAllArticles()
+                    print("示例数据导入完成，共 \(sampleArticles.count) 篇文章")
+                }
+            }
+        }
+    }
+    
+    /// 手动重新导入PDF文件（用于后续手动导入功能）
+    func reimportPDFs() {
+        isLoading = true
+        
+        // 重置PDF导入状态，强制重新导入
+        UserDefaults.standard.set(false, forKey: "hasImportedPDFs")
+        
+        Task {
+            // 先清除所有现有文章数据
+            await MainActor.run {
+                print("[INFO] 开始清除现有文章数据...")
+                serviceContainer.getArticleService().clearAllArticles()
+                print("[INFO] 现有文章数据清除完成")
+            }
+            
+            await importPDFsWithProgress()
+            
+            await MainActor.run {
+                // 标记已导入
+                UserDefaults.standard.set(true, forKey: "hasImportedPDFs")
+                // 更新导入时间戳
+                UserDefaults.standard.set(Date(), forKey: "lastPDFImportDate")
+                
+                isLoading = false
+                
+                // 刷新所有相关数据
+                refreshAllData()
+            }
+        }
     }
     
     // MARK: - Coordination Methods
