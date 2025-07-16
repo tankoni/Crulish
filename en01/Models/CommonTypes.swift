@@ -6,6 +6,112 @@
 //
 
 import Foundation
+import CoreGraphics
+
+// MARK: - Structured Text Models
+
+/// 结构化文本数据模型，用于保存PDF提取的格式化文本
+struct StructuredText: Codable {
+    let pages: [StructuredPage]
+    let metadata: TextMetadata
+}
+
+/// 页面结构
+struct StructuredPage: Codable {
+    let pageNumber: Int
+    let elements: [TextElement]
+    let bounds: CGRect
+}
+
+/// 文本元素
+struct TextElement: Codable, Identifiable {
+    let id = UUID()
+    let content: String
+    let type: ElementType
+    let bounds: CGRect
+    let fontInfo: FontInfo
+    let level: Int? // 用于标题层级
+    
+    enum CodingKeys: String, CodingKey {
+        case content, type, bounds, fontInfo, level
+    }
+}
+
+/// 元素类型
+enum ElementType: String, Codable, CaseIterable {
+    case title = "title"
+    case subtitle = "subtitle"
+    case paragraph = "paragraph"
+    case list = "list"
+    case quote = "quote"
+    case other = "other"
+    
+    var displayName: String {
+        switch self {
+        case .title: return "标题"
+        case .subtitle: return "副标题"
+        case .paragraph: return "段落"
+        case .list: return "列表"
+        case .quote: return "引用"
+        case .other: return "其他"
+        }
+    }
+}
+
+/// 字体信息
+struct FontInfo: Codable {
+    let size: CGFloat
+    let weight: FontWeight
+    let isItalic: Bool
+    let isBold: Bool
+}
+
+/// 字体粗细
+enum FontWeight: String, Codable {
+    case ultraLight = "ultraLight"
+    case thin = "thin"
+    case light = "light"
+    case regular = "regular"
+    case medium = "medium"
+    case semibold = "semibold"
+    case bold = "bold"
+    case heavy = "heavy"
+    case black = "black"
+}
+
+/// 文本元数据
+struct TextMetadata: Codable {
+    let totalPages: Int
+    let extractionDate: Date
+    let sourceURL: URL?
+    let language: String?
+    let wordCount: Int
+}
+
+// MARK: - Display Mode Enum
+
+/// 阅读显示模式
+enum DisplayMode: String, CaseIterable {
+    case pdf = "pdf"           // 原生PDF显示
+    case text = "text"         // 格式化文本显示
+    case hybrid = "hybrid"     // 混合模式
+    
+    var displayName: String {
+        switch self {
+        case .pdf: return "PDF模式"
+        case .text: return "文本模式"
+        case .hybrid: return "混合模式"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .pdf: return "doc.richtext"
+        case .text: return "doc.text"
+        case .hybrid: return "doc.text.below.ecg"
+        }
+    }
+}
 
 // MARK: - Activity Type Enum
 

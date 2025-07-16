@@ -23,83 +23,93 @@ struct ArticleReaderView: View {
     @State private var colorScheme: ColorScheme = .light
     @State private var readingStartTime = Date()
     @State private var readingTimer: Timer?
+    @State private var displayMode: DisplayMode = .pdf
+    @State private var structuredText: StructuredText?
+    @State private var isLoadingStructuredText = false
     
     let article: Article
     
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    // 顶部标题区域 - 模拟真题文档样式
-                    VStack(alignment: HorizontalAlignment.center, spacing: 8) {
-                        Text("\(article.year)年全国硕士研究生入学统一考试英语（\(article.examType == "考研英语一" ? "一" : "二")）试题")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                        
-                        Text("Section I Use of English")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.primary)
-                            .padding(.top, 4)
-                        
-                        Text("Directions:")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.primary)
-                            .padding(.top, 8)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Read the following text.")
-                            Text("Choose the best word (s) for each numbered")
-                            Text("blank and mark A, B, C or D on the ANSWER SHEET.")
-                            Text("(10 points)")
-                        }
-                        .font(.system(size: 11))
-                        .foregroundColor(.primary)
-                        .multilineTextAlignment(.leading)
-                        .padding(.top, 4)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-                    
-                    // 分隔线
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(height: 1)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                    
-                    // 文章正文 - 真题文档样式
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(article.paragraphs.enumerated()), id: \.element.id) { index, paragraph in
-                            VStack(alignment: .leading, spacing: 8) {
-                                // 段落内容 - 使用更紧凑的排版
-                                Text(paragraph.content)
-                                    .font(.system(size: fontSize, weight: .regular))
-                                    .lineSpacing(lineSpacing)
-                                    .foregroundColor(.primary)
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .onTapGesture {
-                                        selectedParagraph = paragraph.content
-                                        showingParagraphTranslation = true
-                                    }
-                                
-                                // 段落翻译（如果可见）
-                                if paragraph.isTranslationVisible, let translation = paragraph.translation {
-                                    Text(translation)
-                                        .font(.system(size: fontSize - 2))
-                                        .foregroundColor(.secondary)
-                                        .italic()
-                                        .padding(.top, 4)
-                                }
-                            }
-                            .padding(.bottom, index < article.paragraphs.count - 1 ? 16 : 8)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
+    // PDF相关状态
+    @State private var pdfURL: URL?
+    @State private var showingPDFReader = false
+    
+    @ViewBuilder
+    private var readerContent: some View {
+        switch displayMode {
+        case .pdf:
+            if let pdfURL = pdfURL, let progressViewModel = appCoordinator.progressViewModel {
+                PDFReaderView(
+                    pdfURL: pdfURL,
+                    article: article,
+                    viewModel: progressViewModel
+                )
+            } else {
+                VStack {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 48))
+                        .foregroundColor(.gray)
+                    Text("PDF文件不可用")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                    Text("切换到文本模式查看内容")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            
+        case .text:
+            if let structuredText = structuredText {
+                StructuredTextView(
+                    structuredText: structuredText,
+                    article: article
+                )
+            } else {
+                VStack {
+                     if isLoadingStructuredText {
+                         VStack {
+                             SwiftUI.ProgressView()
+                             Text("加载中...")
+                                 .foregroundColor(.secondary)
+                         }
+                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                     } else {
+                         Text("文本内容不可用")
+                             .foregroundColor(.gray)
+                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                     }
+                 }
+            }
+            
+        case .hybrid:
+            if let pdfURL = pdfURL, let structuredText = structuredText, let progressViewModel = appCoordinator.progressViewModel {
+                HybridReaderView(
+                    pdfURL: pdfURL,
+                    structuredText: structuredText,
+                    article: article,
+                    viewModel: progressViewModel
+                )
+            } else {
+                VStack {
+                    Image(systemName: "doc.text.below.ecg")
+                        .font(.system(size: 48))
+                        .foregroundColor(.gray)
+                    Text("混合模式不可用")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                    Text("需要PDF文件和文本内容")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            readerContent
+    
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -120,6 +130,28 @@ struct ArticleReaderView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
+                        // 显示模式切换按钮
+                        Menu {
+                            ForEach(DisplayMode.allCases, id: \.self) { mode in
+                                Button(action: {
+                                    switchDisplayMode(to: mode)
+                                }) {
+                                    HStack {
+                                        Image(systemName: mode.iconName)
+                                        Text(mode.displayName)
+                                        if displayMode == mode {
+                                            Spacer()
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: displayMode.iconName)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                        }
+                        
                         Button(action: {
                             showingSettings = true
                         }) {
@@ -150,25 +182,31 @@ struct ArticleReaderView: View {
         }
         .onAppear {
             startReading()
+            loadPDFAndStructuredText()
         }
         .onDisappear {
             stopReading()
         }
+        .onChange(of: displayMode) { _, newMode in
+            if (newMode == .text || newMode == .hybrid) && structuredText == nil && !isLoadingStructuredText {
+                loadStructuredText()
+            }
+        }
         .sheet(isPresented: $showingWordDefinition) { 
             if let progressViewModel = appCoordinator.progressViewModel {
-                WordDefinitionSheet(word: selectedWord, viewModel: progressViewModel)
+                ArticleWordDefinitionSheet(word: selectedWord, viewModel: progressViewModel)
                     .environmentObject(appCoordinator)
             }
         }
         .sheet(isPresented: $showingSentenceTranslation) { 
             if let progressViewModel = appCoordinator.progressViewModel {
-                SentenceTranslationSheet(sentence: selectedSentence, viewModel: progressViewModel)
+                ArticleSentenceTranslationSheet(sentence: selectedSentence, viewModel: progressViewModel)
                     .environmentObject(appCoordinator)
             }
         }
         .sheet(isPresented: $showingParagraphTranslation) { 
             if let progressViewModel = appCoordinator.progressViewModel {
-                ParagraphTranslationSheet(paragraph: selectedParagraph, viewModel: progressViewModel)
+                ArticleParagraphTranslationSheet(paragraph: selectedParagraph, viewModel: progressViewModel)
                     .environmentObject(appCoordinator)
             }
         }
@@ -209,11 +247,93 @@ struct ArticleReaderView: View {
         article.completedDate = Date()
         try? modelContext.save()
     }
+    
+    private func loadPDFAndStructuredText() {
+        // 加载PDF URL
+        if let pdfPath = article.pdfPath {
+            pdfURL = URL(fileURLWithPath: pdfPath)
+        }
+        
+        // 如果需要结构化文本，开始加载
+        if displayMode == .text || displayMode == .hybrid {
+            loadStructuredText()
+        }
+    }
+    
+    private func loadStructuredText() {
+         guard structuredText == nil && !isLoadingStructuredText else { return }
+         
+         isLoadingStructuredText = true
+         
+         Task {
+             // 如果有PDF URL，尝试从PDF提取结构化文本
+             if let pdfURL = pdfURL {
+                 let pdfService = PDFService(
+            modelContext: modelContext,
+            cacheManager: appCoordinator.getCacheManager(),
+            errorHandler: appCoordinator.getErrorHandler()
+        )
+                 if let extractedText = pdfService.extractTextWithLayout(from: pdfURL) {
+                     await MainActor.run {
+                         structuredText = extractedText
+                         isLoadingStructuredText = false
+                     }
+                     return
+                 }
+             }
+             
+             // 否则从文本内容生成简单的结构化文本
+             try? await Task.sleep(nanoseconds: 1_000_000_000)
+             
+             await MainActor.run {
+                 let paragraphs = article.content.components(separatedBy: "\n\n")
+                 let elements = paragraphs.enumerated().map { index, paragraph in
+                     TextElement(
+                         content: paragraph,
+                         type: index == 0 ? .title : .paragraph,
+                         bounds: CGRect(x: 0, y: CGFloat(index * 50), width: 300, height: 40),
+                         fontInfo: FontInfo(
+                             size: index == 0 ? 18 : 16,
+                             weight: index == 0 ? .bold : .regular,
+                             isItalic: false,
+                             isBold: index == 0
+                         ),
+                         level: index == 0 ? 1 : nil
+                     )
+                 }
+                 
+                 structuredText = StructuredText(
+                     pages: [StructuredPage(
+                         pageNumber: 1,
+                         elements: elements,
+                         bounds: CGRect(x: 0, y: 0, width: 300, height: CGFloat(elements.count * 50))
+                     )],
+                     metadata: TextMetadata(
+                         totalPages: 1,
+                         extractionDate: Date(),
+                         sourceURL: pdfURL,
+                         language: "en",
+                         wordCount: article.content.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+                     )
+                 )
+                 isLoadingStructuredText = false
+             }
+         }
+     }
+    
+    private func switchDisplayMode(to mode: DisplayMode) {
+        displayMode = mode
+        
+        // 如果切换到需要结构化文本的模式，确保已加载
+        if (mode == .text || mode == .hybrid) && structuredText == nil && !isLoadingStructuredText {
+            loadStructuredText()
+        }
+    }
 }
 
 // MARK: - 单词定义弹窗
 
-struct WordDefinitionSheet: View {
+struct ArticleWordDefinitionSheet: View {
     @Environment(\.dismiss) private var dismiss
     let word: String
     let viewModel: ProgressViewModel
@@ -272,7 +392,7 @@ struct WordDefinitionSheet: View {
                                     Text("例句")
                                         .font(.headline)
                                         .fontWeight(.semibold)
-                                    
+                                        
                                     ForEach(examples, id: \.self) { example in
                                         Text("• \(example)")
                                             .font(.body)
@@ -342,7 +462,7 @@ struct WordDefinitionSheet: View {
 
 // MARK: - 句子翻译弹窗
 
-struct SentenceTranslationSheet: View {
+struct ArticleSentenceTranslationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let sentence: String
     let viewModel: ProgressViewModel
@@ -431,7 +551,7 @@ struct SentenceTranslationSheet: View {
 
 // MARK: - 段落翻译弹窗
 
-struct ParagraphTranslationSheet: View {
+struct ArticleParagraphTranslationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let paragraph: String
     let viewModel: ProgressViewModel

@@ -30,6 +30,15 @@ class AppCoordinator: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var isConfigured = false
     
+    // MARK: - Public Service Access
+    func getCacheManager() -> CacheManagerProtocol {
+        return serviceContainer.getCacheManager()
+    }
+    
+    func getErrorHandler() -> ErrorHandlerProtocol {
+        return serviceContainer.getErrorHandler()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer
@@ -92,58 +101,47 @@ class AppCoordinator: ObservableObject {
     /// 检查并导入PDF文件
     private func checkAndImportPDFs() {
         Task {
-            do {
-                // 检查是否已经导入过PDF
-                let hasImported = UserDefaults.standard.bool(forKey: "hasImportedPDFs")
+            // 检查是否已经导入过PDF
+            let hasImported = UserDefaults.standard.bool(forKey: "hasImportedPDFs")
+            
+            if !hasImported {
+                await MainActor.run {
+                    isLoading = true
+                }
                 
-                if !hasImported {
+                // 导入PDF文章
+                serviceContainer.getArticleService().importArticlesFromPDFs()
+                
+                await MainActor.run {
+                    // 标记已导入
+                    UserDefaults.standard.set(true, forKey: "hasImportedPDFs")
+                    // 更新导入时间戳
+                    UserDefaults.standard.set(Date(), forKey: "lastPDFImportDate")
+                    
+                    isLoading = false
+                    
+                    // 刷新所有相关数据
+                    refreshAllData()
+                }
+            } else {
+                // 已经导入过，检查是否有文章数据
+                let articles = serviceContainer.getArticleService().getAllArticles()
+                if articles.isEmpty {
+                    // 如果没有文章数据，重新导入
+                    print("检测到没有文章数据，重新导入PDF...")
                     await MainActor.run {
                         isLoading = true
                     }
-                    
-                    // 导入PDF文章
-                    await serviceContainer.getArticleService().importArticlesFromPDFs()
-                    
+                    serviceContainer.getArticleService().importArticlesFromPDFs()
                     await MainActor.run {
-                        // 标记已导入
-                        UserDefaults.standard.set(true, forKey: "hasImportedPDFs")
-                        // 更新导入时间戳
-                        UserDefaults.standard.set(Date(), forKey: "lastPDFImportDate")
-                        
                         isLoading = false
-                        
-                        // 刷新所有相关数据
                         refreshAllData()
                     }
                 } else {
-                    // 已经导入过，检查是否有文章数据
-                    let articles = serviceContainer.getArticleService().getAllArticles()
-                    if articles.isEmpty {
-                        // 如果没有文章数据，重新导入
-                        print("检测到没有文章数据，重新导入PDF...")
-                        await MainActor.run {
-                            isLoading = true
-                        }
-                        await serviceContainer.getArticleService().importArticlesFromPDFs()
-                        await MainActor.run {
-                            isLoading = false
-                            refreshAllData()
-                        }
-                    } else {
-                        // 直接刷新数据
-                        await MainActor.run {
-                            refreshAllData()
-                        }
+                    // 直接刷新数据
+                    await MainActor.run {
+                        refreshAllData()
                     }
-                }
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    // 对于PDF导入错误，只记录日志，不显示错误弹窗
-                    print("[INFO] PDF导入过程中遇到问题，将使用示例数据")
-                    // 如果PDF导入失败，尝试初始化示例数据
-                    serviceContainer.getArticleService().initializeSampleData()
-                    refreshAllData()
                 }
             }
         }
@@ -171,8 +169,8 @@ class AppCoordinator: ObservableObject {
             // 如果没有PDF文件或导入失败，则导入示例数据
             if articles.isEmpty {
                 print("未找到PDF文章，导入示例数据...")
+                await self.serviceContainer.getArticleService().initializeSampleData()
                 await MainActor.run {
-                    self.serviceContainer.getArticleService().initializeSampleData()
                     let sampleArticles = self.serviceContainer.getArticleService().getAllArticles()
                     print("示例数据导入完成，共 \(sampleArticles.count) 篇文章")
                 }

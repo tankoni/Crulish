@@ -27,10 +27,11 @@ final class Article: @unchecked Sendable {
     var createdDate: Date
     var completedDate: Date? // 完成日期
     var imageName: String // 新增图片名称属性
+    var pdfPath: String? // PDF文件路径
     
     // 注意：用户查词记录通过UserWord模型管理，不需要直接关联
     
-    init(title: String, content: String, year: Int, examType: String, difficulty: ArticleDifficulty, topic: String, imageName: String) {
+    init(title: String, content: String, year: Int, examType: String, difficulty: ArticleDifficulty, topic: String, imageName: String, pdfPath: String? = nil) {
         self.id = UUID()
         self.title = title
         self.content = content
@@ -39,6 +40,7 @@ final class Article: @unchecked Sendable {
         self.difficulty = difficulty
         self.topic = topic
         self.imageName = imageName
+        self.pdfPath = pdfPath
         self.wordCount = content.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
         self.isCompleted = false
         self.isBookmarked = false
