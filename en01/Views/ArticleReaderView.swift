@@ -116,6 +116,7 @@ struct ArticleReaderView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
                         stopReading()
+                        appCoordinator.readingViewModel?.stopReading()
                         dismiss()
                     }) {
                         HStack(spacing: 4) {

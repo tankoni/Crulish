@@ -154,25 +154,27 @@ class AppCoordinator: ObservableObject {
         }
         
         // 在后台线程执行PDF导入
-        Task.detached { [weak self] in
-            guard let self = self else { return }
-            
-            print("开始导入PDF文章...")
-            
-            // 执行PDF导入
-            await self.serviceContainer.getArticleService().importArticlesFromPDFs()
-            
-            // 检查导入结果
-            let articles = await self.serviceContainer.getArticleService().getAllArticles()
-            print("PDF导入完成，共导入 \(articles.count) 篇文章")
-            
-            // 如果没有PDF文件或导入失败，则导入示例数据
-            if articles.isEmpty {
-                print("未找到PDF文章，导入示例数据...")
-                await self.serviceContainer.getArticleService().initializeSampleData()
-                await MainActor.run {
-                    let sampleArticles = self.serviceContainer.getArticleService().getAllArticles()
-                    print("示例数据导入完成，共 \(sampleArticles.count) 篇文章")
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                guard let self = self else { return }
+                
+                print("开始导入PDF文章...")
+                
+                // 执行PDF导入
+                await self.serviceContainer.getArticleService().importArticlesFromPDFs()
+                
+                // 检查导入结果
+                let articles = await self.serviceContainer.getArticleService().getAllArticles()
+                print("PDF导入完成，共导入 \(articles.count) 篇文章")
+                
+                // 如果没有PDF文件或导入失败，则导入示例数据
+                if articles.isEmpty {
+                    print("未找到PDF文章，导入示例数据...")
+                    await self.serviceContainer.getArticleService().initializeSampleData()
+                    await MainActor.run {
+                        let sampleArticles = self.serviceContainer.getArticleService().getAllArticles()
+                        print("示例数据导入完成，共 \(sampleArticles.count) 篇文章")
+                    }
                 }
             }
         }

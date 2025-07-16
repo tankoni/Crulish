@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ReadingView: View {
     @ObservedObject var viewModel: ReadingViewModel
@@ -483,6 +484,7 @@ struct ArticleListView: View {
 }
 
 struct DirectArticleListView: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: ReadingViewModel
     let examType: String
     @State private var articles: [Article] = []
@@ -560,6 +562,22 @@ struct DirectArticleListView: View {
             }
         }
         .navigationTitle(displayTitle)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("返回")
+                            .font(.system(size: 16))
+                    }
+                    .foregroundColor(.primary)
+                }
+            }
+        }
         .background(Color(.systemGroupedBackground))
         .onAppear {
             loadArticles()
