@@ -120,6 +120,9 @@ final class en01UITests: XCTestCase {
     }
     
     @MainActor
+    // 原: testProgressViewDisplay()
+    testProgressDashboardViewDisplay()
+    // 更新函数名和内部引用
     func testProgressViewDisplay() throws {
         // 切换到进度页面
         app.tabBars.buttons["进度"].tap()

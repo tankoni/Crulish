@@ -177,3 +177,5 @@ enum TabSelection: String, CaseIterable {
         }
     }
 }
+// Remove the following invalid line:
+// ProgressDashboardView(viewModel: progressViewModel)

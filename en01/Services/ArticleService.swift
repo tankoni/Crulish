@@ -354,6 +354,10 @@ class ArticleService: BaseService, ArticleServiceProtocol {
         importArticlesFromJSON(fileName: "articles")
     }
     
+    func importArticlesFromPDFs() {
+        importPDFsFromDirectory()
+    }
+    
     func getReadingStatistics() async throws -> ReadingStatistics {
         // Implementation for protocol conformance
         let stats = getArticleStats()
@@ -369,91 +373,80 @@ class ArticleService: BaseService, ArticleServiceProtocol {
     }
 
     /// 从PDF文件异步导入文章
-    func importArticlesFromPDFs() {
-        performSafeOperation("导入PDF文章") {
-            // 获取项目的Resources文件夹路径
-            let fileManager = FileManager.default
-            
-            // 尝试多个可能的Resources路径
-            var resourcesPaths: [String] = []
-            
-            // 1. Bundle中的Resources文件夹
-            if let bundlePath = Bundle.main.resourcePath {
-                resourcesPaths.append("\(bundlePath)")
-            }
-            
-            // 2. 当前工作目录下的Resources文件夹
-            let currentDir = fileManager.currentDirectoryPath
-            resourcesPaths.append("\(currentDir)/Resources")
-            
-            // 3. 用户文档目录下的en01/Resources
-            if let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
-                resourcesPaths.append("\(documentsPath.path)/en01/Resources")
-            }
-            
-            // 4. iCloud Drive中的en01/Resources
-            if let iCloudPath = fileManager.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents/xcode/Crulish/en01/Resources") {
-                resourcesPaths.append(iCloudPath.path)
-            }
-            
-            // 5. 直接指定的路径（基于用户提供的信息）
-            resourcesPaths.append("/Users/tankonitk/Library/Mobile Documents/com~apple~CloudDocs/xcode/Crulish/en01/Resources")
-            
-            var foundResourcesPath: String?
-            
-            // 查找存在的Resources文件夹
-            for path in resourcesPaths {
-                if fileManager.fileExists(atPath: path) {
-                    foundResourcesPath = path
-                    print("[INFO] 找到Resources文件夹")
-                    break
-                }
-            }
-            
-            guard let resourcesPath = foundResourcesPath else {
-                print("[INFO] 未找到PDF资源文件夹，跳过PDF导入")
+    private func importPDFsFromDirectory() {
+        Task {
+            // 直接使用Bundle内的Resources目录
+            guard let resourcePath = Bundle.main.resourcePath else {
+                print("[ERROR] 无法获取Bundle资源路径")
                 return
             }
-        
-            // 读取Resources文件夹中的PDF文件
-            do {
-                let resourcesURL = URL(fileURLWithPath: resourcesPath)
-                let fileURLs = try fileManager.contentsOfDirectory(at: resourcesURL, includingPropertiesForKeys: nil)
-                let pdfURLs = fileURLs.filter { $0.pathExtension == "pdf" }
+            
+            let pdfDirectory = URL(fileURLWithPath: resourcePath)
+            
+            logger.info("[PDF导入] 开始扫描目录: \(pdfDirectory.path)")
+            
+            let fileManager = FileManager.default
+            if fileManager.fileExists(atPath: pdfDirectory.path) {
+                var allPDFURLs: [URL] = []
                 
-                print("[INFO] 在Resources文件夹中找到\(pdfURLs.count)个PDF文件")
-                
-                var importedCount = 0
-                var skippedCount = 0
-                var failedCount = 0
-                
-                for url in pdfURLs {
-                    print("[INFO] 正在处理PDF文件: \(url.lastPathComponent)")
+                // 递归扫描Resources目录及其所有子目录
+                func scanDirectory(_ directory: URL) throws {
+                    let fileURLs = try fileManager.contentsOfDirectory(
+                        at: directory,
+                        includingPropertiesForKeys: [.isDirectoryKey],
+                        options: [.skipsHiddenFiles]
+                    )
                     
-                    if let article = pdfService.convertPDFToArticle(from: url) {
-                        // 检查是否已存在相同标题的文章
-                        let existingArticles = self.getAllArticles()
-                        if !existingArticles.contains(where: { $0.title == article.title }) {
-                            addArticle(article)
-                            importedCount += 1
-                            print("[SUCCESS] 成功导入PDF文章: \(article.title)")
-                        } else {
-                            skippedCount += 1
-                            print("[INFO] PDF文章已存在，跳过: \(article.title)")
+                    for fileURL in fileURLs {
+                        let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+                        
+                        if resourceValues.isDirectory == true {
+                            // 如果是目录，递归扫描
+                            try scanDirectory(fileURL)
+                        } else if fileURL.pathExtension.lowercased() == "pdf" {
+                            // 如果是PDF文件，添加到列表
+                            allPDFURLs.append(fileURL)
                         }
-                    } else {
-                        failedCount += 1
-                        print("[ERROR] 无法转换PDF文件: \(url.lastPathComponent)")
                     }
                 }
                 
-                print("[SUMMARY] PDF导入完成 - 成功: \(importedCount), 跳过: \(skippedCount), 失败: \(failedCount)")
-                
-                // 清除缓存以确保新数据生效
-                invalidateArticleCaches()
-                
-            } catch {
-                print("[INFO] 无法访问PDF资源目录")
+                do {
+                    try scanDirectory(pdfDirectory)
+                    print("[INFO] 扫描到 \(allPDFURLs.count) 个PDF文件")
+                    
+                    var importedCount = 0
+                    var skippedCount = 0
+                    var failedCount = 0
+                    
+                    for pdfURL in allPDFURLs {
+                        if let article = pdfService.convertPDFToArticle(from: pdfURL) {
+                            // 检查是否已存在相同标题的文章
+                            let existingArticles = self.getAllArticles()
+                            if !existingArticles.contains(where: { $0.title == article.title }) {
+                                await MainActor.run {
+                                    self.addArticle(article)
+                                }
+                                importedCount += 1
+                                print("[SUCCESS] 导入PDF文章: \(article.title)")
+                            } else {
+                                skippedCount += 1
+                                print("[INFO] 跳过已存在的PDF文章: \(article.title)")
+                            }
+                        } else {
+                            failedCount += 1
+                            print("[ERROR] 无法转换PDF文件: \(pdfURL.lastPathComponent)")
+                        }
+                    }
+                    
+                    print("[SUMMARY] PDF导入完成 - 成功: \(importedCount), 跳过: \(skippedCount), 失败: \(failedCount)")
+                    
+                    // 清除缓存以确保新数据生效
+                    invalidateArticleCaches()
+                } catch {
+                    print("[ERROR] 扫描PDF目录失败: \(error.localizedDescription)")
+                }
+            } else {
+                print("[ERROR] 无法访问PDF资源目录: \(pdfDirectory.path)")
             }
         }
     }

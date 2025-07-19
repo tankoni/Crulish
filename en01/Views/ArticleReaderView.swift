@@ -143,14 +143,23 @@ struct ArticleReaderView: View {
                                         if displayMode == mode {
                                             Spacer()
                                             Image(systemName: "checkmark")
+                                                .foregroundColor(.blue)
                                         }
                                     }
                                 }
                             }
                         } label: {
-                            Image(systemName: displayMode.iconName)
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
+                            HStack(spacing: 4) {
+                                Image(systemName: displayMode.iconName)
+                                    .font(.system(size: 16))
+                                Text(displayMode.displayName)
+                                    .font(.system(size: 14))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(6)
                         }
                         
                         Button(action: {

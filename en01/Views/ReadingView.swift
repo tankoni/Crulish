@@ -74,17 +74,23 @@ struct ReadingView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.primary)
-
+    
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                NavigationLink(destination: DirectArticleListView(viewModel: viewModel, examType: "考研一")) {
-                        CategoryCard(title: "考研英语一")
-                    }
-                    
-                    NavigationLink(destination: DirectArticleListView(viewModel: viewModel, examType: "考研二")) {
-                        CategoryCard(title: "考研英语二")
-                    }
-                CategoryCard(title: "雅思/托福")
-                CategoryCard(title: "大学四六级")
+                NavigationLink(destination: UnifiedArticleListView(viewModel: viewModel, categoryType: .examOne)) {
+                    CategoryCard(title: "考研英语一")
+                }
+                
+                NavigationLink(destination: UnifiedArticleListView(viewModel: viewModel, categoryType: .examTwo)) {
+                    CategoryCard(title: "考研英语二")
+                }
+                
+                NavigationLink(destination: UnifiedArticleListView(viewModel: viewModel, categoryType: .general)) {
+                    CategoryCard(title: "考研英语[通用]")
+                }
+                
+                NavigationLink(destination: UnifiedArticleListView(viewModel: viewModel, categoryType: .cet)) {
+                    CategoryCard(title: "大学四六级")
+                }
             }
         }
     }
@@ -485,10 +491,13 @@ struct ArticleListView: View {
 
 struct DirectArticleListView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appCoordinator: AppCoordinator
     @ObservedObject var viewModel: ReadingViewModel
-    let examType: String
-    @State private var articles: [Article] = []
+    @State private var pdfFiles: [URL] = []
     @State private var isLoading: Bool = true
+    @State private var articles: [Article] = []
+    
+    let examType: String
     
     init(viewModel: ReadingViewModel, examType: String) {
         self.viewModel = viewModel
@@ -669,4 +678,366 @@ struct GridArticleRow: View {
 #Preview {
     // 预览暂时禁用，需要重构ReadingView以支持依赖注入
     Text("ReadingView Preview")
+}
+
+struct PDFListView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appCoordinator: AppCoordinator
+    @ObservedObject var viewModel: ReadingViewModel
+    @State private var pdfFiles: [URL] = []
+    @State private var isLoading: Bool = true
+    
+    init(viewModel: ReadingViewModel) {
+        self.viewModel = viewModel
+    }
+    
+    // 添加计算属性来简化复杂表达式
+    private var progressViewModel: ProgressViewModel {
+        return appCoordinator.progressViewModel ?? ProgressViewModel(
+            userProgressService: appCoordinator.getUserProgressService(),
+            articleService: appCoordinator.getArticleService(),
+            errorHandler: appCoordinator.getErrorHandler()
+        )
+    }
+    
+    var body: some View {
+        Group {
+            if isLoading {
+                VStack {
+                    ProgressView("加载中...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(1.2)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if pdfFiles.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary.opacity(0.6))
+                    
+                    Text("暂无PDF文件")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("请稍后再试")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                        ForEach(pdfFiles, id: \.self) { pdfURL in
+                            NavigationLink(
+                                destination: PDFReaderView(
+                                    pdfURL: pdfURL,
+                                    article: createDummyArticle(from: pdfURL),
+                                    viewModel: progressViewModel
+                                )
+                            ) {
+                                PDFFileCard(pdfURL: pdfURL)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+        .navigationTitle("真题列表")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("返回")
+                    }
+                }
+            }
+        }
+        .onAppear {
+            loadPDFFiles()
+        }
+    }
+
+    private func loadPDFFiles() {
+        isLoading = true
+        Task {
+            let urls = await viewModel.loadPDFFiles()
+            await MainActor.run {
+                self.pdfFiles = urls
+                self.isLoading = false
+            }
+        }
+    }
+
+    private func createDummyArticle(from url: URL) -> Article {
+        let title = url.deletingPathExtension().lastPathComponent
+        return Article(
+            title: title,
+            content: "This is a placeholder for the article content. The actual content will be read from the PDF.",
+            year: 2024,
+            examType: "真题",
+            difficulty: .medium,
+            topic: "综合",
+            imageName: "default_image",
+            pdfPath: url.absoluteString
+        )
+    }
+}
+
+struct PDFFileCard: View {
+    let pdfURL: URL
+    
+    private var fileName: String {
+        pdfURL.lastPathComponent.replacingOccurrences(of: ".pdf", with: "")
+    }
+    
+    private var year: String {
+        let yearRegex = try? NSRegularExpression(pattern: "(\\d{4})年", options: [])
+        let range = NSRange(location: 0, length: fileName.count)
+        let match = yearRegex?.firstMatch(in: fileName, options: [], range: range)
+        
+        if let match = match {
+            let yearString = (fileName as NSString).substring(with: match.range(at: 1))
+            return "\(yearString)年"
+        }
+        return "未知年份"
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // PDF图标区域
+            VStack {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(.red)
+                
+                Text("PDF")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 80)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(fileName)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                Text(year)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - 分类类型枚举
+enum ArticleCategoryType {
+    case examOne    // 考研英语一
+    case examTwo    // 考研英语二  
+    case general    // 考研英语[通用]
+    case cet        // 大学四六级
+    
+    var displayTitle: String {
+        switch self {
+        case .examOne: return "考研英语一"
+        case .examTwo: return "考研英语二"
+        case .general: return "真题列表"
+        case .cet: return "大学四六级"
+        }
+    }
+    
+    var examTypeFilter: String {
+        switch self {
+        case .examOne: return "考研一"
+        case .examTwo: return "考研二"
+        case .general: return "通用"
+        case .cet: return "四六级"
+        }
+    }
+}
+
+// MARK: - 统一文章列表界面
+struct UnifiedArticleListView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appCoordinator: AppCoordinator
+    @ObservedObject var viewModel: ReadingViewModel
+    @State private var articles: [Article] = []
+    @State private var pdfFiles: [URL] = []
+    @State private var isLoading: Bool = true
+    
+    let categoryType: ArticleCategoryType
+    
+    init(viewModel: ReadingViewModel, categoryType: ArticleCategoryType) {
+        self.viewModel = viewModel
+        self.categoryType = categoryType
+    }
+    
+    private var progressViewModel: ProgressViewModel {
+        return appCoordinator.progressViewModel ?? ProgressViewModel(
+            userProgressService: appCoordinator.getUserProgressService(),
+            articleService: appCoordinator.getArticleService(),
+            errorHandler: appCoordinator.getErrorHandler()
+        )
+    }
+    
+    private var filteredAndSortedArticles: [Article] {
+        let filtered = articles.filter { article in
+            switch categoryType {
+            case .examOne:
+                return article.examType.contains("考研") && article.examType.contains("一")
+            case .examTwo:
+                return article.examType.contains("考研") && article.examType.contains("二")
+            case .general:
+                return true // 通用类型显示PDF文件
+            case .cet:
+                return article.examType.contains("四六级")
+            }
+        }
+        return filtered.sorted { $0.year > $1.year }
+    }
+    
+    var body: some View {
+        Group {
+            if isLoading {
+                VStack {
+                    ProgressView("加载中...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(1.2)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                contentView
+            }
+        }
+        .navigationTitle(categoryType.displayTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
+        .onAppear {
+            loadData()
+        }
+    }
+    
+    @ViewBuilder
+    private var contentView: some View {
+        if categoryType == .general {
+            // 通用类型显示PDF文件
+            if pdfFiles.isEmpty {
+                emptyStateView(message: "暂无PDF文件")
+            } else {
+                pdfGridView
+            }
+        } else {
+            // 其他类型显示文章
+            if filteredAndSortedArticles.isEmpty {
+                emptyStateView(message: "暂无\(categoryType.displayTitle)文章")
+            } else {
+                articleGridView
+            }
+        }
+    }
+    
+    private var articleGridView: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                ForEach(filteredAndSortedArticles) { article in
+                    Button(action: {
+                        viewModel.startReading(article)
+                    }) {
+                        GridArticleRow(article: article)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding()
+        }
+    }
+    
+    private var pdfGridView: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                ForEach(pdfFiles, id: \.self) { pdfURL in
+                    NavigationLink(
+                        destination: PDFReaderView(
+                            pdfURL: pdfURL,
+                            article: createDummyArticle(from: pdfURL),
+                            viewModel: progressViewModel
+                        )
+                    ) {
+                        PDFFileCard(pdfURL: pdfURL)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding()
+        }
+    }
+    
+    private func emptyStateView(message: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary.opacity(0.6))
+            
+            Text(message)
+                .font(.headline)
+                .foregroundColor(.secondary)
+            
+            Text("请稍后再试")
+                .font(.subheadline)
+                .foregroundColor(.secondary.opacity(0.8))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func loadData() {
+        Task {
+            if categoryType == .general {
+                // 加载PDF文件
+                let urls = await viewModel.loadPDFFiles()
+                await MainActor.run {
+                    self.pdfFiles = urls
+                    self.isLoading = false
+                }
+            } else {
+                // 加载文章
+                let allArticles = viewModel.articleService.getAllArticles()
+                await MainActor.run {
+                    self.articles = allArticles
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+    
+    private func createDummyArticle(from url: URL) -> Article {
+        let title = url.deletingPathExtension().lastPathComponent
+        return Article(
+            title: title,
+            content: "This is a placeholder for the article content. The actual content will be read from the PDF.",
+            year: 2024,
+            examType: "真题",
+            difficulty: .medium,
+            topic: "综合",
+            imageName: "default_image",
+            pdfPath: url.absoluteString
+        )
+    }
 }

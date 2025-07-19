@@ -110,7 +110,8 @@ class PDFService: BaseService, PDFServiceProtocol {
                 examType: examType.rawValue,
                 difficulty: difficulty,
                 topic: topic,
-                imageName: ""  // PDF文章暂时不设置图片
+                imageName: "",  // PDF文章暂时不设置图片
+                pdfPath: url.path  // 设置PDF文件路径
             )
         }
     }

@@ -68,7 +68,7 @@ struct ContentView: View {
                     }
             
                     if let progressViewModel = appViewModel.progressViewModel {
-                ProgressView(viewModel: progressViewModel)
+                ProgressDashboardView(viewModel: progressViewModel)
                     .tabItem {
                         Image(systemName: TabSelection.progress.iconName)
                         Text(TabSelection.progress.title)

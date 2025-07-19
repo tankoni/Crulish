@@ -39,6 +39,19 @@ class AppCoordinator: ObservableObject {
         return serviceContainer.getErrorHandler()
     }
     
+    // 添加缺失的服务访问方法
+    func getUserProgressService() -> UserProgressServiceProtocol {
+        return serviceContainer.getUserProgressService()
+    }
+    
+    func getArticleService() -> ArticleServiceProtocol {
+        return serviceContainer.getArticleService()
+    }
+    
+    func getDictionaryService() -> DictionaryServiceProtocol {
+        return serviceContainer.getDictionaryService()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer

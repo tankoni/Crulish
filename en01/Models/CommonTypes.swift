@@ -457,3 +457,77 @@ enum VocabularySortOption: String, CaseIterable, Codable {
         return title
     }
 }
+
+// MARK: - Time Range Enum
+
+/// 时间范围枚举，用于数据聚合和图表展示
+enum TimeRange: String, CaseIterable, Codable {
+    case day = "day"
+    case week = "week"
+    case month = "month"
+    case year = "year"
+    case all = "all"
+    
+    var displayName: String {
+        switch self {
+        case .day:
+            return "今日"
+        case .week:
+            return "本周"
+        case .month:
+            return "本月"
+        case .year:
+            return "今年"
+        case .all:
+            return "全部"
+        }
+    }
+    
+    var shortName: String {
+        switch self {
+        case .day:
+            return "日"
+        case .week:
+            return "周"
+        case .month:
+            return "月"
+        case .year:
+            return "年"
+        case .all:
+            return "全部"
+        }
+    }
+    
+    /// 获取对应的日期范围
+    var dateRange: (start: Date, end: Date) {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        switch self {
+        case .day:
+            let startOfDay = calendar.startOfDay(for: now)
+            let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? now
+            return (startOfDay, endOfDay)
+            
+        case .week:
+            let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+            let endOfWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: startOfWeek) ?? now
+            return (startOfWeek, endOfWeek)
+            
+        case .month:
+            let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+            let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth) ?? now
+            return (startOfMonth, endOfMonth)
+            
+        case .year:
+            let startOfYear = calendar.dateInterval(of: .year, for: now)?.start ?? now
+            let endOfYear = calendar.date(byAdding: .year, value: 1, to: startOfYear) ?? now
+            return (startOfYear, endOfYear)
+            
+        case .all:
+            // 返回一个很早的日期作为开始，当前时间作为结束
+            let distantPast = Date(timeIntervalSince1970: 0)
+            return (distantPast, now)
+        }
+    }
+}

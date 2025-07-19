@@ -448,6 +448,55 @@ class ReadingViewModel: ObservableObject {
         readingTimer?.invalidate()
         readingTimer = nil
     }
+    
+    // MARK: - PDF Management
+    func loadPDFFiles() async -> [URL] {
+        let resourcePath = Bundle.main.resourcePath ?? ""
+        let resourcesDirectory = URL(fileURLWithPath: resourcePath).appendingPathComponent("Resources")
+        
+        do {
+            var pdfFiles: [URL] = []
+            
+            // 递归扫描Resources目录及其所有子目录
+            func scanDirectory(_ directory: URL) throws {
+                let fileURLs = try FileManager.default.contentsOfDirectory(
+                    at: directory,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                )
+                
+                for fileURL in fileURLs {
+                    let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+                    
+                    if resourceValues.isDirectory == true {
+                        // 如果是目录，递归扫描
+                        try scanDirectory(fileURL)
+                    } else if fileURL.pathExtension.lowercased() == "pdf" {
+                        // 如果是PDF文件，添加到列表
+                        pdfFiles.append(fileURL)
+                    }
+                }
+            }
+            
+            // 检查Resources目录是否存在
+            if FileManager.default.fileExists(atPath: resourcesDirectory.path) {
+                try scanDirectory(resourcesDirectory)
+                errorHandler.logSuccess("成功加载 \(pdfFiles.count) 个PDF文件")
+            } else {
+                errorHandler.handle(
+                    NSError(domain: "PDFLoader", code: 404, userInfo: [
+                        NSLocalizedDescriptionKey: "Resources目录不存在: \(resourcesDirectory.path)"
+                    ]),
+                    context: "ReadingViewModel.loadPDFFiles"
+                )
+            }
+            
+            return pdfFiles
+        } catch {
+            errorHandler.handle(error, context: "ReadingViewModel.loadPDFFiles")
+            return []
+        }
+    }
 }
 
 // MARK: - Computed Properties
