@@ -103,6 +103,15 @@ class PDFService: BaseService, PDFServiceProtocol {
             
             logger.info("创建文章: 标题=\(title), 年份=\(year), 考试类型=\(examType)")
             
+            // 获取相对于Bundle资源目录的路径
+            let relativePath: String
+            if let resourcePath = Bundle.main.resourcePath {
+                let resourceURL = URL(fileURLWithPath: resourcePath)
+                relativePath = url.path.replacingOccurrences(of: resourceURL.path + "/", with: "")
+            } else {
+                relativePath = url.lastPathComponent
+            }
+            
             return Article(
                 title: title,
                 content: content,
@@ -111,7 +120,7 @@ class PDFService: BaseService, PDFServiceProtocol {
                 difficulty: difficulty,
                 topic: topic,
                 imageName: "",  // PDF文章暂时不设置图片
-                pdfPath: url.path  // 设置PDF文件路径
+                pdfPath: relativePath  // 设置相对PDF文件路径
             )
         }
     }

@@ -450,15 +450,16 @@ class ReadingViewModel: ObservableObject {
     }
     
     // MARK: - PDF Management
-    func loadPDFFiles() async -> [URL] {
+    func loadPDFFiles(for categoryType: ArticleCategoryType? = nil) async -> [URL] {
         let resourcePath = Bundle.main.resourcePath ?? ""
-        let resourcesDirectory = URL(fileURLWithPath: resourcePath).appendingPathComponent("Resources")
+        let bundleDirectory = URL(fileURLWithPath: resourcePath)
         
         do {
             var pdfFiles: [URL] = []
             
-            // 递归扫描Resources目录及其所有子目录
-            func scanDirectory(_ directory: URL) throws {
+            // 递归搜索所有PDF文件
+            func searchPDFFiles(in directory: URL) throws -> [URL] {
+                var foundFiles: [URL] = []
                 let fileURLs = try FileManager.default.contentsOfDirectory(
                     at: directory,
                     includingPropertiesForKeys: [.isDirectoryKey],
@@ -467,35 +468,72 @@ class ReadingViewModel: ObservableObject {
                 
                 for fileURL in fileURLs {
                     let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
-                    
                     if resourceValues.isDirectory == true {
-                        // 如果是目录，递归扫描
-                        try scanDirectory(fileURL)
+                        // 递归搜索子目录
+                        foundFiles.append(contentsOf: try searchPDFFiles(in: fileURL))
                     } else if fileURL.pathExtension.lowercased() == "pdf" {
-                        // 如果是PDF文件，添加到列表
-                        pdfFiles.append(fileURL)
+                        foundFiles.append(fileURL)
                     }
                 }
+                return foundFiles
             }
             
-            // 检查Resources目录是否存在
-            if FileManager.default.fileExists(atPath: resourcesDirectory.path) {
-                try scanDirectory(resourcesDirectory)
-                errorHandler.logSuccess("成功加载 \(pdfFiles.count) 个PDF文件")
+            let allPDFFiles = try searchPDFFiles(in: bundleDirectory)
+            
+            // 根据分类类型过滤PDF文件
+            if let categoryType = categoryType {
+                switch categoryType {
+                case .general:
+                    // 考研英语[通用] - 1998-2009年的PDF文件（在0/目录下）
+                    pdfFiles = allPDFFiles.filter { url in
+                        let fileName = url.lastPathComponent
+                        // 匹配1998-2009年的文件名模式
+                        for year in 1998...2009 {
+                            if fileName.contains("\(year)年") {
+                                return true
+                            }
+                        }
+                        return false
+                    }
+                case .examOne:
+                    // 考研英语一 - 2010年后的英语一PDF文件（在1/目录下）
+                    pdfFiles = allPDFFiles.filter { url in
+                        let fileName = url.lastPathComponent
+                        return fileName.contains("考研英语一") || fileName.contains("英语一")
+                    }
+                case .examTwo:
+                    // 考研英语二 - 2010年后的英语二PDF文件（在2/目录下）
+                    pdfFiles = allPDFFiles.filter { url in
+                        let fileName = url.lastPathComponent
+                        return fileName.contains("考研英语二") || fileName.contains("英语二")
+                    }
+                case .cet:
+                    // 大学四六级 - 包含"四级"或"六级"的PDF文件
+                    pdfFiles = allPDFFiles.filter { url in
+                        let fileName = url.lastPathComponent
+                        return fileName.contains("四级") || fileName.contains("六级") || fileName.contains("CET")
+                    }
+                }
             } else {
-                errorHandler.handle(
-                    NSError(domain: "PDFLoader", code: 404, userInfo: [
-                        NSLocalizedDescriptionKey: "Resources目录不存在: \(resourcesDirectory.path)"
-                    ]),
-                    context: "ReadingViewModel.loadPDFFiles"
-                )
+                // 如果没有指定分类，返回所有PDF文件
+                pdfFiles = allPDFFiles
             }
             
+            // 按文件名排序
+            pdfFiles.sort { $0.lastPathComponent < $1.lastPathComponent }
+            
+            errorHandler.logSuccess("成功加载 \(pdfFiles.count) 个PDF文件 for category: \(categoryType?.displayTitle ?? "全部")")
             return pdfFiles
+            
         } catch {
             errorHandler.handle(error, context: "ReadingViewModel.loadPDFFiles")
             return []
         }
+    }
+    
+    // 保持向后兼容的方法
+    func loadPDFFiles() async -> [URL] {
+        return await loadPDFFiles(for: nil)
     }
 }
 

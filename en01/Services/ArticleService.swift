@@ -355,7 +355,20 @@ class ArticleService: BaseService, ArticleServiceProtocol {
     }
     
     func importArticlesFromPDFs() {
+        // 清除现有文章以避免重复
+        clearAllArticles()
+        
+        // 导入PDF文章
         importPDFsFromDirectory()
+        
+        // PDF导入成功后不再加载预置文章内容
+        // 注释掉示例数据初始化，确保只显示PDF导入的内容
+        /*
+        let articles = getAllArticles()
+        if articles.isEmpty {
+            initializeSampleData()
+        }
+        */
     }
     
     func getReadingStatistics() async throws -> ReadingStatistics {
@@ -442,11 +455,23 @@ class ArticleService: BaseService, ArticleServiceProtocol {
                     
                     // 清除缓存以确保新数据生效
                     invalidateArticleCaches()
+                    
+                    // 添加控制台信息提示
+                    await MainActor.run {
+                        print("[INFO] PDF文章重新导入完成，共处理 \(allPDFURLs.count) 个文件")
+                        print("[INFO] 导入结果：成功 \(importedCount) 个，跳过 \(skippedCount) 个，失败 \(failedCount) 个")
+                    }
                 } catch {
                     print("[ERROR] 扫描PDF目录失败: \(error.localizedDescription)")
+                    await MainActor.run {
+                        print("[ERROR] PDF文章重新导入失败: \(error.localizedDescription)")
+                    }
                 }
             } else {
                 print("[ERROR] 无法访问PDF资源目录: \(pdfDirectory.path)")
+                await MainActor.run {
+                    print("[ERROR] 无法访问PDF资源目录，重新导入失败")
+                }
             }
         }
     }
@@ -498,80 +523,8 @@ class ArticleService: BaseService, ArticleServiceProtocol {
     
     // 初始化示例数据
     func initializeSampleData() {
-        let sampleArticles = [
-            ArticleData(
-                title: "The Impact of Artificial Intelligence on Modern Society",
-                content: """
-Artificial Intelligence (AI) is rapidly transforming work, education, and daily lives.
-
-One of the most significant impacts of AI is in the workplace. Automation and AI-powered tools are revolutionizing industries from manufacturing to healthcare.
-
-In education, AI is personalizing learning experiences and providing new opportunities for students to engage with complex subjects.
-
-However, the rise of AI also brings challenges, including concerns about job displacement and the need for new skills in the workforce.
-
-As we move forward, it is crucial to ensure that AI development is guided by ethical principles and serves the benefit of all humanity.
-""",
-                year: 2023,
-                examType: "考研一",
-                difficulty: .medium,
-                topic: "科技发展"
-            ),
-            ArticleData(
-                title: "Climate Change: Global Challenges and Solutions",
-                content: """
-Climate change represents one of the most pressing challenges of our time, requiring immediate and coordinated global action.
-
-The effects of climate change are already visible worldwide, from rising sea levels to extreme weather events.
-
-Governments, businesses, and individuals must work together to reduce greenhouse gas emissions and transition to sustainable energy sources.
-
-Innovative technologies such as renewable energy, electric vehicles, and carbon capture are playing crucial roles in addressing this challenge.
-
-Education and awareness are also essential components of the solution, as they help people understand the importance of environmental protection.
-""",
-                year: 2022,
-                examType: "考研一",
-                difficulty: .hard,
-                topic: "环境保护"
-            ),
-            ArticleData(
-                title: "The Future of Education in the Digital Age",
-                content: """
-Digital technology is fundamentally changing how we approach education and learning.
-
-Online learning platforms have made education more accessible to people around the world, breaking down geographical and economic barriers.
-
-Virtual reality and augmented reality technologies are creating immersive learning experiences that were previously impossible.
-
-However, the digital divide remains a significant challenge, as not all students have equal access to technology and internet connectivity.
-
-Teachers must adapt their methods to effectively integrate technology while maintaining the human element that is essential to quality education.
-""",
-                year: 2023,
-                examType: "考研二",
-                difficulty: .easy,
-                topic: "教育发展"
-            )
-        ]
-        
-        for articleData in sampleArticles {
-            // 检查是否已存在相同标题的文章
-            let existingArticles = self.getAllArticles()
-            if !existingArticles.contains(where: { $0.title == articleData.title }) {
-                let imageName = "image_\(Int.random(in: 1...10))"
-                let article = Article(
-                    title: articleData.title,
-                    content: articleData.content,
-                    year: articleData.year,
-                    examType: articleData.examType,
-                    difficulty: articleData.difficulty,
-                    topic: articleData.topic,
-                    imageName: imageName
-                )
-                addArticle(article)
-            }
-        }
+        // 不再加载预置示例数据，只使用PDF导入的内容
+        print("[INFO] 跳过示例数据初始化，仅使用PDF导入的内容")
     }
     
     // MARK: - 私有方法

@@ -261,7 +261,18 @@ struct ArticleReaderView: View {
     private func loadPDFAndStructuredText() {
         // 加载PDF URL
         if let pdfPath = article.pdfPath {
-            pdfURL = URL(fileURLWithPath: pdfPath)
+            // 如果是相对路径，构建完整的Bundle资源路径
+            if !pdfPath.hasPrefix("/") {
+                if let resourcePath = Bundle.main.resourcePath {
+                    let fullPath = resourcePath + "/" + pdfPath
+                    pdfURL = URL(fileURLWithPath: fullPath)
+                } else {
+                    print("[ERROR] 无法获取Bundle资源路径")
+                }
+            } else {
+                // 如果是绝对路径，直接使用
+                pdfURL = URL(fileURLWithPath: pdfPath)
+            }
         }
         
         // 如果需要结构化文本，开始加载

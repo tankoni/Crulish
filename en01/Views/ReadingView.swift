@@ -746,6 +746,7 @@ struct PDFListView: View {
         }
         .navigationTitle("真题列表")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: {
@@ -776,6 +777,16 @@ struct PDFListView: View {
 
     private func createDummyArticle(from url: URL) -> Article {
         let title = url.deletingPathExtension().lastPathComponent
+        
+        // 获取相对于Bundle资源目录的路径
+        let relativePath: String
+        if let resourcePath = Bundle.main.resourcePath {
+            let resourceURL = URL(fileURLWithPath: resourcePath)
+            relativePath = url.path.replacingOccurrences(of: resourceURL.path + "/", with: "")
+        } else {
+            relativePath = url.lastPathComponent
+        }
+        
         return Article(
             title: title,
             content: "This is a placeholder for the article content. The actual content will be read from the PDF.",
@@ -784,7 +795,7 @@ struct PDFListView: View {
             difficulty: .medium,
             topic: "综合",
             imageName: "default_image",
-            pdfPath: url.absoluteString
+            pdfPath: relativePath
         )
     }
 }
@@ -848,31 +859,7 @@ struct PDFFileCard: View {
     }
 }
 
-// MARK: - 分类类型枚举
-enum ArticleCategoryType {
-    case examOne    // 考研英语一
-    case examTwo    // 考研英语二  
-    case general    // 考研英语[通用]
-    case cet        // 大学四六级
-    
-    var displayTitle: String {
-        switch self {
-        case .examOne: return "考研英语一"
-        case .examTwo: return "考研英语二"
-        case .general: return "真题列表"
-        case .cet: return "大学四六级"
-        }
-    }
-    
-    var examTypeFilter: String {
-        switch self {
-        case .examOne: return "考研一"
-        case .examTwo: return "考研二"
-        case .general: return "通用"
-        case .cet: return "四六级"
-        }
-    }
-}
+
 
 // MARK: - 统一文章列表界面
 struct UnifiedArticleListView: View {
@@ -937,8 +924,8 @@ struct UnifiedArticleListView: View {
     
     @ViewBuilder
     private var contentView: some View {
-        if categoryType == .general {
-            // 通用类型显示PDF文件
+        if categoryType == .general || categoryType == .cet {
+            // 通用类型和大学四六级显示PDF文件
             if pdfFiles.isEmpty {
                 emptyStateView(message: "暂无PDF文件")
             } else {
@@ -975,11 +962,10 @@ struct UnifiedArticleListView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
                 ForEach(pdfFiles, id: \.self) { pdfURL in
                     NavigationLink(
-                        destination: PDFReaderView(
-                            pdfURL: pdfURL,
-                            article: createDummyArticle(from: pdfURL),
-                            viewModel: progressViewModel
+                        destination: ArticleReaderView(
+                            article: createDummyArticle(from: pdfURL)
                         )
+                        .environmentObject(appCoordinator)
                     ) {
                         PDFFileCard(pdfURL: pdfURL)
                     }
@@ -1009,9 +995,9 @@ struct UnifiedArticleListView: View {
     
     private func loadData() {
         Task {
-            if categoryType == .general {
-                // 加载PDF文件
-                let urls = await viewModel.loadPDFFiles()
+            if categoryType == .general || categoryType == .cet {
+                // 加载PDF文件，传递categoryType参数
+                let urls = await viewModel.loadPDFFiles(for: categoryType)
                 await MainActor.run {
                     self.pdfFiles = urls
                     self.isLoading = false
@@ -1029,6 +1015,16 @@ struct UnifiedArticleListView: View {
     
     private func createDummyArticle(from url: URL) -> Article {
         let title = url.deletingPathExtension().lastPathComponent
+        
+        // 获取相对于Bundle资源目录的路径
+        let relativePath: String
+        if let resourcePath = Bundle.main.resourcePath {
+            let resourceURL = URL(fileURLWithPath: resourcePath)
+            relativePath = url.path.replacingOccurrences(of: resourceURL.path + "/", with: "")
+        } else {
+            relativePath = url.lastPathComponent
+        }
+        
         return Article(
             title: title,
             content: "This is a placeholder for the article content. The actual content will be read from the PDF.",
@@ -1037,7 +1033,7 @@ struct UnifiedArticleListView: View {
             difficulty: .medium,
             topic: "综合",
             imageName: "default_image",
-            pdfPath: url.absoluteString
+            pdfPath: relativePath
         )
     }
 }

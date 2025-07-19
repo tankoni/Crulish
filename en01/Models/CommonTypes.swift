@@ -8,6 +8,34 @@
 import Foundation
 import CoreGraphics
 
+// MARK: - Article Category Types
+
+/// 文章分类类型枚举
+enum ArticleCategoryType {
+    case examOne    // 考研英语一
+    case examTwo    // 考研英语二  
+    case general    // 考研英语[通用]
+    case cet        // 大学四六级
+    
+    var displayTitle: String {
+        switch self {
+        case .examOne: return "考研英语一"
+        case .examTwo: return "考研英语二"
+        case .general: return "真题列表"
+        case .cet: return "大学四六级"
+        }
+    }
+    
+    var examTypeFilter: String {
+        switch self {
+        case .examOne: return "考研一"
+        case .examTwo: return "考研二"
+        case .general: return "通用"
+        case .cet: return "四六级"
+        }
+    }
+}
+
 // MARK: - Structured Text Models
 
 /// 结构化文本数据模型，用于保存PDF提取的格式化文本
