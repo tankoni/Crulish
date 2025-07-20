@@ -27,17 +27,17 @@ struct HybridReaderView: View {
     @State private var lineSpacing: CGFloat = 6
     
     var body: some View {
-        VStack(spacing: 0) {
-            // 混合模式工具栏
-            HybridToolbar(
-                hybridMode: $hybridMode,
-                currentPage: $currentPage,
-                totalPages: max(structuredText.pages.count, 1),
-                syncScrolling: $syncScrolling,
-                onSettingsTap: { showingSettings = true },
-                onPreviousPage: previousPage,
-                onNextPage: nextPage
-            )
+            VStack(spacing: 0) {
+                // 混合模式工具栏
+                HybridToolbar(
+                    hybridMode: $hybridMode,
+                    currentPage: $currentPage,
+                    totalPages: max(structuredText.pages.count, 1),
+                    syncScrolling: $syncScrolling,
+                    onSettingsTap: { showingSettings = true },
+                    onPreviousPage: previousPage,
+                    onNextPage: nextPage
+                )
             
             // 混合内容视图
             GeometryReader { geometry in
@@ -45,7 +45,7 @@ struct HybridReaderView: View {
                 case .sideBySide:
                     HStack(spacing: 0) {
                         // PDF视图
-                        PDFReaderView(
+                        PDFContentView(
                             pdfURL: pdfURL,
                             article: article,
                             viewModel: viewModel
@@ -75,7 +75,7 @@ struct HybridReaderView: View {
                 case .overlay:
                     ZStack {
                         // PDF作为背景
-                        PDFReaderView(
+                        PDFContentView(
                             pdfURL: pdfURL,
                             article: article,
                             viewModel: viewModel
@@ -122,6 +122,7 @@ struct HybridReaderView: View {
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 }
             }
+            .background(Color(.systemBackground))
         }
         .sheet(isPresented: $showingSettings) {
             HybridSettingsSheet(
@@ -366,7 +367,7 @@ struct TabbedPageView: View {
             
             // 内容视图
             if showPDF {
-                PDFReaderView(
+                PDFContentView(
                     pdfURL: pdfURL,
                     article: article,
                     viewModel: self.viewModel

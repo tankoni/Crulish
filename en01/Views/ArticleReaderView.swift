@@ -38,7 +38,7 @@ struct ArticleReaderView: View {
         switch displayMode {
         case .pdf:
             if let pdfURL = pdfURL, let progressViewModel = appCoordinator.progressViewModel {
-                PDFReaderView(
+                PDFContentView(
                     pdfURL: pdfURL,
                     article: article,
                     viewModel: progressViewModel
@@ -107,88 +107,68 @@ struct ArticleReaderView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            readerContent
-    
-            .background(Color(.systemBackground))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        stopReading()
-                        appCoordinator.readingViewModel?.stopReading()
-                        dismiss()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
-                            Text("返回")
-                                .font(.system(size: 16))
-                        }
-                        .foregroundColor(.primary)
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
-                        // 显示模式切换按钮
-                        Menu {
-                            ForEach(DisplayMode.allCases, id: \.self) { mode in
-                                Button(action: {
-                                    switchDisplayMode(to: mode)
-                                }) {
-                                    HStack {
-                                        Image(systemName: mode.iconName)
-                                        Text(mode.displayName)
-                                        if displayMode == mode {
-                                            Spacer()
-                                            Image(systemName: "checkmark")
-                                                .foregroundColor(.blue)
-                                        }
+        ReaderNavigationWrapper(
+            title: article.title,
+            standardButtons: [.bookmark, .share],
+            customButtons: [
+                // 显示模式切换按钮
+                AnyView(
+                    Menu {
+                        ForEach(DisplayMode.allCases, id: \.self) { mode in
+                            Button(action: {
+                                switchDisplayMode(to: mode)
+                            }) {
+                                HStack {
+                                    Image(systemName: mode.iconName)
+                                    Text(mode.displayName)
+                                    if displayMode == mode {
+                                        Spacer()
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
                                     }
                                 }
                             }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: displayMode.iconName)
-                                    .font(.system(size: 16))
-                                Text(displayMode.displayName)
-                                    .font(.system(size: 14))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .cornerRadius(6)
                         }
-                        
-                        Button(action: {
-                            showingSettings = true
-                        }) {
-                            Image(systemName: "textformat.size")
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: displayMode.iconName)
                                 .font(.system(size: 16))
-                                .foregroundColor(.primary)
+                            Text(displayMode.displayName)
+                                .font(.system(size: 14))
                         }
-                        
-                        Button(action: {
-                            article.isBookmarked.toggle()
-                            try? modelContext.save()
-                        }) {
-                            Image(systemName: article.isBookmarked ? "bookmark.fill" : "bookmark")
-                                .font(.system(size: 16))
-                                .foregroundColor(article.isBookmarked ? .orange : .primary)
-                        }
-                        
-                        Button(action: {
-                            shareArticle()
-                        }) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
-                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(6)
                     }
-                }
+                ),
+                // 设置按钮
+                AnyView(
+                    Button(action: {
+                        showingSettings = true
+                    }) {
+                        Image(systemName: "textformat.size")
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                    }
+                )
+            ],
+            onBack: {
+                stopReading()
+                appCoordinator.readingViewModel?.stopReading()
+                dismiss()
+            },
+            onBookmark: {
+                article.isBookmarked.toggle()
+                try? modelContext.save()
+            },
+            onShare: {
+                shareArticle()
             }
+        ) {
+            readerContent
+                .background(Color(.systemBackground))
         }
         .onAppear {
             startReading()

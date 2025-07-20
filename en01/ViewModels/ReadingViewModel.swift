@@ -519,8 +519,28 @@ class ReadingViewModel: ObservableObject {
                 pdfFiles = allPDFFiles
             }
             
-            // 按文件名排序
-            pdfFiles.sort { $0.lastPathComponent < $1.lastPathComponent }
+            // 按年份排序（从旧到新）
+            pdfFiles.sort { url1, url2 in
+                let fileName1 = url1.lastPathComponent
+                let fileName2 = url2.lastPathComponent
+                
+                // 提取年份
+                let yearRegex = try? NSRegularExpression(pattern: "(\\d{4})年", options: [])
+                
+                func extractYear(from fileName: String) -> Int {
+                    let range = NSRange(location: 0, length: fileName.count)
+                    if let match = yearRegex?.firstMatch(in: fileName, options: [], range: range) {
+                        let yearString = (fileName as NSString).substring(with: match.range(at: 1))
+                        return Int(yearString) ?? 0
+                    }
+                    return 0
+                }
+                
+                let year1 = extractYear(from: fileName1)
+                let year2 = extractYear(from: fileName2)
+                
+                return year1 < year2
+            }
             
             errorHandler.logSuccess("成功加载 \(pdfFiles.count) 个PDF文件 for category: \(categoryType?.displayTitle ?? "全部")")
             return pdfFiles

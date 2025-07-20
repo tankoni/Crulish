@@ -457,9 +457,14 @@ class ArticleService: BaseService, ArticleServiceProtocol {
                     invalidateArticleCaches()
                     
                     // 添加控制台信息提示
+                    let totalFiles = allPDFURLs.count
+                    let finalImportedCount = importedCount
+                    let finalSkippedCount = skippedCount
+                    let finalFailedCount = failedCount
+                    
                     await MainActor.run {
-                        print("[INFO] PDF文章重新导入完成，共处理 \(allPDFURLs.count) 个文件")
-                        print("[INFO] 导入结果：成功 \(importedCount) 个，跳过 \(skippedCount) 个，失败 \(failedCount) 个")
+                        print("[INFO] PDF文章重新导入完成，共处理 \(totalFiles) 个文件")
+                        print("[INFO] 导入结果：成功 \(finalImportedCount) 个，跳过 \(finalSkippedCount) 个，失败 \(finalFailedCount) 个")
                     }
                 } catch {
                     print("[ERROR] 扫描PDF目录失败: \(error.localizedDescription)")

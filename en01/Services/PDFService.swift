@@ -43,9 +43,22 @@ class PDFService: BaseService, PDFServiceProtocol {
             var structuredPages: [StructuredPage] = []
             var totalWordCount = 0
             
-            // 逐页提取文本和格式信息
+            // 添加超时机制
+            let timeoutQueue = DispatchQueue(label: "pdf.extraction.timeout")
+            let extractionGroup = DispatchGroup()
+            
             for pageIndex in 0..<pdfDocument.pageCount {
-                guard let page = pdfDocument.page(at: pageIndex) else { continue }
+                extractionGroup.enter()
+                timeoutQueue.asyncAfter(deadline: .now() + 0.25) {
+                    if extractionGroup.wait(timeout: .now()) == .timedOut {
+                        self.logger.error("页面 \(pageIndex + 1) 提取超时")
+                    }
+                }
+                
+                guard let page = pdfDocument.page(at: pageIndex) else {
+                    extractionGroup.leave()
+                    continue
+                }
                 
                 let pageElements = extractElementsFromPage(page, pageNumber: pageIndex + 1)
                 let structuredPage = StructuredPage(
@@ -56,6 +69,11 @@ class PDFService: BaseService, PDFServiceProtocol {
                 
                 structuredPages.append(structuredPage)
                 totalWordCount += pageElements.reduce(0) { $0 + $1.content.components(separatedBy: .whitespacesAndNewlines).count }
+                extractionGroup.leave()
+            }
+            
+            if extractionGroup.wait(timeout: .now() + 1.0) == .timedOut {
+                throw ServiceError.processingFailed("提取超时")
             }
             
             let metadata = TextMetadata(

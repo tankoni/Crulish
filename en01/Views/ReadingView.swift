@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PDFKit
 import UIKit
 
 struct ReadingView: View {
@@ -726,13 +727,15 @@ struct PDFListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
+                    let currentProgressViewModel = progressViewModel
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
                         ForEach(pdfFiles, id: \.self) { pdfURL in
+                            let dummyArticle = createDummyArticle(from: pdfURL)
                             NavigationLink(
                                 destination: PDFReaderView(
                                     pdfURL: pdfURL,
-                                    article: createDummyArticle(from: pdfURL),
-                                    viewModel: progressViewModel
+                                    article: dummyArticle,
+                                    viewModel: currentProgressViewModel
                                 )
                             ) {
                                 PDFFileCard(pdfURL: pdfURL)
@@ -778,6 +781,30 @@ struct PDFListView: View {
     private func createDummyArticle(from url: URL) -> Article {
         let title = url.deletingPathExtension().lastPathComponent
         
+        // 从文件名提取年份
+        let yearRegex = try? NSRegularExpression(pattern: "(\\d{4})年", options: [])
+        let range = NSRange(location: 0, length: title.count)
+        var extractedYear = 2024
+        
+        if let match = yearRegex?.firstMatch(in: title, options: [], range: range) {
+            let yearString = (title as NSString).substring(with: match.range(at: 1))
+            extractedYear = Int(yearString) ?? 2024
+        }
+        
+        // 从文件名提取考试类型
+        var examType = "真题"
+        if title.contains("考研英语一") {
+            examType = "考研英语一"
+        } else if title.contains("考研英语二") {
+            examType = "考研英语二"
+        } else if title.contains("考研英语") {
+            examType = "考研英语[通用]"
+        } else if title.contains("四级") {
+            examType = "大学英语四级"
+        } else if title.contains("六级") {
+            examType = "大学英语六级"
+        }
+        
         // 获取相对于Bundle资源目录的路径
         let relativePath: String
         if let resourcePath = Bundle.main.resourcePath {
@@ -790,8 +817,8 @@ struct PDFListView: View {
         return Article(
             title: title,
             content: "This is a placeholder for the article content. The actual content will be read from the PDF.",
-            year: 2024,
-            examType: "真题",
+            year: extractedYear,
+            examType: examType,
             difficulty: .medium,
             topic: "综合",
             imageName: "default_image",
@@ -802,6 +829,8 @@ struct PDFListView: View {
 
 struct PDFFileCard: View {
     let pdfURL: URL
+    @State private var pdfDocument: PDFDocument?
+    @State private var thumbnailImage: UIImage?
     
     private var fileName: String {
         pdfURL.lastPathComponent.replacingOccurrences(of: ".pdf", with: "")
@@ -821,21 +850,30 @@ struct PDFFileCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // PDF图标区域
-            VStack {
-                Image(systemName: "doc.text.fill")
-                    .font(.system(size: 32))
-                    .foregroundColor(.red)
-                
-                Text("PDF")
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundColor(.secondary)
+            // PDF预览区域
+            Group {
+                if let thumbnailImage = thumbnailImage {
+                    Image(uiImage: thumbnailImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 80)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                } else {
+                    VStack {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("加载中...")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 80)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 80)
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(fileName)
@@ -856,6 +894,38 @@ struct PDFFileCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .onAppear {
+            loadPDFThumbnail()
+        }
+    }
+    
+    private func loadPDFThumbnail() {
+        guard let document = PDFDocument(url: pdfURL),
+              let firstPage = document.page(at: 0) else {
+            return
+        }
+        
+        self.pdfDocument = document
+        
+        // 生成缩略图
+        let pageRect = firstPage.bounds(for: .mediaBox)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 200, height: 200 * pageRect.height / pageRect.width))
+        
+        let image = renderer.image { context in
+            UIColor.white.set()
+            context.fill(CGRect(origin: .zero, size: renderer.format.bounds.size))
+            
+            context.cgContext.translateBy(x: 0, y: renderer.format.bounds.height)
+            context.cgContext.scaleBy(x: 1, y: -1)
+            
+            let scale = min(renderer.format.bounds.width / pageRect.width,
+                          renderer.format.bounds.height / pageRect.height)
+            context.cgContext.scaleBy(x: scale, y: scale)
+            
+            firstPage.draw(with: .mediaBox, to: context.cgContext)
+        }
+        
+        self.thumbnailImage = image
     }
 }
 
@@ -899,6 +969,25 @@ struct UnifiedArticleListView: View {
             }
         }
         return filtered.sorted { $0.year > $1.year }
+    }
+    
+    private var sortedPDFFiles: [URL] {
+        return pdfFiles.sorted { url1, url2 in
+            let year1 = extractYear(from: url1.deletingPathExtension().lastPathComponent)
+            let year2 = extractYear(from: url2.deletingPathExtension().lastPathComponent)
+            return year1 > year2
+        }
+    }
+    
+    private func extractYear(from fileName: String) -> Int {
+        let yearRegex = try? NSRegularExpression(pattern: "(\\d{4})年", options: [])
+        let range = NSRange(location: 0, length: fileName.count)
+        
+        if let match = yearRegex?.firstMatch(in: fileName, options: [], range: range) {
+            let yearString = (fileName as NSString).substring(with: match.range(at: 1))
+            return Int(yearString) ?? 0
+        }
+        return 0
     }
     
     var body: some View {
@@ -960,7 +1049,7 @@ struct UnifiedArticleListView: View {
     private var pdfGridView: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
-                ForEach(pdfFiles, id: \.self) { pdfURL in
+                ForEach(sortedPDFFiles, id: \.self) { pdfURL in
                     NavigationLink(
                         destination: ArticleReaderView(
                             article: createDummyArticle(from: pdfURL)
@@ -1016,6 +1105,30 @@ struct UnifiedArticleListView: View {
     private func createDummyArticle(from url: URL) -> Article {
         let title = url.deletingPathExtension().lastPathComponent
         
+        // 从文件名提取年份
+        let yearRegex = try? NSRegularExpression(pattern: "(\\d{4})年", options: [])
+        let range = NSRange(location: 0, length: title.count)
+        var extractedYear = 2024
+        
+        if let match = yearRegex?.firstMatch(in: title, options: [], range: range) {
+            let yearString = (title as NSString).substring(with: match.range(at: 1))
+            extractedYear = Int(yearString) ?? 2024
+        }
+        
+        // 从文件名提取考试类型
+        var examType = "真题"
+        if title.contains("考研英语一") {
+            examType = "考研英语一"
+        } else if title.contains("考研英语二") {
+            examType = "考研英语二"
+        } else if title.contains("考研英语") {
+            examType = "考研英语[通用]"
+        } else if title.contains("四级") {
+            examType = "大学英语四级"
+        } else if title.contains("六级") {
+            examType = "大学英语六级"
+        }
+        
         // 获取相对于Bundle资源目录的路径
         let relativePath: String
         if let resourcePath = Bundle.main.resourcePath {
@@ -1028,8 +1141,8 @@ struct UnifiedArticleListView: View {
         return Article(
             title: title,
             content: "This is a placeholder for the article content. The actual content will be read from the PDF.",
-            year: 2024,
-            examType: "真题",
+            year: extractedYear,
+            examType: examType,
             difficulty: .medium,
             topic: "综合",
             imageName: "default_image",
