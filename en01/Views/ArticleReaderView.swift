@@ -64,6 +64,7 @@ struct ArticleReaderView: View {
                     structuredText: structuredText,
                     article: article
                 )
+                .environmentObject(appCoordinator.getDictionaryService() as! DictionaryService)
             } else {
                 VStack {
                      if isLoadingStructuredText {

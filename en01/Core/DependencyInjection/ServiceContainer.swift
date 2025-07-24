@@ -67,6 +67,13 @@ class ServiceContainer {
             errorHandler: unifiedErrorHandler
         )
         
+        // 初始化词典数据
+        Task {
+            try? await dictionaryService?.initializeDictionary()
+            // 初始化考研词典数据
+            await dictionaryService?.initializeKaoyanDictionary()
+        }
+        
         self.userProgressService = UserProgressService(
             modelContext: modelContext,
             cacheManager: cacheManager,

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语 - 单词查询</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: transparent;
+            margin: 0;
+            padding: 0;
+            color: #1f2937;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .article-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(3px);
+            z-index: 1;
+        }
+
+        .popup-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            max-width: 90vw;
+            max-height: 85vh;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .popup-header {
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .pronunciation-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            background-color: #f3f4f6;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: #4b5563;
+        }
+
+        .play-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+
+        .mastery-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .mastery-unknown {
+            background-color: #ef4444;
+        }
+
+        .mastery-learning {
+            background-color: #f59e0b;
+        }
+
+        .mastery-familiar {
+            background-color: #fbbf24;
+        }
+
+        .mastery-mastered {
+            background-color: #10b981;
+        }
+
+        .meaning-item {
+            border-radius: 8px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .meaning-item:hover {
+            background-color: #f9fafb;
+            border-color: #e5e7eb;
+        }
+
+        .meaning-item.current {
+            background-color: #f0f9ff;
+            border-left: 3px solid #3b82f6;
+            border-color: #e0f2fe;
+        }
+
+        .example-card {
+            background-color: #f9fafb;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            border-left: 3px solid #dbeafe;
+        }
+
+        .related-word {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s;
+        }
+
+        .related-word:hover {
+            background-color: #f0f9ff;
+            border-color: #bfdbfe;
+        }
+
+        .action-button {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-button i {
+            margin-right: 0.5rem;
+        }
+
+        .mastery-button {
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: white;
+            color: #6b7280;
+        }
+
+        .mastery-button.mastery-unknown:hover {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border-color: #fecaca;
+        }
+
+        .mastery-button.mastery-learning:hover {
+            background-color: #ffedd5;
+            color: #c2410c;
+            border-color: #fed7aa;
+        }
+
+        .mastery-button.mastery-familiar:hover,
+        .mastery-button.mastery-familiar.active {
+            background-color: #fef3c7;
+            color: #b45309;
+            border-color: #fde68a;
+        }
+
+        .mastery-button.mastery-mastered:hover {
+            background-color: #d1fae5;
+            color: #065f46;
+            border-color: #a7f3d0;
+        }
+
+        .word-card {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="article-bg"></div>
+
+    <!-- 完整单词卡片 -->
+    <div class="popup-container word-card" id="fullWordCard">
+        <!-- 单词标题 -->
+        <div class="popup-header p-5">
+            <!-- 保留原有内容 -->
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="flex items-center">
+                        <h2 class="text-2xl font-bold">transforming</h2>
+                        <button class="play-button ml-3 bg-blue-50 text-blue-500 hover:bg-blue-100">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center mt-2 space-x-2">
+                        <span class="pronunciation-badge">
+                            <i class="fas fa-headphones text-gray-400 mr-1"></i>
+                            /trænsˈfɔːrmɪŋ/
+                        </span>
+                        <span class="text-gray-500">v. 现在分词</span>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end">
+                    <div class="flex items-center mb-1">
+                        <span class="mastery-indicator mastery-familiar" title="熟悉度：熟悉"></span>
+                        <span class="text-sm font-medium text-yellow-600">熟悉</span>
+                    </div>
+                    <span class="text-xs text-gray-500">查询次数：3</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 单词在当前文章中的含义 -->
+        <div class="p-5 border-b border-gray-200 bg-white">
+            <h3 class="text-lg font-semibold mb-3 flex items-center">
+                <i class="fas fa-book text-blue-500 mr-2"></i>
+                本文中的含义
+            </h3>
+            <div class="meaning-item current p-3 rounded-lg">
+                <div class="flex items-start">
+                    <div class="text-blue-500 mr-3 mt-1">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium">改变，转变</p>
+                        <p class="text-sm text-gray-600 mt-1">使某事物发生显著的变化或转变</p>
+                        <div class="example-card mt-2">
+                            <p class="text-gray-600 italic">Artificial intelligence (AI) is <span class="font-medium text-blue-600">transforming</span> the way we live, work, and interact with one another.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 单词的其他含义 -->
+        <div class="p-5 border-b border-gray-200 bg-white">
+            <h3 class="text-lg font-semibold mb-3 flex items-center">
+                <i class="fas fa-list-ul text-blue-500 mr-2"></i>
+                其他含义
+            </h3>
+            <div class="meaning-item p-3 rounded-lg mb-2">
+                <div class="flex items-start">
+                    <div class="text-gray-400 mr-3 mt-1">
+                        <i class="fas fa-circle"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium">转化，转换</p>
+                        <p class="text-sm text-gray-600 mt-1">将某物从一种形式或性质转换为另一种</p>
+                        <div class="example-card mt-2">
+                            <p class="text-gray-600 italic">The company is <span class="font-medium text-blue-600">transforming</span> raw materials into finished products.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="meaning-item p-3 rounded-lg">
+                <div class="flex items-start">
+                    <div class="text-gray-400 mr-3 mt-1">
+                        <i class="fas fa-circle"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium">彻底改观</p>
+                        <p class="text-sm text-gray-600 mt-1">使某物的外观或特性发生显著变化</p>
+                        <div class="example-card mt-2">
+                            <p class="text-gray-600 italic">The renovation is <span class="font-medium text-blue-600">transforming</span> the old building into a modern office space.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 相关词汇 -->
+        <div class="p-5 border-b border-gray-200 bg-white">
+            <h3 class="text-lg font-semibold mb-3 flex items-center">
+                <i class="fas fa-project-diagram text-blue-500 mr-2"></i>
+                相关词汇
+            </h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="related-word p-3 rounded-lg">
+                    <p class="font-medium text-blue-700">transform</p>
+                    <p class="text-sm text-gray-600">v. 转变，改变</p>
+                </div>
+                <div class="related-word p-3 rounded-lg">
+                    <p class="font-medium text-blue-700">transformation</p>
+                    <p class="text-sm text-gray-600">n. 转变，变革</p>
+                </div>
+                <div class="related-word p-3 rounded-lg">
+                    <p class="font-medium text-blue-700">transformer</p>
+                    <p class="text-sm text-gray-600">n. 变压器，转换器</p>
+                </div>
+                <div class="related-word p-3 rounded-lg">
+                    <p class="font-medium text-blue-700">transformative</p>
+                    <p class="text-sm text-gray-600">adj. 变革的，革新的</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="p-5 flex justify-between bg-gray-50 rounded-b-lg">
+            <div class="flex space-x-3">
+                <button class="action-button bg-white hover:bg-gray-100">
+                    <i class="fas fa-star text-yellow-500"></i>
+                    <span>收藏</span>
+                </button>
+                <button class="action-button bg-white hover:bg-gray-100">
+                    <i class="fas fa-plus text-blue-500"></i>
+                    <span>添加到单词本</span>
+                </button>
+            </div>
+            <div class="flex space-x-2">
+                <button class="mastery-button mastery-unknown">
+                    <span>不认识</span>
+                </button>
+                <button class="mastery-button mastery-learning">
+                    <span>学习中</span>
+                </button>
+                <button class="mastery-button mastery-familiar active">
+                    <span>熟悉</span>
+                </button>
+                <button class="mastery-button mastery-mastered">
+                    <span>已掌握</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟发音功能
+        document.querySelector('.play-button').addEventListener('click', function() {
+            console.log('播放单词发音');
+            // 在实际应用中，这里会调用音频API播放单词发音
+        });
+
+        // 模拟点击其他含义切换当前含义
+        document.querySelectorAll('.meaning-item').forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('.meaning-item').forEach(i => {
+                    i.classList.remove('current');
+                });
+                this.classList.add('current');
+            });
+        });
+
+        // 模拟点击背景关闭弹窗
+        document.querySelector('.article-bg').addEventListener('click', function() {
+            console.log('关闭弹窗');
+            // 在实际应用中，这里会关闭弹窗并返回到文章阅读页面
+            window.history.back();
+        });
+    </script>
+</body>
+</html>

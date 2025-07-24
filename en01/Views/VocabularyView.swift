@@ -9,6 +9,7 @@ import SwiftUI
 
 struct VocabularyView: View {
     @ObservedObject var viewModel: VocabularyViewModel
+    @Environment(\.modelContext) private var modelContext
     
     init(viewModel: VocabularyViewModel) {
         self.viewModel = viewModel
@@ -23,6 +24,14 @@ struct VocabularyView: View {
     @State private var vocabularyStats: VocabularyStats?
     @State private var debounceTask: Task<Void, Never>? // 防抖任务
     @State private var isDataLoaded = false // 防止重复加载
+    
+    // 个人学习词典相关状态
+    @State private var personalDictionaries: [PersonalDictionary] = []
+    @State private var availableDictionaries: [DictionaryInfo] = []
+    @State private var isShowingDictionaryImport = false
+    @State private var selectedDictionariesForImport: Set<String> = []
+    @State private var personalDictionaryManager: PersonalDictionaryManager?
+    @State private var kaoyanDictionaryImporter: KaoyanDictionaryImporter?
     
     var body: some View {
         NavigationView {
@@ -39,6 +48,7 @@ struct VocabularyView: View {
             // 避免重复加载数据
             if !isDataLoaded {
                 loadVocabularyData()
+                initializePersonalDictionaryManager()
                 isDataLoaded = true
             }
         }
@@ -222,6 +232,8 @@ struct VocabularyView: View {
         switch selectedTab {
         case .myWords:
             myWordsView
+        case .personalDictionaries:
+            personalDictionariesView
         case .review:
             reviewView
         case .statistics:
@@ -689,6 +701,163 @@ struct VocabularyView: View {
     private func getFrequentWords() -> [UserWord] {
         return myWords.sorted { $0.queryCount > $1.queryCount }
     }
+    
+    // MARK: - 个人学习词典相关方法
+    
+    private func initializePersonalDictionaryManager() {
+        personalDictionaryManager = PersonalDictionaryManager(modelContext: modelContext)
+        kaoyanDictionaryImporter = KaoyanDictionaryImporter(modelContext: modelContext)
+        loadPersonalDictionaries()
+        loadAvailableDictionaries()
+    }
+    
+    private func loadPersonalDictionaries() {
+        guard let manager = personalDictionaryManager else { return }
+        Task {
+            do {
+                let dictionaries = try await manager.getPersonalDictionaries()
+                await MainActor.run {
+                    personalDictionaries = dictionaries
+                }
+            } catch {
+                print("加载个人词典失败: \(error)")
+            }
+        }
+    }
+    
+    private func loadAvailableDictionaries() {
+        guard let importer = kaoyanDictionaryImporter else { return }
+        Task {
+            do {
+                let dictionaries = try await importer.getAvailableDictionaries()
+                await MainActor.run {
+                    availableDictionaries = dictionaries
+                }
+            } catch {
+                print("加载可用词典失败: \(error)")
+            }
+        }
+    }
+    
+    private func importSelectedDictionaries() {
+        guard let importer = kaoyanDictionaryImporter else { return }
+        
+        Task {
+            do {
+                try await importer.importSelectedDictionaries(Array(selectedDictionariesForImport))
+                await MainActor.run {
+                    loadPersonalDictionaries()
+                    loadAvailableDictionaries()
+                    selectedDictionariesForImport.removeAll()
+                    isShowingDictionaryImport = false
+                }
+            } catch {
+                print("导入词典失败: \(error)")
+            }
+        }
+    }
+    
+    private func deletePersonalDictionary(_ dictionary: PersonalDictionary) {
+        guard let manager = personalDictionaryManager else { return }
+        
+        Task {
+            do {
+                try await manager.deleteDictionary(dictionary.id)
+                await MainActor.run {
+                    loadPersonalDictionaries()
+                    loadAvailableDictionaries()
+                }
+            } catch {
+                print("删除词典失败: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - 个人学习词典视图
+    
+    private var personalDictionariesView: some View {
+        VStack(spacing: 0) {
+            // 导入词典按钮
+            HStack {
+                Text("已导入的学习词典")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Button {
+                    isShowingDictionaryImport = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("导入词典")
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top)
+            
+            if personalDictionaries.isEmpty {
+                // 空状态视图
+                VStack(spacing: 16) {
+                    Image(systemName: "books.vertical")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    
+                    Text("还没有导入任何学习词典")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("点击上方的\"导入词典\"按钮来添加您的第一个学习词典")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    
+                    Button {
+                        isShowingDictionaryImport = true
+                    } label: {
+                        Text("开始导入")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.blue)
+                            .cornerRadius(8)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // 词典列表
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(personalDictionaries, id: \.id) { dictionary in
+                            PersonalDictionaryCard(
+                                dictionary: dictionary,
+                                onDelete: { deletePersonalDictionary(dictionary) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingDictionaryImport) {
+            DictionaryImportView(
+                availableDictionaries: availableDictionaries,
+                selectedDictionaries: $selectedDictionariesForImport,
+                onImport: importSelectedDictionaries,
+                onCancel: {
+                    isShowingDictionaryImport = false
+                    selectedDictionariesForImport.removeAll()
+                }
+            )
+        }
+    }
 }
 
 // MARK: - 子视图组件
@@ -853,6 +1022,7 @@ struct FilterChip: View {
 
 enum VocabularyTab: String, CaseIterable {
     case myWords = "myWords"
+    case personalDictionaries = "personalDictionaries"
     case review = "review"
     case statistics = "statistics"
     
@@ -860,6 +1030,8 @@ enum VocabularyTab: String, CaseIterable {
         switch self {
         case .myWords:
             return "我的单词"
+        case .personalDictionaries:
+            return "学习词典"
         case .review:
             return "复习"
         case .statistics:

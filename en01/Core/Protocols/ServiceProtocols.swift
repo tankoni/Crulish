@@ -70,6 +70,10 @@ protocol DictionaryServiceProtocol {
     
     // 数据初始化
     func initializeDictionary() async throws
+    func initializeKaoyanDictionary() async
+    
+    // 考研词典查询
+    func getKaoyanWordDetails(_ word: String) -> KaoyanWordDetails?
 }
 
 // MARK: - User Progress Service Protocol

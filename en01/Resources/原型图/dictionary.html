@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语 - 个人词典</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .word-card {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .word-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .mastery-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .mastery-beginner {
+            background-color: #ef4444;
+        }
+        .mastery-familiar {
+            background-color: #f59e0b;
+        }
+        .mastery-mastered {
+            background-color: #10b981;
+        }
+        .filter-pill {
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .filter-pill.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .search-bar {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        .alphabet-index {
+            position: sticky;
+            top: 70px;
+            background-color: #f9f9f9;
+            z-index: 10;
+            padding: 10px 0;
+        }
+        .alphabet-letter {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .alphabet-letter:hover, .alphabet-letter.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .section-header {
+            position: sticky;
+            top: 130px;
+            background-color: #f9f9f9;
+            z-index: 9;
+            padding: 10px 0;
+        }
+    </style>
+</head>
+<body class="pb-20">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 bg-white shadow-sm z-10">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-800">个人词典</h1>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-sort text-xl"></i>
+                    </button>
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-filter text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 搜索栏 -->
+            <div class="mt-4 relative">
+                <input type="text" placeholder="搜索单词..." class="search-bar w-full py-3 px-4 pr-10 bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <button class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="container mx-auto px-4 py-6">
+        <!-- 筛选选项 -->
+        <section class="mb-6">
+            <div class="flex overflow-x-auto pb-2 space-x-3 hide-scrollbar">
+                <div class="filter-pill active bg-blue-500 text-white">全部</div>
+                <div class="filter-pill bg-gray-100">生疏</div>
+                <div class="filter-pill bg-gray-100">熟悉</div>
+                <div class="filter-pill bg-gray-100">掌握</div>
+                <div class="filter-pill bg-gray-100">高频</div>
+                <div class="filter-pill bg-gray-100">近期学习</div>
+                <div class="filter-pill bg-gray-100">需复习</div>
+            </div>
+        </section>
+
+        <!-- 字母索引 -->
+        <section class="alphabet-index">
+            <div class="flex justify-between">
+                <div class="alphabet-letter active">A</div>
+                <div class="alphabet-letter">B</div>
+                <div class="alphabet-letter">C</div>
+                <div class="alphabet-letter">D</div>
+                <div class="alphabet-letter">E</div>
+                <div class="alphabet-letter">F</div>
+                <div class="alphabet-letter">G</div>
+                <div class="alphabet-letter">H</div>
+                <div class="alphabet-letter">I</div>
+                <div class="alphabet-letter">J</div>
+                <div class="alphabet-letter">K</div>
+                <div class="alphabet-letter">L</div>
+                <div class="alphabet-letter">M</div>
+                <div class="alphabet-letter">N</div>
+                <div class="alphabet-letter">O</div>
+                <div class="alphabet-letter">P</div>
+                <div class="alphabet-letter">Q</div>
+                <div class="alphabet-letter">R</div>
+                <div class="alphabet-letter">S</div>
+                <div class="alphabet-letter">T</div>
+                <div class="alphabet-letter">U</div>
+                <div class="alphabet-letter">V</div>
+                <div class="alphabet-letter">W</div>
+                <div class="alphabet-letter">X</div>
+                <div class="alphabet-letter">Y</div>
+                <div class="alphabet-letter">Z</div>
+            </div>
+        </section>
+
+        <!-- A 开头的单词 -->
+        <section id="section-a" class="mb-8">
+            <div class="section-header flex items-center">
+                <h2 class="text-2xl font-bold text-gray-800 mr-2">A</h2>
+                <div class="flex-grow h-px bg-gray-200"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="word-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center">
+                                    <h3 class="font-semibold text-lg">autonomous</h3>
+                                    <button class="ml-2 text-blue-500 hover:text-blue-700">
+                                        <i class="fas fa-volume-up"></i>
+                                    </button>
+                                </div>
+                                <p class="text-gray-600 text-sm mt-1">/ɔːˈtɒnəməs/ adj. 自主的，自治的</p>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-familiar" title="熟悉度：熟悉"></span>
+                                <span class="text-xs text-gray-500">查询：5次</span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-sm">能够独立运作或自我管理，不受外部控制</p>
+                            <p class="text-xs text-gray-500 italic mt-1">From virtual assistants like Siri and Alexa to autonomous vehicles...</p>
+                        </div>
+                        <div class="mt-3 flex justify-between items-center">
+                            <div class="text-xs text-gray-500">最近查询：2天前</div>
+                            <div class="flex space-x-2">
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-bookmark"></i>
+                                </button>
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="word-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center">
+                                    <h3 class="font-semibold text-lg">advancement</h3>
+                                    <button class="ml-2 text-blue-500 hover:text-blue-700">
+                                        <i class="fas fa-volume-up"></i>
+                                    </button>
+                                </div>
+                                <p class="text-gray-600 text-sm mt-1">/ədˈvɑːnsmənt/ n. 进步，发展</p>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-beginner" title="熟悉度：生疏"></span>
+                                <span class="text-xs text-gray-500">查询：2次</span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-sm">在某个领域或方面的进步或发展</p>
+                            <p class="text-xs text-gray-500 italic mt-1">However, this technological advancement also raises concerns...</p>
+                        </div>
+                        <div class="mt-3 flex justify-between items-center">
+                            <div class="text-xs text-gray-500">最近查询：1天前</div>
+                            <div class="flex space-x-2">
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-bookmark"></i>
+                                </button>
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="word-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center">
+                                    <h3 class="font-semibold text-lg">analyze</h3>
+                                    <button class="ml-2 text-blue-500 hover:text-blue-700">
+                                        <i class="fas fa-volume-up"></i>
+                                    </button>
+                                </div>
+                                <p class="text-gray-600 text-sm mt-1">/ˈænəlaɪz/ v. 分析，研究</p>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-mastered" title="熟悉度：掌握"></span>
+                                <span class="text-xs text-gray-500">查询：8次</span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-sm">仔细研究或检查某事物以了解更多信息</p>
+                            <p class="text-xs text-gray-500 italic mt-1">Machine learning algorithms can analyze vast amounts of medical data...</p>
+                        </div>
+                        <div class="mt-3 flex justify-between items-center">
+                            <div class="text-xs text-gray-500">最近查询：3天前</div>
+                            <div class="flex space-x-2">
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-bookmark"></i>
+                                </button>
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="word-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center">
+                                    <h3 class="font-semibold text-lg">adaptive</h3>
+                                    <button class="ml-2 text-blue-500 hover:text-blue-700">
+                                        <i class="fas fa-volume-up"></i>
+                                    </button>
+                                </div>
+                                <p class="text-gray-600 text-sm mt-1">/əˈdæptɪv/ adj. 适应性的，自适应的</p>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-familiar" title="熟悉度：熟悉"></span>
+                                <span class="text-xs text-gray-500">查询：4次</span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-sm">能够根据环境或条件变化进行调整或适应</p>
+                            <p class="text-xs text-gray-500 italic mt-1">Adaptive learning platforms can tailor educational content...</p>
+                        </div>
+                        <div class="mt-3 flex justify-between items-center">
+                            <div class="text-xs text-gray-500">最近查询：5天前</div>
+                            <div class="flex space-x-2">
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-bookmark"></i>
+                                </button>
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- T 开头的单词 -->
+        <section id="section-t" class="mb-8">
+            <div class="section-header flex items-center">
+                <h2 class="text-2xl font-bold text-gray-800 mr-2">T</h2>
+                <div class="flex-grow h-px bg-gray-200"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="word-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center">
+                                    <h3 class="font-semibold text-lg">transforming</h3>
+                                    <button class="ml-2 text-blue-500 hover:text-blue-700">
+                                        <i class="fas fa-volume-up"></i>
+                                    </button>
+                                </div>
+                                <p class="text-gray-600 text-sm mt-1">/trænsˈfɔːrmɪŋ/ v. 转变，改变</p>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-familiar" title="熟悉度：熟悉"></span>
+                                <span class="text-xs text-gray-500">查询：3次</span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-sm">使某事物发生显著的变化或转变</p>
+                            <p class="text-xs text-gray-500 italic mt-1">Artificial intelligence (AI) is transforming the way we live, work...</p>
+                        </div>
+                        <div class="mt-3 flex justify-between items-center">
+                            <div class="text-xs text-gray-500">最近查询：今天</div>
+                            <div class="flex space-x-2">
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-bookmark"></i>
+                                </button>
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="word-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center">
+                                    <h3 class="font-semibold text-lg">tremendous</h3>
+                                    <button class="ml-2 text-blue-500 hover:text-blue-700">
+                                        <i class="fas fa-volume-up"></i>
+                                    </button>
+                                </div>
+                                <p class="text-gray-600 text-sm mt-1">/trəˈmendəs/ adj. 巨大的，极好的</p>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-mastered" title="熟悉度：掌握"></span>
+                                <span class="text-xs text-gray-500">查询：7次</span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-sm">程度或规模非常大的，令人印象深刻的</p>
+                            <p class="text-xs text-gray-500 italic mt-1">AI has the potential to bring about tremendous benefits for society...</p>
+                        </div>
+                        <div class="mt-3 flex justify-between items-center">
+                            <div class="text-xs text-gray-500">最近查询：2天前</div>
+                            <div class="flex space-x-2">
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-bookmark"></i>
+                                </button>
+                                <button class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 复习提醒 -->
+        <section class="bg-blue-50 rounded-xl p-5 mb-8">
+            <h3 class="text-lg font-semibold text-blue-800 mb-3">今日复习建议</h3>
+            <p class="text-sm text-blue-700 mb-4">根据艾宾浩斯遗忘曲线，以下单词需要复习以加强记忆：</p>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div class="bg-white p-3 rounded-lg shadow-sm">
+                    <div class="flex items-center">
+                        <span class="mastery-indicator mastery-familiar"></span>
+                        <span class="font-medium">autonomous</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">上次学习：5天前</p>
+                </div>
+                <div class="bg-white p-3 rounded-lg shadow-sm">
+                    <div class="flex items-center">
+                        <span class="mastery-indicator mastery-beginner"></span>
+                        <span class="font-medium">sophisticated</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">上次学习：7天前</p>
+                </div>
+                <div class="bg-white p-3 rounded-lg shadow-sm">
+                    <div class="flex items-center">
+                        <span class="mastery-indicator mastery-familiar"></span>
+                        <span class="font-medium">deployment</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">上次学习：3天前</p>
+                </div>
+                <div class="bg-white p-3 rounded-lg shadow-sm">
+                    <div class="flex items-center">
+                        <span class="mastery-indicator mastery-beginner"></span>
+                        <span class="font-medium">ethical</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">上次学习：4天前</p>
+                </div>
+                <div class="bg-white p-3 rounded-lg shadow-sm">
+                    <div class="flex items-center">
+                        <span class="mastery-indicator mastery-familiar"></span>
+                        <span class="font-medium">regulatory</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">上次学习：6天前</p>
+                </div>
+            </div>
+            <button class="mt-4 w-full py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition duration-200">开始复习</button>
+        </section>
+    </main>
+
+    <script>
+        // 筛选选项交互
+        document.querySelectorAll('.filter-pill').forEach(pill => {
+            pill.addEventListener('click', function() {
+                document.querySelectorAll('.filter-pill').forEach(p => {
+                    p.classList.remove('active', 'bg-blue-500', 'text-white');
+                    p.classList.add('bg-gray-100');
+                });
+                this.classList.add('active', 'bg-blue-500', 'text-white');
+                this.classList.remove('bg-gray-100');
+            });
+        });
+
+        // 字母索引交互
+        document.querySelectorAll('.alphabet-letter').forEach(letter => {
+            letter.addEventListener('click', function() {
+                document.querySelectorAll('.alphabet-letter').forEach(l => {
+                    l.classList.remove('active');
+                });
+                this.classList.add('active');
+                
+                // 在实际应用中，这里会滚动到对应字母的单词区域
+                const letterText = this.textContent.toLowerCase();
+                const sectionId = `section-${letterText}`;
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

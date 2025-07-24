@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语 - 设置</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .setting-section {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .setting-item {
+            transition: background-color 0.2s ease;
+        }
+        .setting-item:hover {
+            background-color: #f3f4f6;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #3b82f6;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+        .range-slider {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 5px;
+            background: #d7dcdf;
+            outline: none;
+        }
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+    </style>
+</head>
+<body class="pb-20">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 bg-white shadow-sm z-10">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-800">设置</h1>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-question-circle text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="container mx-auto px-4 py-6">
+        <!-- 阅读设置 -->
+        <section class="setting-section bg-white mb-6">
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-800">阅读设置</h2>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">字体大小</h3>
+                    <p class="text-sm text-gray-500 mt-1">调整阅读文章时的字体大小</p>
+                </div>
+                <div class="w-32 flex items-center">
+                    <span class="text-sm mr-2">A</span>
+                    <input type="range" class="range-slider" min="1" max="5" value="3">
+                    <span class="text-lg ml-2">A</span>
+                </div>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">行间距</h3>
+                    <p class="text-sm text-gray-500 mt-1">调整文本行之间的间距</p>
+                </div>
+                <div class="w-32 flex items-center">
+                    <span class="text-sm mr-2"><i class="fas fa-arrows-alt-v"></i></span>
+                    <input type="range" class="range-slider" min="1" max="5" value="3">
+                    <span class="text-lg ml-2"><i class="fas fa-arrows-alt-v"></i></span>
+                </div>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">字体选择</h3>
+                    <p class="text-sm text-gray-500 mt-1">选择适合阅读的字体</p>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">系统默认</span>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </div>
+            </div>
+
+            <!-- 新增的设备尺寸选择 -->
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">选择设备尺寸</h3>
+                    <p class="text-sm text-gray-500 mt-1">模拟不同设备的阅读效果</p>
+                </div>
+                <div class="flex items-center">
+                    <select id="device-select" class="block w-full py-1 px-2 text-base border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="iphone">iPhone (375x812)</option>
+                        <option value="ipad" selected>iPad (834x1112)</option>
+                        <option value="android">Android Phone (360x800)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="setting-item p-4 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">夜间模式</h3>
+                    <p class="text-sm text-gray-500 mt-1">深色背景，保护眼睛</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </section>
+        
+        <!-- 单词查询设置 -->
+        <section class="setting-section bg-white mb-6">
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-800">单词查询设置</h2>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">查词方式</h3>
+                    <p class="text-sm text-gray-500 mt-1">选择触发单词查询的方式</p>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">点击单词</span>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </div>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">自动发音</h3>
+                    <p class="text-sm text-gray-500 mt-1">查询单词时自动播放发音</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">显示例句</h3>
+                    <p class="text-sm text-gray-500 mt-1">在单词释义中显示例句</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="setting-item p-4 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">自动添加到词汇库</h3>
+                    <p class="text-sm text-gray-500 mt-1">查询的单词自动添加到个人词汇库</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </section>
+        
+        <!-- 数据管理 -->
+        <section class="setting-section bg-white mb-6">
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-800">数据管理</h2>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">备份数据</h3>
+                    <p class="text-sm text-gray-500 mt-1">将学习数据备份到本地文件</p>
+                </div>
+                <button class="px-3 py-1 bg-blue-500 text-white rounded-md text-sm">
+                    备份
+                </button>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">恢复数据</h3>
+                    <p class="text-sm text-gray-500 mt-1">从备份文件恢复学习数据</p>
+                </div>
+                <button class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm">
+                    恢复
+                </button>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">导出词汇库</h3>
+                    <p class="text-sm text-gray-500 mt-1">将个人词汇库导出为CSV文件</p>
+                </div>
+                <button class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm">
+                    导出
+                </button>
+            </div>
+            
+            <div class="setting-item p-4 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium text-red-500">清除所有数据</h3>
+                    <p class="text-sm text-gray-500 mt-1">删除所有学习记录和设置（不可恢复）</p>
+                </div>
+                <button class="px-3 py-1 bg-red-100 text-red-500 rounded-md text-sm">
+                    清除
+                </button>
+            </div>
+        </section>
+        
+        <!-- 资源管理 -->
+        <section class="setting-section bg-white mb-6">
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-800">资源管理</h2>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">离线词典</h3>
+                    <p class="text-sm text-gray-500 mt-1">管理离线词典资源</p>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">已下载</span>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </div>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">语音包</h3>
+                    <p class="text-sm text-gray-500 mt-1">管理单词发音语音包</p>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">英式发音</span>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </div>
+            </div>
+            
+            <div class="setting-item p-4 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">存储空间</h3>
+                    <p class="text-sm text-gray-500 mt-1">查看和管理应用占用的存储空间</p>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">238MB</span>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 关于 -->
+        <section class="setting-section bg-white">
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-800">关于</h2>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">版本</h3>
+                    <p class="text-sm text-gray-500 mt-1">当前应用版本</p>
+                </div>
+                <span class="text-gray-700">1.0.0</span>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">检查更新</h3>
+                    <p class="text-sm text-gray-500 mt-1">检查应用是否有新版本</p>
+                </div>
+                <button class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm">
+                    检查
+                </button>
+            </div>
+            
+            <div class="setting-item p-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">使用帮助</h3>
+                    <p class="text-sm text-gray-500 mt-1">查看应用使用指南</p>
+                </div>
+                <i class="fas fa-chevron-right text-gray-400"></i>
+            </div>
+            
+            <div class="setting-item p-4 flex justify-between items-center">
+                <div>
+                    <h3 class="font-medium">关于我们</h3>
+                    <p class="text-sm text-gray-500 mt-1">了解开发团队</p>
+                </div>
+                <i class="fas fa-chevron-right text-gray-400"></i>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 切换开关交互效果
+        document.querySelectorAll('.toggle-switch input').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                // 这里可以添加切换开关的逻辑
+                console.log('Toggle changed:', this.checked);
+            });
+        });
+
+        // 滑块交互效果
+        document.querySelectorAll('.range-slider').forEach(slider => {
+            slider.addEventListener('input', function() {
+                // 这里可以添加滑块变化的逻辑
+                console.log('Slider value:', this.value);
+            });
+        });
+
+        // 点击设置项交互效果
+        document.querySelectorAll('.setting-item').forEach(item => {
+            if (item.querySelector('.fas.fa-chevron-right')) {
+                item.addEventListener('click', function() {
+                    // 这里可以添加点击设置项的逻辑
+                    console.log('Setting item clicked');
+                });
+            }
+        });
+
+        // 新增设备尺寸选择的事件监听
+        document.getElementById('device-select').addEventListener('change', function() {
+            console.log('Selected device:', this.value);
+            // 在这里可以添加根据选择的设备尺寸调整页面布局的逻辑
+        });
+    </script>
+</body>
+</html>

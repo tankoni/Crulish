@@ -17,7 +17,16 @@ struct en01App: App {
             WordDefinition.self,
             UserWord.self,
             UserProgress.self,
-            DailyStudyRecord.self
+            DailyStudyRecord.self,
+            // 考研词典模型
+            KaoyanWord.self,
+            KaoyanTranslation.self,
+            KaoyanSentence.self,
+            KaoyanSynonym.self,
+            KaoyanPhrase.self,
+            KaoyanRelatedWord.self,
+            KaoyanExam.self,
+            KaoyanChoice.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

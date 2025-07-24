@@ -220,6 +220,59 @@ class MockDictionaryService: DictionaryServiceProtocol {
     func initializeDictionary() async throws {
         // Mock implementation
     }
+    
+    func initializeKaoyanDictionary() async {
+        // Mock implementation
+    }
+    
+    func getKaoyanWordDetails(_ word: String) -> KaoyanWordDetails? {
+        // 返回模拟的考研单词详情
+        return KaoyanWordDetails(
+            word: word,
+            wordRank: 1000,
+            bookId: "mock_book",
+            usPhone: "test",
+            ukPhone: "test",
+            translations: [
+                KaoyanWordTranslation(
+                    pos: "n.",
+                    tranCn: "测试；考试",
+                    tranOther: nil
+                ),
+                KaoyanWordTranslation(
+                    pos: "v.",
+                    tranCn: "测试；检验",
+                    tranOther: nil
+                )
+            ],
+            sentences: [
+                KaoyanWordSentence(
+                    sContent: "This is a test sentence.",
+                    sCn: "这是一个测试句子。"
+                )
+            ],
+            synonyms: [
+                KaoyanWordSynonym(
+                    pos: "n.",
+                    tran: "exam, examination",
+                    synonymWords: ["exam", "examination"]
+                )
+            ],
+            phrases: [
+                KaoyanWordPhrase(
+                    pContent: "test case",
+                    pCn: "测试用例"
+                )
+            ],
+            relatedWords: [
+                KaoyanWordRelated(
+                    pos: "v.",
+                    hwd: "testing",
+                    tran: "测试"
+                )
+            ]
+        )
+    }
 }
 
 // MARK: - Mock User Progress Service

@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语 - 首页</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .article-card {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .article-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+        .category-pill {
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .category-pill.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .search-bar {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        .progress-indicator {
+            height: 6px;
+            border-radius: 3px;
+            background-color: #e5e7eb;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            border-radius: 3px;
+            background-color: #3b82f6;
+        }
+    </style>
+    <style>
+        .category-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .category-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .article-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(3px);
+            z-index: 50;
+        }
+
+        .popup-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            max-width: 90vw;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            z-index: 51;
+        }
+
+        .popup-header {
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body class="pb-20">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 bg-white shadow-sm z-10">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-800">Crush English</h1>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-bell text-xl"></i>
+                    </button>
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-user-circle text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 搜索栏 -->
+            <div class="mt-4 relative">
+                <input type="text" placeholder="搜索文章、单词或主题..." class="search-bar w-full py-3 px-4 pr-10 bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <button class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="container mx-auto px-4 py-6">
+        <!-- 分类选择 -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">文章分类</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="category-card bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" data-category="考研英语">
+                    <h3 class="text-lg font-medium mb-2">考研英语一</h3>
+                    <div class="text-blue-500">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </div>
+                <div class="category-card bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" data-category="六级">
+                    <h3 class="text-lg font-medium mb-2">考研英语二</h3>
+                    <div class="text-blue-500">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </div>
+                <div class="category-card bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" data-category="专四专八">
+                    <h3 class="text-lg font-medium mb-2">雅思/托福</h3>
+                    <div class="text-blue-500">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </div>
+                <div class="category-card bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" data-category="四级">
+                    <h3 class="text-lg font-medium mb-2">大学四六级</h3>
+                    <div class="text-blue-500">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 继续阅读 -->
+        <section class="mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">继续阅读</h2>
+                <a href="#" class="text-blue-500 text-sm">查看全部</a>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="article-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-block px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded">考研英语一</span>
+                            <span class="text-sm text-gray-500">2022年</span>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">The Impact of Artificial Intelligence on Modern Society</h3>
+                        <p class="text-gray-600 text-sm mb-3">人工智能正在以前所未有的速度改变我们的生活方式、工作方式和思考方式...</p>
+                        <div class="flex justify-between items-center">
+                            <div class="w-3/4">
+                                <div class="progress-indicator">
+                                    <div class="progress-bar" style="width: 65%"></div>
+                                </div>
+                                <span class="text-xs text-gray-500 mt-1 inline-block">已阅读 65%</span>
+                            </div>
+                            <button class="text-blue-500 hover:text-blue-700">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article-card bg-white">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-block px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded">考研英语二</span>
+                            <span class="text-sm text-gray-500">2023年</span>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">Climate Change: Global Challenges and Solutions</h3>
+                        <p class="text-gray-600 text-sm mb-3">气候变化是当今世界面临的最紧迫的环境挑战之一，需要全球共同努力...</p>
+                        <div class="flex justify-between items-center">
+                            <div class="w-3/4">
+                                <div class="progress-indicator">
+                                    <div class="progress-bar" style="width: 30%"></div>
+                                </div>
+                                <span class="text-xs text-gray-500 mt-1 inline-block">已阅读 30%</span>
+                            </div>
+                            <button class="text-blue-500 hover:text-blue-700">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 推荐阅读 -->
+        <section class="mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">推荐阅读</h2>
+                <a href="#" class="text-blue-500 text-sm">查看全部</a>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="article-card bg-white">
+                    <img src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="文章封面" class="w-full h-40 object-cover">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-block px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded">考研英语一</span>
+                            <span class="text-sm text-gray-500">2021年</span>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">The Future of Education in Digital Age</h3>
+                        <p class="text-gray-600 text-sm">数字时代的教育正在经历前所未有的变革，在线学习和混合式教育模式成为新常态...</p>
+                    </div>
+                </div>
+
+                <div class="article-card bg-white">
+                    <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="文章封面" class="w-full h-40 object-cover">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-block px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded">考研英语二</span>
+                            <span class="text-sm text-gray-500">2020年</span>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">Economic Globalization: Opportunities and Challenges</h3>
+                        <p class="text-gray-600 text-sm">经济全球化为世界各国带来了前所未有的机遇和挑战，国际贸易和投资的增长...</p>
+                    </div>
+                </div>
+
+                <div class="article-card bg-white">
+                    <img src="https://images.unsplash.com/photo-1532094349884-543bc11b234d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="文章封面" class="w-full h-40 object-cover">
+                    <div class="p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-block px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded">考研英语一</span>
+                            <span class="text-sm text-gray-500">2019年</span>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">Public Health Crises and Global Cooperation</h3>
+                        <p class="text-gray-600 text-sm">全球公共卫生危机需要国际社会的紧密合作，共同应对传染病的威胁和挑战...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 最近更新 -->
+        <section>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">最近更新</h2>
+                <a href="#" class="text-blue-500 text-sm">查看全部</a>
+            </div>
+            <div class="grid grid-cols-1 gap-4">
+                <div class="article-card bg-white">
+                    <div class="p-4 flex">
+                        <div class="w-24 h-24 flex-shrink-0">
+                            <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="文章封面" class="w-full h-full object-cover rounded-lg">
+                        </div>
+                        <div class="ml-4 flex-grow">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="inline-block px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded">考研英语一</span>
+                                <span class="text-sm text-gray-500">2023年</span>
+                            </div>
+                            <h3 class="font-semibold text-base mb-1">Digital Transformation in Traditional Industries</h3>
+                            <p class="text-gray-600 text-xs">传统行业正在经历数字化转型，新技术的应用正在改变生产和服务模式...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article-card bg-white">
+                    <div class="p-4 flex">
+                        <div class="w-24 h-24 flex-shrink-0">
+                            <img src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="文章封面" class="w-full h-full object-cover rounded-lg">
+                        </div>
+                        <div class="ml-4 flex-grow">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="inline-block px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded">考研英语二</span>
+                                <span class="text-sm text-gray-500">2022年</span>
+                            </div>
+                            <h3 class="font-semibold text-base mb-1">Sustainable Development and Environmental Protection</h3>
+                            <p class="text-gray-600 text-xs">可持续发展和环境保护已成为全球共识，绿色经济和清洁能源的发展...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article-card bg-white">
+                    <div class="p-4 flex">
+                        <div class="w-24 h-24 flex-shrink-0">
+                            <img src="https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="文章封面" class="w-full h-full object-cover rounded-lg">
+                        </div>
+                        <div class="ml-4 flex-grow">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="inline-block px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded">考研英语一</span>
+                                <span class="text-sm text-gray-500">2021年</span>
+                            </div>
+                            <h3 class="font-semibold text-base mb-1">Cultural Diversity and Global Integration</h3>
+                            <p class="text-gray-600 text-xs">文化多样性和全球一体化是当今世界的重要特征，不同文化之间的交流与融合...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 分类选择交互
+        document.querySelectorAll('.category-pill').forEach(pill => {
+            pill.addEventListener('click', function() {
+                document.querySelectorAll('.category-pill').forEach(p => {
+                    p.classList.remove('active', 'bg-blue-500', 'text-white');
+                    p.classList.add('bg-gray-100');
+                });
+                this.classList.add('active', 'bg-blue-500', 'text-white');
+                this.classList.remove('bg-gray-100');
+            });
+        });
+    </script>
+</body>
+</html>
+<!-- 真题选择弹窗 -->
+<div class="article-bg hidden" id="examPopupBg"></div>
+<div class="popup-container hidden" id="examPopup" style="max-height: 80vh; overflow-y: auto;">
+    <!-- 弹窗标题 -->
+    <div class="popup-header p-5">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold" id="popupTitle">真题选择</h2>
+            <button id="closePopupBtn" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 年份选择 -->
+    <div class="p-5 border-b border-gray-200">
+        <h3 class="text-lg font-semibold mb-3">选择年份</h3>
+        <div class="grid grid-cols-3 gap-3" id="yearContainer">
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2024年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2023年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2022年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2021年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2020年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2019年
+            </div>
+        </div>
+    </div>
+
+    <!-- 文章列表 -->
+    <div class="p-5">
+        <h3 class="text-lg font-semibold mb-3">文章列表</h3>
+        <div class="space-y-3" id="articleContainer">
+            <!-- 考研英语文章 -->
+            <div class="article-item hidden" data-category="考研英语">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 1</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于人工智能对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 2</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨气候变化的全球挑战与解决方案...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 3</h4>
+                            <p class="text-sm text-gray-600 mt-1">数字时代的教育变革与未来发展...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 六级文章 -->
+            <div class="article-item hidden" data-category="六级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于可持续发展与环境保护的讨论...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨文化多样性与全球一体化...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 专四专八文章 -->
+            <div class="article-item hidden" data-category="专四专八">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专八 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于经济全球化的机遇与挑战...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专四 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨传统行业的数字化转型...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 四级文章 -->
+            <div class="article-item hidden" data-category="四级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于公共卫生危机与全球合作...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨社交媒体对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
+<script>
+    // 分类卡片点击事件
+    document.querySelectorAll('.category-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const category = this.getAttribute('data-category');
+            const popupTitle = document.getElementById('popupTitle');
+            
+            // 设置弹窗标题
+            if (category === '考研英语') {
+                popupTitle.textContent = '历年考研英语真题选择';
+            } else if (category === '六级') {
+                popupTitle.textContent = '大学英语六级真题选择';
+            } else if (category === '专四专八') {
+                popupTitle.textContent = '专四专八英语真题选择';
+            } else if (category === '四级') {
+                popupTitle.textContent = '大学英语四级真题选择';
+            }
+            
+            // 显示对应分类的文章
+            document.querySelectorAll('.article-item').forEach(item => {
+                if (item.getAttribute('data-category') === category) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+            
+            // 显示弹窗
+            document.getElementById('examPopupBg').classList.remove('hidden');
+            document.getElementById('examPopup').classList.remove('hidden');
+        });
+    });
+    
+    // 关闭弹窗
+    document.getElementById('closePopupBtn').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 点击背景关闭弹窗
+    document.getElementById('examPopupBg').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 年份选择
+    document.querySelectorAll('.year-item').forEach(item => {
+        item.addEventListener('click', function() {
+            document.querySelectorAll('.year-item').forEach(year => {
+                year.classList.remove('bg-blue-50', 'text-blue-600');
+                year.classList.add('bg-gray-50');
+            });
+            this.classList.remove('bg-gray-50');
+            this.classList.add('bg-blue-50', 'text-blue-600');
+            
+            // 这里可以添加根据年份筛选文章的逻辑
+            console.log('选择年份：' + this.textContent.trim());
+        });
+    });
+    
+    // 文章项点击事件
+    document.querySelectorAll('.article-item > div').forEach(item => {
+        item.addEventListener('click', function() {
+            // 这里可以添加跳转到文章阅读页面的逻辑
+            console.log('选择文章：' + this.querySelector('h4').textContent);
+            // 示例：跳转到文章页面
+            // window.location.href = 'article.html';
+        });
+    });
+</script>
+</body>
+</html>
+<!-- 真题选择弹窗 -->
+<div class="article-bg hidden" id="examPopupBg"></div>
+<div class="popup-container hidden" id="examPopup" style="max-height: 80vh; overflow-y: auto;">
+    <!-- 弹窗标题 -->
+    <div class="popup-header p-5">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold" id="popupTitle">真题选择</h2>
+            <button id="closePopupBtn" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 年份选择 -->
+    <div class="p-5 border-b border-gray-200">
+        <h3 class="text-lg font-semibold mb-3">选择年份</h3>
+        <div class="grid grid-cols-3 gap-3" id="yearContainer">
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2024年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2023年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2022年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2021年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2020年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2019年
+            </div>
+        </div>
+    </div>
+
+    <!-- 文章列表 -->
+    <div class="p-5">
+        <h3 class="text-lg font-semibold mb-3">文章列表</h3>
+        <div class="space-y-3" id="articleContainer">
+            <!-- 考研英语文章 -->
+            <div class="article-item hidden" data-category="考研英语">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 1</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于人工智能对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 2</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨气候变化的全球挑战与解决方案...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 3</h4>
+                            <p class="text-sm text-gray-600 mt-1">数字时代的教育变革与未来发展...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 六级文章 -->
+            <div class="article-item hidden" data-category="六级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于可持续发展与环境保护的讨论...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨文化多样性与全球一体化...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 专四专八文章 -->
+            <div class="article-item hidden" data-category="专四专八">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专八 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于经济全球化的机遇与挑战...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专四 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨传统行业的数字化转型...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 四级文章 -->
+            <div class="article-item hidden" data-category="四级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于公共卫生危机与全球合作...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨社交媒体对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
+<script>
+    // 分类卡片点击事件
+    document.querySelectorAll('.category-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const category = this.getAttribute('data-category');
+            const popupTitle = document.getElementById('popupTitle');
+            
+            // 设置弹窗标题
+            if (category === '考研英语') {
+                popupTitle.textContent = '历年考研英语真题选择';
+            } else if (category === '六级') {
+                popupTitle.textContent = '大学英语六级真题选择';
+            } else if (category === '专四专八') {
+                popupTitle.textContent = '专四专八英语真题选择';
+            } else if (category === '四级') {
+                popupTitle.textContent = '大学英语四级真题选择';
+            }
+            
+            // 显示对应分类的文章
+            document.querySelectorAll('.article-item').forEach(item => {
+                if (item.getAttribute('data-category') === category) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+            
+            // 显示弹窗
+            document.getElementById('examPopupBg').classList.remove('hidden');
+            document.getElementById('examPopup').classList.remove('hidden');
+        });
+    });
+    
+    // 关闭弹窗
+    document.getElementById('closePopupBtn').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 点击背景关闭弹窗
+    document.getElementById('examPopupBg').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 年份选择
+    document.querySelectorAll('.year-item').forEach(item => {
+        item.addEventListener('click', function() {
+            document.querySelectorAll('.year-item').forEach(year => {
+                year.classList.remove('bg-blue-50', 'text-blue-600');
+                year.classList.add('bg-gray-50');
+            });
+            this.classList.remove('bg-gray-50');
+            this.classList.add('bg-blue-50', 'text-blue-600');
+            
+            // 这里可以添加根据年份筛选文章的逻辑
+            console.log('选择年份：' + this.textContent.trim());
+        });
+    });
+    
+    // 文章项点击事件
+    document.querySelectorAll('.article-item > div').forEach(item => {
+        item.addEventListener('click', function() {
+            // 这里可以添加跳转到文章阅读页面的逻辑
+            console.log('选择文章：' + this.querySelector('h4').textContent);
+            // 示例：跳转到文章页面
+            // window.location.href = 'article.html';
+        });
+    });
+</script>
+</body>
+</html>
+<!-- 真题选择弹窗 -->
+<div class="article-bg hidden" id="examPopupBg"></div>
+<div class="popup-container hidden" id="examPopup" style="max-height: 80vh; overflow-y: auto;">
+    <!-- 弹窗标题 -->
+    <div class="popup-header p-5">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold" id="popupTitle">真题选择</h2>
+            <button id="closePopupBtn" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 年份选择 -->
+    <div class="p-5 border-b border-gray-200">
+        <h3 class="text-lg font-semibold mb-3">选择年份</h3>
+        <div class="grid grid-cols-3 gap-3" id="yearContainer">
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2024年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2023年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2022年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2021年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2020年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2019年
+            </div>
+        </div>
+    </div>
+
+    <!-- 文章列表 -->
+    <div class="p-5">
+        <h3 class="text-lg font-semibold mb-3">文章列表</h3>
+        <div class="space-y-3" id="articleContainer">
+            <!-- 考研英语文章 -->
+            <div class="article-item hidden" data-category="考研英语">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 1</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于人工智能对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 2</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨气候变化的全球挑战与解决方案...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 3</h4>
+                            <p class="text-sm text-gray-600 mt-1">数字时代的教育变革与未来发展...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 六级文章 -->
+            <div class="article-item hidden" data-category="六级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于可持续发展与环境保护的讨论...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨文化多样性与全球一体化...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 专四专八文章 -->
+            <div class="article-item hidden" data-category="专四专八">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专八 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于经济全球化的机遇与挑战...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专四 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨传统行业的数字化转型...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 四级文章 -->
+            <div class="article-item hidden" data-category="四级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于公共卫生危机与全球合作...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨社交媒体对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
+<script>
+    // 分类卡片点击事件
+    document.querySelectorAll('.category-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const category = this.getAttribute('data-category');
+            const popupTitle = document.getElementById('popupTitle');
+            
+            // 设置弹窗标题
+            if (category === '考研英语') {
+                popupTitle.textContent = '历年考研英语真题选择';
+            } else if (category === '六级') {
+                popupTitle.textContent = '大学英语六级真题选择';
+            } else if (category === '专四专八') {
+                popupTitle.textContent = '专四专八英语真题选择';
+            } else if (category === '四级') {
+                popupTitle.textContent = '大学英语四级真题选择';
+            }
+            
+            // 显示对应分类的文章
+            document.querySelectorAll('.article-item').forEach(item => {
+                if (item.getAttribute('data-category') === category) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+            
+            // 显示弹窗
+            document.getElementById('examPopupBg').classList.remove('hidden');
+            document.getElementById('examPopup').classList.remove('hidden');
+        });
+    });
+    
+    // 关闭弹窗
+    document.getElementById('closePopupBtn').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 点击背景关闭弹窗
+    document.getElementById('examPopupBg').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 年份选择
+    document.querySelectorAll('.year-item').forEach(item => {
+        item.addEventListener('click', function() {
+            document.querySelectorAll('.year-item').forEach(year => {
+                year.classList.remove('bg-blue-50', 'text-blue-600');
+                year.classList.add('bg-gray-50');
+            });
+            this.classList.remove('bg-gray-50');
+            this.classList.add('bg-blue-50', 'text-blue-600');
+            
+            // 这里可以添加根据年份筛选文章的逻辑
+            console.log('选择年份：' + this.textContent.trim());
+        });
+    });
+    
+    // 文章项点击事件
+    document.querySelectorAll('.article-item > div').forEach(item => {
+        item.addEventListener('click', function() {
+            // 这里可以添加跳转到文章阅读页面的逻辑
+            console.log('选择文章：' + this.querySelector('h4').textContent);
+            // 示例：跳转到文章页面
+            // window.location.href = 'article.html';
+        });
+    });
+</script>
+</body>
+</html>
+<!-- 真题选择弹窗 -->
+<div class="article-bg hidden" id="examPopupBg"></div>
+<div class="popup-container hidden" id="examPopup" style="max-height: 80vh; overflow-y: auto;">
+    <!-- 弹窗标题 -->
+    <div class="popup-header p-5">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold" id="popupTitle">真题选择</h2>
+            <button id="closePopupBtn" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 年份选择 -->
+    <div class="p-5 border-b border-gray-200">
+        <h3 class="text-lg font-semibold mb-3">选择年份</h3>
+        <div class="grid grid-cols-3 gap-3" id="yearContainer">
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2024年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2023年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2022年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2021年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2020年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2019年
+            </div>
+        </div>
+    </div>
+
+    <!-- 文章列表 -->
+    <div class="p-5">
+        <h3 class="text-lg font-semibold mb-3">文章列表</h3>
+        <div class="space-y-3" id="articleContainer">
+            <!-- 考研英语文章 -->
+            <div class="article-item hidden" data-category="考研英语">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 1</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于人工智能对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 2</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨气候变化的全球挑战与解决方案...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 3</h4>
+                            <p class="text-sm text-gray-600 mt-1">数字时代的教育变革与未来发展...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 六级文章 -->
+            <div class="article-item hidden" data-category="六级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于可持续发展与环境保护的讨论...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨文化多样性与全球一体化...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 专四专八文章 -->
+            <div class="article-item hidden" data-category="专四专八">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专八 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于经济全球化的机遇与挑战...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专四 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨传统行业的数字化转型...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 四级文章 -->
+            <div class="article-item hidden" data-category="四级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于公共卫生危机与全球合作...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年12月四级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨社交媒体对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
+<script>
+    // 分类卡片点击事件
+    document.querySelectorAll('.category-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const category = this.getAttribute('data-category');
+            const popupTitle = document.getElementById('popupTitle');
+            
+            // 设置弹窗标题
+            if (category === '考研英语') {
+                popupTitle.textContent = '历年考研英语真题选择';
+            } else if (category === '六级') {
+                popupTitle.textContent = '大学英语六级真题选择';
+            } else if (category === '专四专八') {
+                popupTitle.textContent = '专四专八英语真题选择';
+            } else if (category === '四级') {
+                popupTitle.textContent = '大学英语四级真题选择';
+            }
+            
+            // 显示对应分类的文章
+            document.querySelectorAll('.article-item').forEach(item => {
+                if (item.getAttribute('data-category') === category) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+            
+            // 显示弹窗
+            document.getElementById('examPopupBg').classList.remove('hidden');
+            document.getElementById('examPopup').classList.remove('hidden');
+        });
+    });
+    
+    // 关闭弹窗
+    document.getElementById('closePopupBtn').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 点击背景关闭弹窗
+    document.getElementById('examPopupBg').addEventListener('click', function() {
+        document.getElementById('examPopupBg').classList.add('hidden');
+        document.getElementById('examPopup').classList.add('hidden');
+    });
+    
+    // 年份选择
+    document.querySelectorAll('.year-item').forEach(item => {
+        item.addEventListener('click', function() {
+            document.querySelectorAll('.year-item').forEach(year => {
+                year.classList.remove('bg-blue-50', 'text-blue-600');
+                year.classList.add('bg-gray-50');
+            });
+            this.classList.remove('bg-gray-50');
+            this.classList.add('bg-blue-50', 'text-blue-600');
+            
+            // 这里可以添加根据年份筛选文章的逻辑
+            console.log('选择年份：' + this.textContent.trim());
+        });
+    });
+    
+    // 文章项点击事件
+    document.querySelectorAll('.article-item > div').forEach(item => {
+        item.addEventListener('click', function() {
+            // 这里可以添加跳转到文章阅读页面的逻辑
+            console.log('选择文章：' + this.querySelector('h4').textContent);
+            // 示例：跳转到文章页面
+            // window.location.href = 'article.html';
+        });
+    });
+</script>
+</body>
+</html>
+<!-- 真题选择弹窗 -->
+<div class="article-bg hidden" id="examPopupBg"></div>
+<div class="popup-container hidden" id="examPopup" style="max-height: 80vh; overflow-y: auto;">
+    <!-- 弹窗标题 -->
+    <div class="popup-header p-5">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold" id="popupTitle">真题选择</h2>
+            <button id="closePopupBtn" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 年份选择 -->
+    <div class="p-5 border-b border-gray-200">
+        <h3 class="text-lg font-semibold mb-3">选择年份</h3>
+        <div class="grid grid-cols-3 gap-3" id="yearContainer">
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2024年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2023年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2022年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2021年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2020年
+            </div>
+            <div class="year-item p-3 bg-gray-50 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                2019年
+            </div>
+        </div>
+    </div>
+
+    <!-- 文章列表 -->
+    <div class="p-5">
+        <h3 class="text-lg font-semibold mb-3">文章列表</h3>
+        <div class="space-y-3" id="articleContainer">
+            <!-- 考研英语文章 -->
+            <div class="article-item hidden" data-category="考研英语">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 1</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于人工智能对现代社会的影响...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 2</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨气候变化的全球挑战与解决方案...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年考研英语一 Text 3</h4>
+                            <p class="text-sm text-gray-600 mt-1">数字时代的教育变革与未来发展...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 六级文章 -->
+            <div class="article-item hidden" data-category="六级">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage A</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于可持续发展与环境保护的讨论...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年6月六级 Passage B</h4>
+                            <p class="text-sm text-gray-600 mt-1">探讨文化多样性与全球一体化...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 专四专八文章 -->
+            <div class="article-item hidden" data-category="专四专八">
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专八 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-600 mt-1">关于经济全球化的机遇与挑战...</p>
+                        </div>
+                        <span class="text-blue-500"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                </div>
+                <div class="p-3 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors cursor-pointer">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">2023年专四 Reading Comprehension (A)</h4>
+                            <p class="text-sm text-gray-60

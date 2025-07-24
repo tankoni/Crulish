@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语 - 试卷真题</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .paper-card {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .paper-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .year-pill {
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .year-pill.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .search-bar {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        .year-section {
+            position: sticky;
+            top: 70px;
+            background-color: #f9f9f9;
+            z-index: 10;
+            padding: 10px 0;
+        }
+        .paper-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .paper-item {
+            background-color: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .paper-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .paper-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background-color: #f8fafc;
+        }
+        .paper-content {
+            padding: 16px;
+        }
+        .paper-footer {
+            padding: 12px 16px;
+            border-top: 1px solid #e5e7eb;
+            background-color: #f8fafc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toolbar {
+            position: fixed;
+            top: 50%;
+            right: 16px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 8px;
+            z-index: 20;
+        }
+        .tool-button {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            margin: 4px 0;
+            color: #4b5563;
+            transition: all 0.2s ease;
+        }
+        .tool-button:hover {
+            background-color: #f3f4f6;
+            color: #3b82f6;
+        }
+        .exam-paper {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+        .exam-header {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: center;
+        }
+        .exam-section {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .question {
+            margin-bottom: 20px;
+        }
+        .options {
+            margin-top: 10px;
+            margin-left: 20px;
+        }
+        .option {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+        }
+        .option-label {
+            min-width: 24px;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+        .blank {
+            display: inline-block;
+            width: 60px;
+            height: 1px;
+            border-bottom: 1px solid #000;
+            margin: 0 4px;
+        }
+    </style>
+</head>
+<body class="pb-20">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 bg-white shadow-sm z-10">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <a href="exam-list.html" class="text-gray-600 hover:text-gray-800 mr-3">
+                        <i class="fas fa-arrow-left text-xl"></i>
+                    </a>
+                    <h1 class="text-2xl font-bold text-gray-800">2023年全国硕士研究生入学统一考试英语（一）</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-bookmark text-xl"></i>
+                    </button>
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-share-alt text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+        <button class="tool-button" title="放大">
+            <i class="fas fa-search-plus"></i>
+        </button>
+        <button class="tool-button" title="缩小">
+            <i class="fas fa-search-minus"></i>
+        </button>
+        <button class="tool-button" title="全屏">
+            <i class="fas fa-expand"></i>
+        </button>
+        <button class="tool-button" title="打印">
+            <i class="fas fa-print"></i>
+        </button>
+        <button class="tool-button" title="下载">
+            <i class="fas fa-download"></i>
+        </button>
+    </div>
+
+    <!-- 主要内容区 -->
+    <main class="container mx-auto px-4 py-6">
+        <div class="exam-paper">
+            <div class="exam-header">
+                <h1 class="text-2xl font-bold mb-2">2023年全国硕士研究生入学统一考试英语（一）</h1>
+                <p class="text-gray-600">Section I: Use of English</p>
+            </div>
+
+            <div class="exam-section">
+                <div class="mb-6">
+                    <p class="mb-4"><strong>Directions:</strong> Read the following text. Choose the best word(s) for each numbered blank and mark A, B, C or D on the ANSWER SHEET. (10 points)</p>
+                    
+                    <p class="mb-4">I landed in the <u>ancient</u> Petra archaeological site, Jordan, at the end of the day when most of the tourists, which caused the city to <span class="blank"></span> <strong>1</strong> in the morning, had left. The site was built with a lot of <span class="blank"></span> <strong>2</strong> by earthquakes and erosion, which caused the city to <span class="blank"></span> <strong>3</strong> for centuries. The city was lost from the 7th century until its <span class="blank"></span> <strong>4</strong> in 1812.</p>
+                    
+                    <p class="mb-4">For millennia, the city's <span class="blank"></span> <strong>5</strong> by ancient traders some 2,000 feet of steps. They were created at the end of a narrow canyon, <span class="blank"></span> <strong>6</strong> the location and ease the city. The steps are lined with tombs, <span class="blank"></span> <strong>7</strong> a dark layer of sand. <span class="blank"></span> <strong>8</strong> the ancient Nabataean culture that created the city, the dead were more important than the living.</p>
+                    
+                    <p class="mb-4">Photographers must wait <span class="blank"></span> <strong>9</strong> for a moment when the sun hits the Treasury just right, <span class="blank"></span> <strong>10</strong> the rose-colored stone to glow.</p>
+                </div>
+
+                <div class="question">
+                    <p><strong>1.</strong></p>
+                    <div class="options">
+                        <div class="option">
+                            <span class="option-label">A.</span>
+                            <span>boom</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">B.</span>
+                            <span>thrive</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">C.</span>
+                            <span>survive</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">D.</span>
+                            <span>flourish</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="question">
+                    <p><strong>2.</strong></p>
+                    <div class="options">
+                        <div class="option">
+                            <span class="option-label">A.</span>
+                            <span>damage</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">B.</span>
+                            <span>effort</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">C.</span>
+                            <span>precision</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">D.</span>
+                            <span>caution</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="question">
+                    <p><strong>3.</strong></p>
+                    <div class="options">
+                        <div class="option">
+                            <span class="option-label">A.</span>
+                            <span>vanish</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">B.</span>
+                            <span>remain</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">C.</span>
+                            <span>collapse</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">D.</span>
+                            <span>expand</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="question">
+                    <p><strong>4.</strong></p>
+                    <div class="options">
+                        <div class="option">
+                            <span class="option-label">A.</span>
+                            <span>discovery</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">B.</span>
+                            <span>construction</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">C.</span>
+                            <span>destruction</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">D.</span>
+                            <span>renovation</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="question">
+                    <p><strong>5.</strong></p>
+                    <div class="options">
+                        <div class="option">
+                            <span class="option-label">A.</span>
+                            <span>inhabitants climbed</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">B.</span>
+                            <span>visitors descended</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">C.</span>
+                            <span>architects designed</span>
+                        </div>
+                        <div class="option">
+                            <span class="option-label">D.</span>
+                            <span>builders constructed</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="exam-footer p-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <button class="mr-4 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                        <i class="fas fa-chevron-left mr-2"></i> 上一页
+                    </button>
+                    <button class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                        下一页 <i class="fas fa-chevron-right ml-2"></i>
+                    </button>
+                </div>
+                <div class="text-gray-600">
+                    第 1 页 / 共 10 页
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 年份选择交互
+        document.querySelectorAll('.year-pill').forEach(pill => {
+            pill.addEventListener('click', function() {
+                document.querySelectorAll('.year-pill').forEach(p => {
+                    p.classList.remove('active', 'bg-blue-500', 'text-white');
+                    p.classList.add('bg-gray-100');
+                });
+                this.classList.add('active', 'bg-blue-500', 'text-white');
+                this.classList.remove('bg-gray-100');
+            });
+        });
+
+        // 模拟点击单词高亮功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const examText = document.querySelectorAll('.exam-section p');
+            
+            examText.forEach(paragraph => {
+                const words = paragraph.innerHTML.split(' ');
+                const newHTML = words.map(word => {
+                    // 排除HTML标签和标点符号
+                    if (word.includes('<') || word.includes('>') || word.match(/^[^a-zA-Z0-9]+$/) || word === '') {
+                        return word;
+                    }
+                    // 清理单词中的标点符号
+                    const cleanWord = word.replace(/[^a-zA-Z0-9]/g, '');
+                    if (cleanWord === '') return word;
+                    
+                    return word.replace(cleanWord, `<span class="cursor-pointer hover:bg-yellow-200 transition-colors duration-200">${cleanWord}</span>`);
+                }).join(' ');
+                
+                paragraph.innerHTML = newHTML;
+            });
+
+            // 为所有可点击的单词添加事件监听器
+            document.querySelectorAll('.hover\\:bg-yellow-200').forEach(word => {
+                word.addEventListener('click', function() {
+                    // 在实际应用中，这里会打开单词查询弹窗
+                    console.log('查询单词:', this.textContent);
+                    window.location.href = 'word-popup.html?word=' + this.textContent;
+                });
+            });
+        });
+    </script>
+</body>
+</html>

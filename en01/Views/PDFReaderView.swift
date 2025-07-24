@@ -357,14 +357,84 @@ struct PDFContentView: View {
         }
         
         private func getWordAt(point: CGPoint, in page: PDFPage) -> String? {
-            // 使用正确的PDFPage API
-            if let selection = page.selection(for: CGRect(x: point.x - 10, y: point.y - 10, width: 20, height: 20)) {
+            // 使用更大的选择区域来确保能够选中完整单词
+            let selectionRect = CGRect(x: point.x - 30, y: point.y - 20, width: 60, height: 40)
+            
+            if let selection = page.selection(for: selectionRect) {
                 let text = selection.string?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
-                // 提取单个单词
-                let words = text.components(separatedBy: CharacterSet.whitespacesAndNewlines)
-                return words.first(where: { !$0.isEmpty })
+                
+                // 如果选中的文本为空，尝试扩大选择范围
+                if text.isEmpty {
+                    let largerRect = CGRect(x: point.x - 50, y: point.y - 30, width: 100, height: 60)
+                    if let largerSelection = page.selection(for: largerRect) {
+                        let largerText = largerSelection.string?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
+                        return extractValidWord(from: largerText)
+                    }
+                } else {
+                    return extractValidWord(from: text)
+                }
             }
             return nil
+        }
+        
+        private func extractValidWord(from text: String) -> String? {
+            // 清理文本，移除标点符号
+            let cleanedText = text.trimmingCharacters(in: .punctuationCharacters)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // 如果是单个单词，直接返回
+            if !cleanedText.contains(" ") && !cleanedText.isEmpty {
+                return isValidWordForLookup(cleanedText) ? cleanedText : nil
+            }
+            
+            // 如果包含多个单词，选择最长的有效单词
+            let words = cleanedText.components(separatedBy: CharacterSet.whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+                .map { $0.trimmingCharacters(in: .punctuationCharacters) }
+                .filter { isValidWordForLookup($0) }
+            
+            // 返回最长的单词
+            return words.max(by: { $0.count < $1.count })
+        }
+        
+        private func isValidWordForLookup(_ word: String) -> Bool {
+            // 检查是否为空或太短
+            guard !word.isEmpty && word.count > 1 else {
+                return false
+            }
+            
+            // 检查是否包含字母
+            guard word.rangeOfCharacter(from: .letters) != nil else {
+                return false
+            }
+            
+            // 检查是否包含中文字符
+            let chineseCharacterSet = CharacterSet(charactersIn: "\u{4e00}-\u{9fff}")
+            if word.rangeOfCharacter(from: chineseCharacterSet) != nil {
+                return false
+            }
+            
+            // 检查是否为纯数字
+            if word.rangeOfCharacter(from: .decimalDigits) != nil &&
+               word.rangeOfCharacter(from: .letters) == nil {
+                return false
+            }
+            
+            // 检查是否包含过多特殊字符
+            let specialCharCount = word.filter { !$0.isLetter && !$0.isNumber }.count
+            if specialCharCount > word.count / 2 {
+                return false
+            }
+            
+            // 检查是否只包含英文字母
+            let nonEnglishCount = word.filter { char in
+                !char.isASCII || (!char.isLetter && !char.isNumber)
+            }.count
+            if nonEnglishCount > 0 {
+                return false
+            }
+            
+            return true
         }
         
         private func getSentenceAt(point: CGPoint, in page: PDFPage) -> String? {

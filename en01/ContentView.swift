@@ -19,88 +19,101 @@ struct ContentView: View {
                     get: { appViewModel.selectedTab },
                     set: { appViewModel.selectTab($0) }
                 )) {
-                    if let homeViewModel = appViewModel.homeViewModel {
-                HomeView(viewModel: homeViewModel)
+                    // Home Tab
+                    Group {
+                        if let homeViewModel = appViewModel.homeViewModel {
+                            HomeView(viewModel: homeViewModel)
+                        } else {
+                            VStack {
+                                ProgressView()
+                                Text("加载中...")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
                     .tabItem {
-                        Image(systemName: TabSelection.home.iconName)
-                        Text(TabSelection.home.title)
+                        Image(systemName: "house")
+                        Text("首页")
                     }
                     .tag(TabSelection.home)
-                    } else {
-                        Text("加载中...")
-                            .tabItem {
-                                Image(systemName: TabSelection.home.iconName)
-                                Text(TabSelection.home.title)
+                    
+                    // Reading Tab
+                    Group {
+                        if let readingViewModel = appViewModel.readingViewModel {
+                            ReadingView(viewModel: readingViewModel)
+                        } else {
+                            VStack {
+                                ProgressView()
+                                Text("加载中...")
+                                    .foregroundColor(.secondary)
                             }
-                            .tag(TabSelection.home)
+                        }
                     }
-            
-                    if let readingViewModel = appViewModel.readingViewModel {
-                ReadingView(viewModel: readingViewModel)
                     .tabItem {
-                        Image(systemName: TabSelection.reading.iconName)
-                        Text(TabSelection.reading.title)
+                        Image(systemName: "book")
+                        Text("阅读")
                     }
                     .tag(TabSelection.reading)
-                    } else {
-                        Text("加载中...")
-                            .tabItem {
-                                Image(systemName: TabSelection.reading.iconName)
-                                Text(TabSelection.reading.title)
+                    
+                    // Vocabulary Tab
+                    Group {
+                        if let vocabularyViewModel = appViewModel.vocabularyViewModel {
+                            VocabularyView(viewModel: vocabularyViewModel)
+                        } else {
+                            VStack {
+                                ProgressView()
+                                Text("加载中...")
+                                    .foregroundColor(.secondary)
                             }
-                            .tag(TabSelection.reading)
+                        }
                     }
-            
-                    if let vocabularyViewModel = appViewModel.vocabularyViewModel {
-                VocabularyView(viewModel: vocabularyViewModel)
                     .tabItem {
-                        Image(systemName: TabSelection.vocabulary.iconName)
-                        Text(TabSelection.vocabulary.title)
+                        Image(systemName: "text.book.closed")
+                        Text("词汇")
                     }
                     .tag(TabSelection.vocabulary)
-                    } else {
-                        Text("加载中...")
-                            .tabItem {
-                                Image(systemName: TabSelection.vocabulary.iconName)
-                                Text(TabSelection.vocabulary.title)
+                    
+                    // Progress Tab
+                    Group {
+                        if let progressViewModel = appViewModel.progressViewModel {
+                            ProgressDashboardView(viewModel: progressViewModel)
+                        } else {
+                            VStack {
+                                ProgressView()
+                                Text("加载中...")
+                                    .foregroundColor(.secondary)
                             }
-                            .tag(TabSelection.vocabulary)
+                        }
                     }
-            
-                    if let progressViewModel = appViewModel.progressViewModel {
-                ProgressDashboardView(viewModel: progressViewModel)
                     .tabItem {
-                        Image(systemName: TabSelection.progress.iconName)
-                        Text(TabSelection.progress.title)
+                        Image(systemName: "chart.bar")
+                        Text("进度")
                     }
                     .tag(TabSelection.progress)
-                    } else {
-                        Text("加载中...")
-                            .tabItem {
-                                Image(systemName: TabSelection.progress.iconName)
-                                Text(TabSelection.progress.title)
+                    
+                    // Settings Tab
+                    Group {
+                        if let settingsViewModel = appViewModel.settingsViewModel {
+                            SettingsView(viewModel: settingsViewModel)
+                        } else {
+                            VStack {
+                                ProgressView()
+                                Text("加载中...")
+                                    .foregroundColor(.secondary)
                             }
-                            .tag(TabSelection.progress)
+                        }
                     }
-            
-                    if let settingsViewModel = appViewModel.settingsViewModel {
-                SettingsView(viewModel: settingsViewModel)
                     .tabItem {
-                        Image(systemName: TabSelection.settings.iconName)
-                        Text(TabSelection.settings.title)
+                        Image(systemName: "gear")
+                        Text("设置")
                     }
                     .tag(TabSelection.settings)
-                    } else {
-                        Text("加载中...")
-                            .tabItem {
-                                Image(systemName: TabSelection.settings.iconName)
-                                Text(TabSelection.settings.title)
-                            }
-                            .tag(TabSelection.settings)
-                    }
                 }
                 .environment(appViewModel)
                 .environmentObject(appViewModel.coordinator)
+                .environmentObject(appViewModel.coordinator.getDictionaryService() as! DictionaryService)
+                .environmentObject(appViewModel.coordinator.getTextProcessor() as! TextProcessor)
+                .environmentObject(appViewModel.coordinator.wordInteractionCoordinator!)
             } else {
                 VStack {
                     SwiftUI.ProgressView()

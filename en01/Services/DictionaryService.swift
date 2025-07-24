@@ -8,38 +8,11 @@
 import Foundation
 import SwiftData
 import NaturalLanguage
+import Combine // 添加以支持ObservableObject
 
-class DictionaryService: BaseService, DictionaryServiceProtocol {
-    func getWordsForReview(filter: ReviewFilter) -> [UserWord] {
-        return []
-    }
-    
-    func getWordsByMastery(level: MasteryLevel) -> [UserWord] {
-        return []
-    }
-    
-    func getWordHistory(limit: Int) -> [UserWord] {
-        return []
-    }
-    
-    func getVocabularyStats() -> VocabularyStats {
-        return VocabularyStats(
-            totalWords: 0,
-            unfamiliarWords: 0,
-            familiarWords: 0,
-            masteredWords: 0,
-            todayLookups: 0,
-            weeklyLookups: 0,
-            averageLookupPerDay: 0.0,
-            mostLookedUpWords: []
-        )
-    }
-    
-    func clearWordHistory() {
-        
-    }
-    
-    private var dictionaryWords: [String: DictionaryWord] = [:]
+class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObject { // 添加ObservableObject
+    // 添加@Published属性以支持观察，例如：
+    @Published var dictionaryWords: [String: DictionaryWord] = [:] // 使dictionaryWords可观察
     private let textProcessor = TextProcessor()
     
     init(
@@ -75,7 +48,9 @@ class DictionaryService: BaseService, DictionaryServiceProtocol {
     private func loadDictionaryFromJSON() async {
         guard let url = Bundle.main.url(forResource: "dictionary", withExtension: "json") else {
             print("[WARNING] 找不到词典文件，使用示例数据")
-            initializeSampleDictionary()
+            await MainActor.run {
+                initializeSampleDictionary()
+            }
             return
         }
         
@@ -153,6 +128,11 @@ class DictionaryService: BaseService, DictionaryServiceProtocol {
         // 首先尝试精确匹配（最快）
         if let exactMatch = self.dictionaryWords[lowercaseWord] {
             return exactMatch
+        }
+        
+        // 尝试词形变化匹配
+        if let morphMatch = findByMorphology(cleanWord) {
+            return morphMatch
         }
         
         // 尝试词根匹配（中等性能消耗）
@@ -236,6 +216,30 @@ class DictionaryService: BaseService, DictionaryServiceProtocol {
         return score
     }
     
+    // 词形变化匹配
+    private func findByMorphology(_ word: String) -> DictionaryWord? {
+        let morphologyProcessor = WordMorphologyProcessor.shared
+        let possibleForms = morphologyProcessor.getAllPossibleForms(for: word)
+        
+        // 检查所有可能的词形
+        for form in possibleForms {
+            let lowercaseForm = form.lowercased()
+            if let match = self.dictionaryWords[lowercaseForm] {
+                return match
+            }
+        }
+        
+        // 反向匹配：检查词典中的词是否是查询词的变形
+        for (key, dictionaryWord) in self.dictionaryWords {
+            let wordForms = morphologyProcessor.getAllPossibleForms(for: key)
+            if wordForms.contains(where: { $0.lowercased() == word.lowercased() }) {
+                return dictionaryWord
+            }
+        }
+        
+        return nil
+    }
+    
     // 词根匹配
     private func findByStem(_ word: String) -> DictionaryWord? {
         let stem = self.textProcessor.stemWord(word)
@@ -308,6 +312,12 @@ class DictionaryService: BaseService, DictionaryServiceProtocol {
             }
         } ?? UserWord(word: word, context: context, sentence: sentence, selectedDefinition: nil)
     }
+    
+    // 协议要求的异步查词方法
+    
+    
+    // 获取需要复习的单词
+    
     
     // 协议要求的异步查词方法
     func lookupWord(_ word: String) async throws -> UserWord {
@@ -418,9 +428,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol {
         try self.modelContext.save()
     }
 
-    func updateWordMastery(_ record: UserWord, level: MasteryLevel, correct: Bool) {
-        
-    }
+    
 
     func toggleReviewFlag(for record: UserWord) {
         record.isMarkedForReview.toggle()
@@ -519,7 +527,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol {
     // MARK: - 统计功能
     
     // 获取词汇统计
-    func getVocabularyStats() -> VocabularyStats? {
+    func getVocabularyStats() -> VocabularyStats {
         let userRecords = getUserWordRecords()
         
         let totalWords = userRecords.count
@@ -611,22 +619,6 @@ class DictionaryService: BaseService, DictionaryServiceProtocol {
                 frequency: 92,
                 difficulty: .medium,
                 tags: ["高频词", "核心词汇"]
-            ),
-            DictionaryWordData(
-                word: "transform",
-                phonetic: "/trænsˈfɔːrm/",
-                definitions: [
-                    WordDefinitionData(
-                        partOfSpeech: .verb,
-                        meaning: "转变，改变",
-                        englishMeaning: "to change completely",
-                        examples: ["transform society", "digital transformation"],
-                        contextKeywords: ["change", "convert", "modify", "alter"]
-                    )
-                ],
-                frequency: 78,
-                difficulty: .medium,
-                tags: ["动词", "变化"]
             )
         ]
         
@@ -721,4 +713,151 @@ extension DictionaryService {
     func getWordsByTag(_ tag: String) -> [DictionaryWord] {
         return self.dictionaryWords.values.filter { $0.tags.contains(tag) }
     }
+    
+    // MARK: - 考研词典功能
+    
+    /// 查找考研词典中的单词
+    func lookupKaoyanWord(_ word: String) -> KaoyanWord? {
+        let cleanWord = self.textProcessor.cleanWord(word)
+        
+        // 输入验证
+        guard !cleanWord.isEmpty else { return nil }
+        
+        // 精确匹配（大小写敏感，使用 Predicate）
+        let exactPredicate = #Predicate<KaoyanWord> { $0.headWord == cleanWord }
+        let exactDescriptor = FetchDescriptor<KaoyanWord>(predicate: exactPredicate)
+        if let exactMatch = self.safeFetch(exactDescriptor, operation: "精确匹配考研单词").first {
+            return exactMatch
+        }
+        
+        // 获取所有单词用于内存过滤
+        let allWordsDescriptor = FetchDescriptor<KaoyanWord>()
+        let allWords = self.safeFetch(allWordsDescriptor, operation: "获取所有考研单词")
+        
+        // 大小写不敏感的精确匹配（内存过滤）
+        if let caseInsensitiveMatch = allWords.first(where: { $0.headWord.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
+            return caseInsensitiveMatch
+        }
+        
+        // 词形变化匹配
+        let morphologyProcessor = WordMorphologyProcessor.shared
+        let possibleForms = morphologyProcessor.getAllPossibleForms(for: cleanWord)
+        
+        for form in possibleForms {
+            if let morphMatch = allWords.first(where: { $0.headWord.caseInsensitiveCompare(form) == .orderedSame }) {
+                return morphMatch
+            }
+        }
+        
+        // 反向词形匹配（检查数据库中的词是否是查询词的变形）
+        for kaoyanWord in allWords {
+            let wordForms = morphologyProcessor.getAllPossibleForms(for: kaoyanWord.headWord)
+            if wordForms.contains(where: { $0.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
+                return kaoyanWord
+            }
+        }
+        
+        // 模糊匹配（内存过滤）
+        if let fuzzyMatch = allWords.first(where: { $0.headWord.contains(cleanWord) || cleanWord.contains($0.headWord) }) {
+            return fuzzyMatch
+        }
+        
+        return nil
+    }
+    
+    /// 获取考研单词的详细信息（包含释义、例句等）
+    func getKaoyanWordDetails(_ word: String) -> KaoyanWordDetails? {
+        guard let kaoyanWord = lookupKaoyanWord(word) else { return nil }
+        
+        return KaoyanWordDetails(
+            word: kaoyanWord.headWord,
+            wordRank: kaoyanWord.wordRank,
+            bookId: kaoyanWord.bookId,
+            usPhone: kaoyanWord.usPhone,
+            ukPhone: kaoyanWord.ukPhone,
+            translations: kaoyanWord.translations.map { translation in
+                KaoyanWordTranslation(
+                    pos: translation.pos,
+                    tranCn: translation.tranCn,
+                    tranOther: translation.tranOther
+                )
+            },
+            sentences: kaoyanWord.sentences.map { sentence in
+                KaoyanWordSentence(
+                    sContent: sentence.sContent,
+                    sCn: sentence.sCn
+                )
+            },
+            synonyms: kaoyanWord.synonyms.map { synonym in
+                KaoyanWordSynonym(
+                    pos: synonym.pos,
+                    tran: synonym.tran,
+                    synonymWords: synonym.synonymWords
+                )
+            },
+            phrases: kaoyanWord.phrases.map { phrase in
+                KaoyanWordPhrase(
+                    pContent: phrase.pContent,
+                    pCn: phrase.pCn
+                )
+            },
+            relatedWords: kaoyanWord.relatedWords.map { relWord in
+                KaoyanWordRelated(
+                    pos: relWord.pos,
+                    hwd: relWord.hwd,
+                    tran: relWord.tran
+                )
+            }
+        )
+    }
+    
+    /// 初始化考研词典数据
+    func initializeKaoyanDictionary() async {
+        print("[INFO][DictionaryService] 开始初始化考研词典数据...")
+        let importer = KaoyanDictionaryImporter(modelContext: modelContext)
+        
+        do {
+            let needsImport = try await importer.needsImport()
+            print("[INFO][DictionaryService] 检查是否需要导入: \(needsImport)")
+            
+            if needsImport {
+                print("[INFO][DictionaryService] 开始导入考研词典数据...")
+                try await importer.importAllDictionaries()
+                print("[INFO][DictionaryService] 考研词典数据导入完成")
+                
+                // 验证导入结果
+                let descriptor = FetchDescriptor<KaoyanWord>()
+                let count = try modelContext.fetchCount(descriptor)
+                print("[INFO][DictionaryService] 导入后数据库中共有 \(count) 个考研单词")
+            } else {
+                print("[INFO][DictionaryService] 考研词典数据已存在，跳过导入")
+                
+                // 显示现有数据统计
+                let descriptor = FetchDescriptor<KaoyanWord>()
+                let count = try modelContext.fetchCount(descriptor)
+                print("[INFO][DictionaryService] 数据库中现有 \(count) 个考研单词")
+            }
+        } catch {
+            print("[ERROR][DictionaryService] 导入考研词典失败: \(error.localizedDescription)")
+            if let importError = error as? ImportError {
+                print("[ERROR][DictionaryService] 详细错误: \(importError.errorDescription ?? "未知错误")")
+            }
+        }
+    }
+    
+    /// 获取发音URL
+    func getPronunciationURL(for word: String, type: PronunciationType) -> URL? {
+        let typeParam = type == .uk ? "1" : "2"
+        let urlString = "https://dict.youdao.com/dictvoice?audio=\(word)&type=\(typeParam)"
+        return URL(string: urlString)
+    }
+}
+
+// MARK: - 考研词典数据结构
+// 注意：考研词典相关的数据结构已移动到 DetailedWordDefinition.swift 文件中
+
+/// 发音类型
+enum PronunciationType {
+    case uk // 英音
+    case us // 美音
 }

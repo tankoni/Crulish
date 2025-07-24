@@ -25,6 +25,9 @@ class AppCoordinator: ObservableObject {
     @Published var progressViewModel: ProgressViewModel?
     @Published var settingsViewModel: SettingsViewModel?
     
+    // MARK: - Word Interaction
+    @Published var wordInteractionCoordinator: WordInteractionCoordinator?
+    
     // MARK: - Services
     private let serviceContainer: ServiceContainer
     private var cancellables = Set<AnyCancellable>()
@@ -52,6 +55,10 @@ class AppCoordinator: ObservableObject {
         return serviceContainer.getDictionaryService()
     }
     
+    func getTextProcessor() -> TextProcessorProtocol {
+        return serviceContainer.getTextProcessor()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer
@@ -61,45 +68,82 @@ class AppCoordinator: ObservableObject {
     private func initializeViewModels() {
         guard !isConfigured else { return }
         
-        // 初始化子ViewModels
+        // 使用内存保护的方式初始化 ViewModels
+        autoreleasepool {
+            // 初始化单词交互协调器
+            self.wordInteractionCoordinator = WordInteractionCoordinator(
+                dictionaryService: serviceContainer.getDictionaryService()
+            )
+            
+            // 分阶段初始化 ViewModels 以减少内存压力
+            initializeViewModelsGradually()
+        }
+        
+        isConfigured = true
+        setupCoordination()
+        
+        // 延迟执行PDF导入以避免启动时的内存压力
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.checkAndImportPDFs()
+        }
+    }
+    
+    /// 分阶段初始化 ViewModels
+    private func initializeViewModelsGradually() {
+        // 立即初始化关键的 HomeViewModel
         self.homeViewModel = HomeViewModel(
             articleService: serviceContainer.getArticleService(),
             userProgressService: serviceContainer.getUserProgressService(),
             errorHandler: serviceContainer.getErrorHandler()
         )
         
-        self.readingViewModel = ReadingViewModel(
-            articleService: serviceContainer.getArticleService(),
-            userProgressService: serviceContainer.getUserProgressService(),
-            dictionaryService: serviceContainer.getDictionaryService(),
-            textProcessor: serviceContainer.getTextProcessor() as! TextProcessor,
-            errorHandler: serviceContainer.getErrorHandler()
-        )
+        // 延迟初始化其他 ViewModels
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self else { return }
+            autoreleasepool {
+                self.progressViewModel = ProgressViewModel(
+                    userProgressService: self.serviceContainer.getUserProgressService(),
+                    articleService: self.serviceContainer.getArticleService(),
+                    errorHandler: self.serviceContainer.getErrorHandler()
+                )
+            }
+        }
         
-        self.vocabularyViewModel = VocabularyViewModel(
-            dictionaryService: serviceContainer.getDictionaryService(),
-            userProgressService: serviceContainer.getUserProgressService(),
-            errorHandler: serviceContainer.getErrorHandler()
-        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self = self else { return }
+            autoreleasepool {
+                self.settingsViewModel = SettingsViewModel(
+                    userProgressService: self.serviceContainer.getUserProgressService(),
+                    errorHandler: self.serviceContainer.getErrorHandler(),
+                    cacheManager: self.serviceContainer.getCacheManager(),
+                    coordinator: self
+                )
+            }
+        }
         
-        self.progressViewModel = ProgressViewModel(
-            userProgressService: serviceContainer.getUserProgressService(),
-            articleService: serviceContainer.getArticleService(),
-            errorHandler: serviceContainer.getErrorHandler()
-        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self = self else { return }
+            autoreleasepool {
+                self.vocabularyViewModel = VocabularyViewModel(
+                    dictionaryService: self.serviceContainer.getDictionaryService(),
+                    userProgressService: self.serviceContainer.getUserProgressService(),
+                    errorHandler: self.serviceContainer.getErrorHandler()
+                )
+            }
+        }
         
-        self.settingsViewModel = SettingsViewModel(
-            userProgressService: serviceContainer.getUserProgressService(),
-            errorHandler: serviceContainer.getErrorHandler(),
-            cacheManager: serviceContainer.getCacheManager(),
-            coordinator: self
-        )
-        
-        isConfigured = true
-        setupCoordination()
-        
-        // 检查并执行PDF导入
-        checkAndImportPDFs()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self = self else { return }
+            autoreleasepool {
+                self.readingViewModel = ReadingViewModel(
+                    articleService: self.serviceContainer.getArticleService(),
+                    userProgressService: self.serviceContainer.getUserProgressService(),
+                    dictionaryService: self.serviceContainer.getDictionaryService(),
+                    textProcessor: self.serviceContainer.getTextProcessor() as! TextProcessor,
+                    errorHandler: self.serviceContainer.getErrorHandler()
+                )
+            }
+        }
     }
     
     // MARK: - Setup

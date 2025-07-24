@@ -18,9 +18,9 @@ struct HybridReaderView: View {
     @State private var currentPage: Int = 1
     @State private var syncScrolling: Bool = true
     @State private var showingSettings = false
-    @State private var selectedWord = ""
+    @EnvironmentObject private var dictionaryService: DictionaryService
+    @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
     @State private var selectedSentence = ""
-    @State private var showingWordDefinition = false
     @State private var showingSentenceTranslation = false
     @State private var splitRatio: CGFloat = 0.5
     @State private var fontSize: CGFloat = 16
@@ -133,11 +133,14 @@ struct HybridReaderView: View {
                 splitRatio: $splitRatio
             )
         }
-        .sheet(isPresented: $showingWordDefinition) {
-            HybridWordDefinitionSheet(
-                word: selectedWord,
-                onDismiss: { showingWordDefinition = false }
+        .sheet(isPresented: $wordInteractionCoordinator.showDetailedSheet) {
+            DetailedWordDefinitionView(
+                word: wordInteractionCoordinator.selectedWord,
+                onDismiss: {
+                    wordInteractionCoordinator.hideDetailedSheet()
+                }
             )
+            .environmentObject(dictionaryService) // 假设移除多余参数，需根据实际代码调整
         }
         .sheet(isPresented: $showingSentenceTranslation) {
             HybridSentenceTranslationSheet(
@@ -149,12 +152,7 @@ struct HybridReaderView: View {
     
     // MARK: - 事件处理
     private func handleWordTap(_ word: String) {
-        selectedWord = word
-        showingWordDefinition = true
-        
-        // 添加触觉反馈
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
+        wordInteractionCoordinator.handleWordTap(word)
     }
     
     private func handleSentenceLongPress(_ sentence: String) {
@@ -464,53 +462,7 @@ struct HybridSettingsSheet: View {
     }
 }
 
-// MARK: - Sheet组件（重用之前定义的）
-struct HybridWordDefinitionSheet: View {
-    let word: String
-    let onDismiss: () -> Void
-    @State private var definition = "加载中..."
-    @State private var isLoading = true
-    
-    var body: some View {
-        NavigationView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(word)
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                if isLoading {
-                    SwiftUI.ProgressView("加载定义中...")
-                        .frame(maxWidth: .infinity, alignment: .center)
-                } else {
-                    Text(definition)
-                        .font(.body)
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("词典")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
-                        onDismiss()
-                    }
-                }
-            }
-            .onAppear {
-                loadDefinition()
-            }
-        }
-    }
-    
-    private func loadDefinition() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            definition = "\(word): 这里是单词的定义和解释..."
-            isLoading = false
-        }
-    }
-}
+// MARK: - Sheet组件
 
 struct HybridSentenceTranslationSheet: View {
     let sentence: String

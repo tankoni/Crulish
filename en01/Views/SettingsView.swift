@@ -228,6 +228,11 @@ struct SettingsView: View {
     
     private var dataSection: some View {
         Section("数据管理") {
+            // 考研词典状态
+            NavigationLink(destination: KaoyanDictionaryStatusView()) {
+                Label("考研词典状态", systemImage: "book.fill")
+            }
+            
             // 重新导入PDF
             Button {
                 Task {

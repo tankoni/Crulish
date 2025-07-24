@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语阅读APP原型</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        .device-container {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-radius: 30px;
+            overflow: hidden;
+            background-color: white;
+            position: relative;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #000;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 14px;
+        }
+        .tab-bar {
+            height: 83px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-top: 1px solid #e0e0e0;
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding-bottom: 20px;
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #8e8e93;
+            font-size: 10px;
+            padding-top: 8px;
+        }
+        .tab-item.active {
+            color: #007aff;
+        }
+        .device-frame {
+            width: 100%;
+            height: calc(100% - 127px); /* 减去状态栏和标签栏的高度 */
+            margin-top: 44px; /* 状态栏高度 */
+            overflow: hidden;
+        }
+        .prototype-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 30px;
+            padding: 30px;
+        }
+        .prototype-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .prototype-label {
+            margin-top: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+        .device-selector {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="device-selector">
+        <label for="device-select" class="block text-sm font-medium text-gray-700 mb-2">选择设备尺寸:</label>
+        <select id="device-select" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="iphone">iPhone (375x812)</option>
+            <option value="ipad" selected>iPad (834x1112)</option>
+            <option value="android">Android Phone (360x800)</option>
+        </select>
+    </div>
+
+    <div class="prototype-grid">
+        <!-- 首页 -->
+        <div class="prototype-item">
+            <div class="device-container" style="width: 834px; height: 1112px;">
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <div>
+                        <span class="mr-2"><i class="fas fa-signal"></i></span>
+                        <span class="mr-2"><i class="fas fa-wifi"></i></span>
+                        <span><i class="fas fa-battery-full"></i></span>
+                    </div>
+                </div>
+                <div class="device-frame">
+                    <iframe src="home.html" frameborder="0" width="100%" height="100%"></iframe>
+                </div>
+                <div class="tab-bar">
+                    <div class="tab-item active">
+                        <i class="fas fa-book-open text-xl mb-1"></i>
+                        <span>阅读</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-book text-xl mb-1"></i>
+                        <span>词典</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-chart-line text-xl mb-1"></i>
+                        <span>统计</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-cog text-xl mb-1"></i>
+                        <span>设置</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prototype-label">首页</div>
+        </div>
+
+        <!-- 文章阅读页 -->
+        <div class="prototype-item">
+            <div class="device-container" style="width: 834px; height: 1112px;">
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <div>
+                        <span class="mr-2"><i class="fas fa-signal"></i></span>
+                        <span class="mr-2"><i class="fas fa-wifi"></i></span>
+                        <span><i class="fas fa-battery-full"></i></span>
+                    </div>
+                </div>
+                <div class="device-frame">
+                    <iframe src="article.html" frameborder="0" width="100%" height="100%"></iframe>
+                </div>
+                <div class="tab-bar">
+                    <div class="tab-item active">
+                        <i class="fas fa-book-open text-xl mb-1"></i>
+                        <span>阅读</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-book text-xl mb-1"></i>
+                        <span>词典</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-chart-line text-xl mb-1"></i>
+                        <span>统计</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-cog text-xl mb-1"></i>
+                        <span>设置</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prototype-label">文章阅读页</div>
+        </div>
+
+        <!-- 单词查询弹窗 -->
+        <div class="prototype-item">
+            <div class="device-container" style="width: 834px; height: 1112px;">
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <div>
+                        <span class="mr-2"><i class="fas fa-signal"></i></span>
+                        <span class="mr-2"><i class="fas fa-wifi"></i></span>
+                        <span><i class="fas fa-battery-full"></i></span>
+                    </div>
+                </div>
+                <div class="device-frame">
+                    <iframe src="word-popup.html" frameborder="0" width="100%" height="100%"></iframe>
+                </div>
+                <div class="tab-bar">
+                    <div class="tab-item active">
+                        <i class="fas fa-book-open text-xl mb-1"></i>
+                        <span>阅读</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-book text-xl mb-1"></i>
+                        <span>词典</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-chart-line text-xl mb-1"></i>
+                        <span>统计</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-cog text-xl mb-1"></i>
+                        <span>设置</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prototype-label">单词查询弹窗</div>
+        </div>
+
+        <!-- 个人词典页 -->
+        <div class="prototype-item">
+            <div class="device-container" style="width: 834px; height: 1112px;">
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <div>
+                        <span class="mr-2"><i class="fas fa-signal"></i></span>
+                        <span class="mr-2"><i class="fas fa-wifi"></i></span>
+                        <span><i class="fas fa-battery-full"></i></span>
+                    </div>
+                </div>
+                <div class="device-frame">
+                    <iframe src="dictionary.html" frameborder="0" width="100%" height="100%"></iframe>
+                </div>
+                <div class="tab-bar">
+                    <div class="tab-item">
+                        <i class="fas fa-book-open text-xl mb-1"></i>
+                        <span>阅读</span>
+                    </div>
+                    <div class="tab-item active">
+                        <i class="fas fa-book text-xl mb-1"></i>
+                        <span>词典</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-chart-line text-xl mb-1"></i>
+                        <span>统计</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-cog text-xl mb-1"></i>
+                        <span>设置</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prototype-label">个人词典页</div>
+        </div>
+
+        <!-- 学习统计页 -->
+        <div class="prototype-item">
+            <div class="device-container" style="width: 834px; height: 1112px;">
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <div>
+                        <span class="mr-2"><i class="fas fa-signal"></i></span>
+                        <span class="mr-2"><i class="fas fa-wifi"></i></span>
+                        <span><i class="fas fa-battery-full"></i></span>
+                    </div>
+                </div>
+                <div class="device-frame">
+                    <iframe src="statistics.html" frameborder="0" width="100%" height="100%"></iframe>
+                </div>
+                <div class="tab-bar">
+                    <div class="tab-item">
+                        <i class="fas fa-book-open text-xl mb-1"></i>
+                        <span>阅读</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-book text-xl mb-1"></i>
+                        <span>词典</span>
+                    </div>
+                    <div class="tab-item active">
+                        <i class="fas fa-chart-line text-xl mb-1"></i>
+                        <span>统计</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-cog text-xl mb-1"></i>
+                        <span>设置</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prototype-label">学习统计页</div>
+        </div>
+
+        <!-- 设置页 -->
+        <div class="prototype-item">
+            <div class="device-container" style="width: 834px; height: 1112px;">
+                <div class="status-bar">
+                    <span>9:41</span>
+                    <div>
+                        <span class="mr-2"><i class="fas fa-signal"></i></span>
+                        <span class="mr-2"><i class="fas fa-wifi"></i></span>
+                        <span><i class="fas fa-battery-full"></i></span>
+                    </div>
+                </div>
+                <div class="device-frame">
+                    <iframe src="settings.html" frameborder="0" width="100%" height="100%"></iframe>
+                </div>
+                <div class="tab-bar">
+                    <div class="tab-item">
+                        <i class="fas fa-book-open text-xl mb-1"></i>
+                        <span>阅读</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-book text-xl mb-1"></i>
+                        <span>词典</span>
+                    </div>
+                    <div class="tab-item">
+                        <i class="fas fa-chart-line text-xl mb-1"></i>
+                        <span>统计</span>
+                    </div>
+                    <div class="tab-item active">
+                        <i class="fas fa-cog text-xl mb-1"></i>
+                        <span>设置</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prototype-label">设置页</div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('device-select').addEventListener('change', function() {
+            const deviceContainers = document.querySelectorAll('.device-container');
+            const value = this.value;
+            
+            deviceContainers.forEach(container => {
+                if (value === 'iphone') {
+                    container.style.width = '375px';
+                    container.style.height = '812px';
+                } else if (value === 'ipad') {
+                    container.style.width = '834px';
+                    container.style.height = '1112px';
+                } else if (value === 'android') {
+                    container.style.width = '360px';
+                    container.style.height = '800px';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

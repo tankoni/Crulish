@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语 - 文章阅读</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .article-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .article-content {
+            font-size: 18px;
+            line-height: 1.8;
+            letter-spacing: 0.01em;
+        }
+        .article-content p {
+            margin-bottom: 1.5em;
+        }
+        .word {
+            cursor: pointer;
+            border-bottom: 1px dotted transparent;
+            transition: all 0.2s ease;
+        }
+        .word:hover {
+            color: #3b82f6;
+            border-bottom-color: #3b82f6;
+        }
+        .word.highlighted {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-radius: 2px;
+        }
+        .toolbar {
+            position: sticky;
+            bottom: 0;
+            background-color: white;
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+        .toolbar-button {
+            padding: 12px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+        .toolbar-button:hover {
+            background-color: #f3f4f6;
+        }
+        .progress-bar-container {
+            height: 4px;
+            width: 100%;
+            background-color: #e5e7eb;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 20;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #3b82f6;
+            width: 0;
+            transition: width 0.3s ease;
+        }
+        
+        /* 轻量级查词提示样式 */
+        .word-tooltip {
+            position: absolute;
+            width: auto;
+            min-width: 200px;
+            max-width: 300px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            overflow: hidden;
+            padding: 12px;
+            display: none;
+            font-size: 14px;
+        }
+        
+        .word-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #111827;
+        }
+        
+        .part-of-speech {
+            display: inline-block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-right: 8px;
+        }
+        
+        .definition {
+            font-size: 14px;
+            color: #374151;
+            margin-top: 6px;
+        }
+        
+        .view-more {
+            display: inline-block;
+            font-size: 12px;
+            color: #3b82f6;
+            margin-top: 8px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .view-more:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body class="pb-20">
+    <!-- 阅读进度条 -->
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="readingProgress"></div>
+    </div>
+
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 bg-white shadow-sm z-10 pt-1">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex items-center">
+                <button class="mr-4 text-gray-600 hover:text-gray-800" onclick="window.history.back()">
+                    <i class="fas fa-arrow-left text-xl"></i>
+                </button>
+                <div class="flex-grow">
+                    <h1 class="text-lg font-semibold text-gray-800 truncate">The Impact of Artificial Intelligence on Modern Society</h1>
+                    <div class="flex items-center text-sm text-gray-500 mt-1">
+                        <span class="mr-3">考研英语一</span>
+                        <span>2022年真题</span>
+                    </div>
+                </div>
+                <button class="ml-4 text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-ellipsis-v text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 文章内容 -->
+    <main class="container mx-auto px-4 py-6">
+        <div class="article-container p-6">
+            <div class="article-content">
+                <p>Artificial intelligence (AI) is <span class="word">transforming</span> the way we live, work, and <span class="word">interact</span> with one another. From <span class="word">virtual</span> assistants like Siri and Alexa to <span class="word">autonomous</span> vehicles and <span class="word">sophisticated</span> data analysis tools, AI technologies are <span class="word">increasingly</span> becoming part of our daily lives.</p>
+                
+                <p>One of the most <span class="word">significant</span> impacts of AI is in the workplace. <span class="word">Automation</span> and AI-powered tools are <span class="word">revolutionizing</span> industries from manufacturing to healthcare, <span class="word">enhancing</span> productivity and <span class="word">efficiency</span>. However, this technological <span class="word">advancement</span> also raises concerns about job <span class="word">displacement</span> and the future of work.</p>
+                
+                <p>In healthcare, AI is being used to <span class="word">diagnose</span> diseases, develop new <span class="word">treatments</span>, and <span class="word">personalize</span> patient care. Machine learning algorithms can <span class="word">analyze</span> vast amounts of medical data to identify patterns that might be missed by human doctors, <span class="word">potentially</span> leading to earlier and more accurate diagnoses.</p>
+                
+                <p>Education is another field being <span class="word">transformed</span> by AI. <span class="word">Adaptive</span> learning platforms can <span class="word">tailor</span> educational content to individual students' needs, helping them learn at their own pace and in ways that work best for them. AI tutors can provide <span class="word">immediate</span> feedback and support, <span class="word">supplementing</span> the work of human teachers.</p>
+                
+                <p>Despite these <span class="word">benefits</span>, the rapid <span class="word">advancement</span> of AI technology also presents <span class="word">challenges</span>. There are <span class="word">ethical</span> concerns about privacy, <span class="word">bias</span> in AI systems, and the <span class="word">potential</span> for AI to be used in harmful ways. As AI becomes more <span class="word">sophisticated</span>, questions about <span class="word">accountability</span> and control become increasingly important.</p>
+                
+                <p>Another <span class="word">concern</span> is the digital divide. As AI technologies become more <span class="word">integrated</span> into society, there is a risk that those without access to these technologies or the skills to use them will be left behind, <span class="word">exacerbating</span> existing social and economic <span class="word">inequalities</span>.</p>
+                
+                <p>To <span class="word">address</span> these challenges, it is <span class="word">crucial</span> that the development and <span class="word">deployment</span> of AI is guided by <span class="word">ethical</span> principles and <span class="word">regulatory</span> frameworks that <span class="word">prioritize</span> human well-being and social good. This requires <span class="word">collaboration</span> between technologists, policymakers, ethicists, and the public.</p>
+                
+                <p>In conclusion, AI has the <span class="word">potential</span> to bring about <span class="word">tremendous</span> benefits for society, from improving healthcare and education to <span class="word">enhancing</span> productivity and quality of life. However, <span class="word">realizing</span> this potential while <span class="word">mitigating</span> the risks will require careful thought, <span class="word">responsible</span> innovation, and inclusive dialogue about the kind of future we want to create.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 底部工具栏 -->
+    <div class="toolbar py-3 px-6">
+        <div class="flex justify-between items-center max-w-screen-md mx-auto">
+            <div class="flex items-center space-x-2">
+                <button class="toolbar-button text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-font text-xl"></i>
+                </button>
+                <button class="toolbar-button text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-moon text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="text-sm text-gray-500">
+                <span id="readingPercentage">0%</span> 已阅读
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button class="toolbar-button text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-bookmark text-xl"></i>
+                </button>
+                <button class="toolbar-button text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-share-alt text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 轻量级查词提示 -->
+    <div class="word-tooltip" id="wordTooltip">
+        <div class="word-title" id="tooltipWord">imaginable</div>
+        <div>
+            <span class="part-of-speech" id="tooltipPos">adj.</span>
+        </div>
+        <div class="definition" id="tooltipDefinition">可想象的，想象得到的</div>
+        <a href="#" class="view-more" id="viewMoreDetails">查看详细 ></a>
+    </div>
+
+    <script>
+        // 单词点击事件
+        document.querySelectorAll('.word').forEach(word => {
+            word.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // 移除其他单词的高亮
+                document.querySelectorAll('.word.highlighted').forEach(w => {
+                    if (w !== this) w.classList.remove('highlighted');
+                });
+                
+                // 切换当前单词的高亮状态
+                this.classList.toggle('highlighted');
+                
+                // 如果单词被高亮，显示轻量级查词提示
+                if (this.classList.contains('highlighted')) {
+                    const wordText = this.textContent.trim();
+                    showWordTooltip(wordText, this);
+                } else {
+                    // 隐藏提示
+                    document.getElementById('wordTooltip').style.display = 'none';
+                }
+            });
+        });
+
+        // 显示轻量级查词提示
+        function showWordTooltip(word, element) {
+            const tooltip = document.getElementById('wordTooltip');
+            const tooltipWord = document.getElementById('tooltipWord');
+            const tooltipPos = document.getElementById('tooltipPos');
+            const tooltipDefinition = document.getElementById('tooltipDefinition');
+            
+            // 设置提示内容（在实际应用中，这里会调用API获取单词释义）
+            tooltipWord.textContent = word;
+            
+            // 模拟不同单词的词性和释义（实际应用中应从API获取）
+            let pos = 'n.';
+            let definition = '释义加载中...';
+            
+            // 简单的模拟数据
+            const wordData = {
+                'transforming': { pos: 'v.', definition: '改变，转变' },
+                'interact': { pos: 'v.', definition: '交流，互动' },
+                'virtual': { pos: 'adj.', definition: '虚拟的，实质上的' },
+                'autonomous': { pos: 'adj.', definition: '自主的，自治的' },
+                'sophisticated': { pos: 'adj.', definition: '复杂的，精密的' },
+                'increasingly': { pos: 'adv.', definition: '日益，越来越多地' }
+                // 可以添加更多单词
+            };
+            
+            // 如果有该单词的数据，使用它
+            if (wordData[word]) {
+                pos = wordData[word].pos;
+                definition = wordData[word].definition;
+            }
+            
+            tooltipPos.textContent = pos;
+            tooltipDefinition.textContent = definition;
+            
+            // 定位提示框到单词附近
+            positionTooltipNearWord(element);
+            
+            // 显示提示
+            tooltip.style.display = 'block';
+        }
+
+        // 定位轻量级提示到单词附近的函数
+        function positionTooltipNearWord(wordElement) {
+            const tooltip = document.getElementById('wordTooltip');
+            const rect = wordElement.getBoundingClientRect();
+            
+            // 计算位置，优先显示在单词上方
+            let top = rect.top - tooltip.offsetHeight - 10;
+            
+            // 如果上方空间不足，则显示在下方
+            if (top < 10) {
+                top = rect.bottom + 10;
+            }
+            
+            // 水平居中对齐
+            const left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2);
+            
+            // 确保提示不会超出屏幕左右边界
+            const rightEdge = left + tooltip.offsetWidth;
+            const windowWidth = window.innerWidth;
+            
+            let finalLeft = left;
+            if (finalLeft < 10) finalLeft = 10;
+            if (rightEdge > windowWidth - 10) finalLeft = windowWidth - tooltip.offsetWidth - 10;
+            
+            tooltip.style.left = finalLeft + 'px';
+            tooltip.style.top = top + 'px';
+        }
+
+        // 点击查看详细按钮
+        document.getElementById('viewMoreDetails').addEventListener('click', function(e) {
+            e.preventDefault();
+            const word = document.getElementById('tooltipWord').textContent;
+            // 跳转到完整的单词详情页
+            window.location.href = 'word-popup.html?word=' + encodeURIComponent(word);
+        });
+
+        // 点击页面其他地方关闭提示
+        document.addEventListener('click', function(e) {
+            // 如果点击的不是单词和不是提示框内部
+            if (!e.target.closest('.word') && !e.target.closest('.word-tooltip')) {
+                // 隐藏提示
+                document.getElementById('wordTooltip').style.display = 'none';
+                // 移除所有单词高亮
+                document.querySelectorAll('.word.highlighted').forEach(w => {
+                    w.classList.remove('highlighted');
+                });
+            }
+        });
+
+        // 阅读进度条
+        window.addEventListener('scroll', function() {
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
+            const scrollTop = window.scrollY || document.documentElement.scrollTop;
+            
+            // 计算阅读进度百分比
+            const scrollPercentage = (scrollTop / (documentHeight - windowHeight)) * 100;
+            
+            // 更新进度条
+            document.getElementById('readingProgress').style.width = scrollPercentage + '%';
+            document.getElementById('readingPercentage').textContent = Math.round(scrollPercentage) + '%';
+        });
+
+        // 初始触发一次滚动事件，以设置初始进度
+        window.dispatchEvent(new Event('scroll'));
+    </script>
+</body>
+</html>

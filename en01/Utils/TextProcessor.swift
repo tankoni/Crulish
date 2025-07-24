@@ -7,8 +7,9 @@
 
 import Foundation
 import NaturalLanguage
+import SwiftUI
 
-class TextProcessor: TextProcessorProtocol {
+class TextProcessor: TextProcessorProtocol, ObservableObject {
     private let tokenizer = NLTokenizer(unit: .word)
     private let tagger = NLTagger(tagSchemes: [.lexicalClass, .lemma])
     
@@ -28,7 +29,8 @@ class TextProcessor: TextProcessorProtocol {
             .trimmingCharacters(in: .punctuationCharacters)
             .lowercased()
         
-        return cleanedWord
+        // 过滤中文字符和其他非英文字符
+        return filterEnglishOnly(cleanedWord)
     }
     
     // 清理文本
@@ -66,7 +68,8 @@ class TextProcessor: TextProcessorProtocol {
         let tokens = tokenizeText(text)
         return tokens.filter { token in
             !token.trimmingCharacters(in: .punctuationCharacters).isEmpty &&
-            token.rangeOfCharacter(from: .letters) != nil
+            token.rangeOfCharacter(from: .letters) != nil &&
+            isValidEnglishWord(token)
         }.map { cleanWord($0) }
     }
     
@@ -199,6 +202,46 @@ class TextProcessor: TextProcessorProtocol {
         }
         
         return lowercaseWord
+    }
+    
+    // MARK: - 英文单词过滤
+    
+    /// 过滤只保留英文字符
+    private func filterEnglishOnly(_ word: String) -> String {
+        return String(word.filter { char in
+            char.isLetter && char.isASCII
+        })
+    }
+    
+    /// 检查是否为有效的英文单词
+    private func isValidEnglishWord(_ word: String) -> Bool {
+        // 检查是否为空或太短
+        guard !word.isEmpty && word.count > 1 else {
+            return false
+        }
+        
+        // 检查是否包含中文字符
+        let chineseCharacterSet = CharacterSet(charactersIn: "\u{4e00}-\u{9fff}")
+        if word.rangeOfCharacter(from: chineseCharacterSet) != nil {
+            return false
+        }
+        
+        // 检查是否包含其他非英文字符（如日文、韩文等）
+        let nonEnglishCount = word.filter { char in
+            !char.isASCII || (!char.isLetter && !char.isNumber)
+        }.count
+        
+        // 如果非英文字符超过一半，则认为不是有效英文单词
+        if nonEnglishCount > word.count / 2 {
+            return false
+        }
+        
+        // 检查是否为纯数字
+        if word.allSatisfy({ $0.isNumber }) {
+            return false
+        }
+        
+        return true
     }
     
     // MARK: - 句子提取
