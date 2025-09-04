@@ -6,6 +6,16 @@
 //
 
 import SwiftUI
+import Foundation
+import PDFKit
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
+
+
 
 struct StructuredTextView: View {
     let structuredText: StructuredText
@@ -13,6 +23,8 @@ struct StructuredTextView: View {
     @EnvironmentObject private var dictionaryService: DictionaryService
     @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
     @EnvironmentObject private var textProcessor: TextProcessor
+    @EnvironmentObject private var translationService: TranslationServiceImpl
+    @StateObject private var inputManager = UnifiedInputManager.shared
     @State private var selectedSentence = ""
     @State private var selectedParagraph = ""
     @State private var showingSentenceTranslation = false
@@ -82,7 +94,7 @@ struct StructuredTextView: View {
         }
         .overlay(
             // 轻量级单词提示tooltip - 只在顶层显示一次
-            Group {
+            ZStack {
                 if wordInteractionCoordinator.showTooltip {
                     WordTooltipView(
                         word: wordInteractionCoordinator.selectedWord,
@@ -106,7 +118,7 @@ struct StructuredTextView: View {
     
     // MARK: - 事件处理
     private func handleWordTap(_ word: String) {
-        wordInteractionCoordinator.handleWordTap(word, at: .zero)
+        wordInteractionCoordinator.handleWordTap(word, at: CGPoint.zero)
     }
     
     private func handleSentenceLongPress(_ sentence: String) {
@@ -114,8 +126,10 @@ struct StructuredTextView: View {
         showingSentenceTranslation = true
         
         // 添加触觉反馈
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        #if canImport(UIKit)
+        let impactFeedback = UIImpactFeedbackGenerator(style: UIImpactFeedbackGenerator.FeedbackStyle.medium)
         impactFeedback.impactOccurred()
+        #endif
     }
     
     private func handleParagraphSelection(_ paragraph: String) {
@@ -169,9 +183,10 @@ struct TextToolbar: View {
     let onSearch: (String) -> Void
     let onPreviousPage: () -> Void
     let onNextPage: () -> Void
-    
+
     @State private var localSearchText = ""
     @State private var showingSettings = false
+    @StateObject private var inputManager = UnifiedInputManager.shared
     
     var body: some View {
         HStack {
@@ -198,11 +213,22 @@ struct TextToolbar: View {
             HStack {
                 TextField("搜索...", text: $localSearchText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .onTapGesture {
+                        inputManager.beginInputSession(
+                            fieldId: "structured_text_search",
+                            priority: 1,
+                            inputType: .search
+                        )
+                    }
                     .onSubmit {
                         onSearch(localSearchText)
+                        inputManager.endInputSession(fieldId: "structured_text_search")
                     }
                 
-                Button(action: { onSearch(localSearchText) }) {
+                Button(action: { 
+                    onSearch(localSearchText)
+                    inputManager.endInputSession(fieldId: "structured_text_search")
+                }) {
                     Image(systemName: "magnifyingglass")
                 }
                 .disabled(localSearchText.isEmpty)
@@ -217,7 +243,7 @@ struct TextToolbar: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(Color(.systemBackground))
+        .background(Color(red: 0.95, green: 0.95, blue: 0.95))
         .shadow(radius: 1)
         .sheet(isPresented: $showingSettings) {
             TextSettingsSheet(
@@ -240,7 +266,8 @@ struct StructuredPageView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: lineSpacing) {
-            ForEach(page.elements, id: \.id) { element in
+            ForEach(0..<page.elements.count, id: \.self) { index in
+                let element = page.elements[index]
                 StructuredElementView(
                     element: element,
                     fontSize: fontSize,
@@ -274,35 +301,123 @@ struct StructuredElementView: View {
     @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
     @EnvironmentObject private var dictionaryService: DictionaryService
     @EnvironmentObject private var textProcessor: TextProcessor
+    @EnvironmentObject private var settings: AppSettings
+    @State private var isSelected = false
+    @State private var selectedText = ""
     
     var body: some View {
         Text(element.content)
             .font(fontForElement)
             .foregroundColor(colorForElement)
-            .lineSpacing(lineSpacing)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isHighlighted ? Color.yellow.opacity(0.3) : Color.clear)
+            .lineSpacing(adjustedLineSpacing)
+            .multilineTextAlignment(textAlignmentForElement)
+            .frame(maxWidth: .infinity, alignment: frameAlignmentForElement)
+            .padding(paddingForElement)
+            .background(backgroundForElement)
             .onTapGesture { location in
-                // 使用TextProcessor精确提取单词
-                if let word = extractWordFromTap(at: location) {
-                    // 验证是否为有效单词（避免点击标题、数字等）
-                    if isValidWord(word) {
-                        wordInteractionCoordinator.handleWordTap(word, at: location)
-                    }
-                }
+                handleTapGesture(at: location)
             }
             .onLongPressGesture {
-                onSentenceLongPress(element.content)
+                handleLongPressGesture()
             }
             .contextMenu {
-                Button("翻译段落") {
-                    onParagraphSelection(element.content)
-                }
-                Button("复制文本") {
-                    UIPasteboard.general.string = element.content
-                }
+                contextMenuItems
             }
             // 移除overlay，WordTooltipView将在StructuredTextView顶层显示
+    }
+    
+    private var backgroundForElement: some View {
+        ZStack {
+            // 布局信息中的背景色
+            if let layoutInfo = element.layoutInfo,
+               let bgColorHex = layoutInfo.backgroundColor {
+                Color(hex: bgColorHex)
+            }
+            
+            // 高亮和选中状态
+            if isHighlighted {
+                Color.yellow.opacity(0.3)
+            } else if isSelected && wordInteractionCoordinator.currentTranslationMode.rawValue == "sentence" {
+                Color.blue.opacity(0.2)
+            } else if layoutInfo?.backgroundColor == nil {
+                Color.clear
+            }
+        }
+        .overlay(
+            // 边框
+            layoutInfo?.borderInfo != nil ?
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(
+                    Color(hex: layoutInfo?.borderInfo?.color ?? "#000000"),
+                    lineWidth: layoutInfo?.borderInfo?.width ?? 1
+                )
+            : nil
+        )
+    }
+    
+    private var layoutInfo: LayoutInfo? {
+        return element.layoutInfo
+    }
+    
+    private func handleTapGesture(at location: CGPoint) {
+        if wordInteractionCoordinator.currentTranslationMode.rawValue == "sentence" {
+            // 句段翻译模式：提取点击位置的句子进行翻译
+            if let sentence = extractSentenceFromTap(at: location) {
+                isSelected = true
+                selectedText = sentence
+                // 触发句子翻译
+                onSentenceLongPress(sentence)
+            }
+        } else {
+            // 单词翻译模式：提取单词
+            if let word = extractWordFromTap(at: location) {
+                if isValidWord(word) {
+                    wordInteractionCoordinator.handleWordTap(word, at: location)
+                }
+            }
+        }
+    }
+    
+    private func handleLongPressGesture() {
+        if wordInteractionCoordinator.currentTranslationMode.rawValue == "sentence" {
+            // 句段翻译模式：长按选择段落
+            onParagraphSelection(element.content)
+        } else {
+            // 单词翻译模式：长按翻译句子
+            onSentenceLongPress(element.content)
+        }
+    }
+    
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        if wordInteractionCoordinator.currentTranslationMode.rawValue == "sentence" {
+            Button("翻译此句") {
+                // 使用选中的句子或第一个句子
+                let sentenceToTranslate = selectedText.isEmpty ? 
+                    (textProcessor.splitIntoSentences(element.content).first ?? element.content) : selectedText
+                onSentenceLongPress(sentenceToTranslate)
+            }
+            Button("翻译段落") {
+                onParagraphSelection(element.content)
+            }
+        } else {
+            Button("翻译句子") {
+                // 使用选中的句子或第一个句子
+                let sentenceToTranslate = selectedText.isEmpty ? 
+                    (textProcessor.splitIntoSentences(element.content).first ?? element.content) : selectedText
+                onSentenceLongPress(sentenceToTranslate)
+            }
+            Button("翻译段落") {
+                onParagraphSelection(element.content)
+            }
+        }
+        Button("复制文本") {
+#if canImport(UIKit)
+            UIPasteboard.general.string = element.content
+#else
+            NSPasteboard.general.setString(element.content, forType: .string)
+#endif
+        }
     }
 
     
@@ -350,6 +465,72 @@ struct StructuredElementView: View {
         }
     }
     
+    // 新增的布局相关计算属性
+    private var adjustedLineSpacing: CGFloat {
+        if let layoutInfo = element.layoutInfo {
+            return layoutInfo.lineHeight - fontSize
+        }
+        return lineSpacing
+    }
+    
+    private var textAlignmentForElement: SwiftUI.TextAlignment {
+        if let alignment = element.textAlignment {
+            return alignment.toSwiftUITextAlignment()
+        }
+        
+        // 根据元素类型设置默认对齐
+        switch element.type {
+        case .title, .subtitle:
+            return .center
+        default:
+            return .leading
+        }
+    }
+    
+    private var frameAlignmentForElement: Alignment {
+        if let alignment = element.textAlignment {
+            return alignment.toSwiftUIAlignment()
+        }
+        
+        // 根据元素类型设置默认对齐
+        switch element.type {
+        case .title, .subtitle:
+            return .center
+        default:
+            return .leading
+        }
+    }
+    
+    private var paddingForElement: SwiftUI.EdgeInsets {
+        var padding = SwiftUI.EdgeInsets()
+        
+        // 应用布局信息中的边距
+        if let layoutInfo = element.layoutInfo {
+            padding = SwiftUI.EdgeInsets(
+                top: layoutInfo.margins.top,
+                leading: layoutInfo.margins.leading + (element.indentation ?? 0),
+                bottom: layoutInfo.margins.bottom,
+                trailing: layoutInfo.margins.trailing
+            )
+        } else {
+            // 默认边距
+            switch element.type {
+            case .title:
+                padding = SwiftUI.EdgeInsets(top: 20, leading: element.indentation ?? 0, bottom: 16, trailing: 0)
+            case .subtitle:
+                padding = SwiftUI.EdgeInsets(top: 16, leading: element.indentation ?? 0, bottom: 12, trailing: 0)
+            case .quote:
+                padding = SwiftUI.EdgeInsets(top: 12, leading: 20 + (element.indentation ?? 0), bottom: 12, trailing: 20)
+            case .list:
+                padding = SwiftUI.EdgeInsets(top: 4, leading: 16 + (element.indentation ?? 0), bottom: 4, trailing: 0)
+            default:
+                padding = SwiftUI.EdgeInsets(top: 8, leading: element.indentation ?? 0, bottom: 8, trailing: 0)
+            }
+        }
+        
+        return padding
+    }
+    
     private func extractWordFromTap(at location: CGPoint) -> String? {
         // 使用TextProcessor提取单词
         let words = textProcessor.extractWords(element.content)
@@ -363,6 +544,23 @@ struct StructuredElementView: View {
         return selectWordByPosition(words: words, tapLocation: location)
     }
     
+    private func extractSentenceFromTap(at location: CGPoint) -> String? {
+        // 使用改进的句子提取方法
+        let sentences = textProcessor.splitIntoSentences(element.content)
+        
+        // 如果只有一个句子，直接返回
+        if sentences.count == 1 {
+            return sentences.first
+        }
+        
+        // 改进的字符位置估算
+        let estimatedCharacterWidth: CGFloat = fontSize * 0.5 // 根据字体大小调整
+        let clickPosition = Int(location.x / estimatedCharacterWidth)
+        
+        // 使用TextProcessor的新方法进行精确提取
+        return textProcessor.extractSentenceAtPosition(clickPosition, from: element.content)
+    }
+    
     /// 根据点击位置智能选择单词
     private func selectWordByPosition(words: [String], tapLocation: CGPoint) -> String? {
         // 如果没有单词，返回nil
@@ -370,15 +568,14 @@ struct StructuredElementView: View {
         
         // 创建一个临时的Text视图来测量单词位置
         let content = element.content
-        let wordsInContent = content.components(separatedBy: .whitespacesAndNewlines)
+        let wordsInContent = content.components(separatedBy: CharacterSet.whitespacesAndNewlines)
             .filter { !$0.isEmpty }
         
         // 估算每个单词的位置
         var currentX: CGFloat = 0
-        let lineHeight: CGFloat = 20 // 估算行高
         let spaceWidth: CGFloat = 6 // 估算空格宽度
         
-        for (index, wordInContent) in wordsInContent.enumerated() {
+        for (_, wordInContent) in wordsInContent.enumerated() {
             let cleanWord = textProcessor.cleanWord(wordInContent)
             
             // 估算单词宽度（简化计算）
@@ -436,7 +633,8 @@ struct StructuredElementView: View {
         }
         
         // 检查是否为标题类型的元素（通常不需要查词）
-        if element.type == .title || element.type == .subtitle {
+        let elementType = element.type
+        if elementType == .title || elementType == .subtitle {
             return false
         }
         
@@ -689,9 +887,8 @@ struct TextSettingsSheet: View {
                 }
             }
             .navigationTitle("文本设置")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("完成") {
                         dismiss()
                     }
@@ -709,6 +906,7 @@ struct StructuredSentenceTranslationSheet: View {
     let onDismiss: () -> Void
     @State private var translation = "翻译中..."
     @State private var isLoading = true
+    @EnvironmentObject private var translationService: TranslationServiceImpl
     
     var body: some View {
         NavigationView {
@@ -719,7 +917,7 @@ struct StructuredSentenceTranslationSheet: View {
                 Text(sentence)
                     .font(.body)
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.gray.opacity(0.1))
                     .cornerRadius(8)
                 
                 Text("翻译")
@@ -740,9 +938,8 @@ struct StructuredSentenceTranslationSheet: View {
             }
             .padding()
             .navigationTitle("句子翻译")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("完成") {
                         onDismiss()
                     }
@@ -755,10 +952,19 @@ struct StructuredSentenceTranslationSheet: View {
     }
     
     private func loadTranslation() {
-        // 模拟加载翻译
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            translation = "这里是句子的中文翻译..."
-            isLoading = false
+        Task {
+            do {
+                let result = try await translationService.translateSentence(sentence)
+                await MainActor.run {
+                    translation = result?.translatedText ?? "翻译失败"
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    translation = "翻译失败：\(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
         }
     }
 }
@@ -779,7 +985,7 @@ struct StructuredParagraphTranslationSheet: View {
                     Text(paragraph)
                         .font(.body)
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.gray.opacity(0.1))
                         .cornerRadius(8)
                     
                     Text("翻译")
@@ -799,9 +1005,8 @@ struct StructuredParagraphTranslationSheet: View {
                 .padding()
             }
             .navigationTitle("段落翻译")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("完成") {
                         onDismiss()
                     }
@@ -823,44 +1028,11 @@ struct StructuredParagraphTranslationSheet: View {
 }
 
 // MARK: - 预览
+#if DEBUG
 struct StructuredTextView_Previews: PreviewProvider {
     static var previews: some View {
-        let sampleElement = TextElement(
-            content: "这是一个示例段落，用于展示结构化文本的显示效果。",
-            type: .paragraph,
-            bounds: CGRect(x: 0, y: 0, width: 300, height: 50),
-            fontInfo: FontInfo(size: 16, weight: .regular, isItalic: false, isBold: false),
-            level: 0
-        )
-        
-        let samplePage = StructuredPage(
-            pageNumber: 1,
-            elements: [sampleElement],
-            bounds: CGRect(x: 0, y: 0, width: 400, height: 600)
-        )
-        
-        let sampleStructuredText = StructuredText(
-            pages: [samplePage],
-            metadata: TextMetadata(
-                totalPages: 1,
-                extractionDate: Date(),
-                sourceURL: nil,
-                language: "zh",
-                wordCount: 20
-            )
-        )
-        
-        StructuredTextView(
-            structuredText: sampleStructuredText,
-            article: Article(
-                title: "示例文章",
-                content: "示例内容",
-                year: 2023,
-                examType: "考研一",
-                difficulty: .medium,
-                topic: "阅读理解",
-                imageName: "sample"
-            )
-        )
+        Text("StructuredTextView Preview")
+            .padding()
     }
 }
+#endif

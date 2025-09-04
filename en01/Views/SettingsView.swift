@@ -89,7 +89,7 @@ struct SettingsView: View {
                 in: 12...24,
                 step: 1
             )
-            .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
+            .listRowInsets(SwiftUI.EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
             
             // 字体家族
             Picker("字体", selection: $viewModel.readingSettings.fontFamily) {
@@ -98,7 +98,7 @@ struct SettingsView: View {
                 Text("宋体").tag("Songti SC")
             }
             .pickerStyle(MenuPickerStyle())
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             
             // 行间距
             HStack {
@@ -113,7 +113,7 @@ struct SettingsView: View {
                 in: 4...12,
                 step: 1
             )
-            .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
+            .listRowInsets(SwiftUI.EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
             
             // 自动滚动速度
             HStack {
@@ -128,7 +128,7 @@ struct SettingsView: View {
                 in: 0.5...3.0,
                 step: 0.1
             )
-            .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
+            .listRowInsets(SwiftUI.EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
             
             // 启用自动滚动
             Toggle("启用自动滚动", isOn: $viewModel.readingSettings.enableAutoScroll)
@@ -180,6 +180,77 @@ struct SettingsView: View {
             // 启用间隔重复
             Toggle("启用间隔重复", isOn: $viewModel.vocabularySettings.enableSpacedRepetition)
             
+            // AI翻译设置
+            Toggle("启用AI翻译", isOn: $viewModel.appSettings.enableAITranslation)
+            
+            if viewModel.appSettings.enableAITranslation {
+                // AI模型选择
+                NavigationLink(destination: AIModelSelectionView(selectedModel: $viewModel.appSettings.selectedAIModel)
+                    .environmentObject(viewModel.appSettings)) {
+                    HStack {
+                        Label("AI模型", systemImage: "brain.head.profile")
+                        Spacer()
+                        Text(viewModel.appSettings.selectedAIModel.displayName)
+                            .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                }
+                
+                // AI翻译功能测试
+                NavigationLink(destination: TranslationTestView(translationService: TranslationServiceImpl())) {
+                    HStack {
+                        Label("翻译功能测试", systemImage: "testtube.2")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                }
+                
+                // 翻译模式选择
+                Picker("翻译模式", selection: $viewModel.appSettings.translationMode) {
+                    ForEach(TranslationMode.allCases, id: \.self) { mode in
+                        Label(mode.displayName, systemImage: mode.iconName)
+                            .tag(mode)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+                .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 32, bottom: 8, trailing: 16))
+                
+                // 根据选中的AI模型显示对应的API密钥输入框
+                switch viewModel.appSettings.selectedAIModel.provider {
+                case .gemini:
+                    SecureField("Gemini API Key", text: $viewModel.appSettings.geminiAPIKey)
+                        .textContentType(.password)
+                    SecureField("Backup Gemini API Key", text: $viewModel.appSettings.geminiBackupAPIKey)
+                        .textContentType(.password)
+                    
+                case .openai:
+                    SecureField("OpenAI API Key", text: $viewModel.appSettings.openaiAPIKey)
+                        .textContentType(.password)
+                    
+                case .deepseek:
+                    SecureField("DeepSeek API Key", text: $viewModel.appSettings.deepseekAPIKey)
+                        .textContentType(.password)
+                    
+                case .doubao:
+                    SecureField("豆包 API Key", text: $viewModel.appSettings.doubaoAPIKey)
+                        .textContentType(.password)
+                    
+                default:
+                    // 对于其他提供者，根据模型名称显示对应的API密钥输入框
+                    if viewModel.appSettings.selectedAIModel.displayName.contains("Claude") {
+                        SecureField("Claude API Key", text: $viewModel.appSettings.claudeAPIKey)
+                            .textContentType(.password)
+                    } else if viewModel.appSettings.selectedAIModel.displayName.contains("Qwen") {
+                        SecureField("Qwen API Key", text: $viewModel.appSettings.qwenAPIKey)
+                            .textContentType(.password)
+                    }
+                }
+            }
+            
             // 每日新词数量
             HStack {
                 Label("每日新词数量", systemImage: "target")
@@ -196,7 +267,7 @@ struct SettingsView: View {
                 in: 5...50,
                 step: 5
             )
-            .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
+            .listRowInsets(SwiftUI.EdgeInsets(top: 0, leading: 32, bottom: 8, trailing: 16))
         }
     }
     
@@ -213,7 +284,7 @@ struct SettingsView: View {
                     selection: $viewModel.notificationSettings.dailyReminderTime,
                     displayedComponents: .hourAndMinute
                 )
-                .listRowInsets(EdgeInsets(top: 8, leading: 32, bottom: 8, trailing: 16))
+                .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 32, bottom: 8, trailing: 16))
             }
             
             // 复习提醒
@@ -272,7 +343,7 @@ struct SettingsView: View {
                     Text("每月").tag(BackupFrequency.monthly)
                 }
                 .pickerStyle(MenuPickerStyle())
-                .listRowInsets(EdgeInsets(top: 8, leading: 32, bottom: 8, trailing: 16))
+                .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 32, bottom: 8, trailing: 16))
             }
             
             // 清除缓存

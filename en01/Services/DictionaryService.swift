@@ -10,10 +10,27 @@ import SwiftData
 import NaturalLanguage
 import Combine // 添加以支持ObservableObject
 
+// MARK: - Dictionary Service Errors
+enum DictionaryServiceError: Error {
+    case dictionaryNotFound
+    case fileNotFound
+    case decodingError
+    case loadingTimeout
+}
+
+// MARK: - Dictionary File Format
+// Note: DictionaryFileFormat is defined in DictionaryLoader.swift
+
 class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObject { // 添加ObservableObject
     // 添加@Published属性以支持观察，例如：
     @Published var dictionaryWords: [String: DictionaryWord] = [:] // 使dictionaryWords可观察
     private let textProcessor = TextProcessor()
+    private let dictionaryLoader = DictionaryLoader()
+    private let youdaoParser = YoudaoDictionaryParser()
+    
+    // 分批加载配置
+    private let batchSize = 1000 // 每批加载1000个单词
+    private let maxLoadTime: TimeInterval = 3.0 // 最大加载时间3秒
     
     init(
         modelContext: ModelContext,
@@ -33,6 +50,121 @@ class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObjec
     }
     
     // MARK: - 词典管理
+    
+    /// 获取可用词典列表
+    func getAvailableDictionaries() -> AnyPublisher<[DictionaryInfo], Error> {
+        return Future { [weak self] promise in
+            Task {
+                do {
+                    try await self?.dictionaryLoader.loadDictionaries()
+                    let dictionaries = self?.dictionaryLoader.getDictionaryInfos() ?? []
+                    promise(.success(dictionaries))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /// 加载指定词典的单词（支持分批加载）
+    func loadDictionary(fileName: String) -> AnyPublisher<[DictionaryWord], Error> {
+        return Future { [weak self] promise in
+            Task {
+                await self?.loadDictionaryWithBatching(fileName: fileName, promise: promise)
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /// 分批加载词典实现
+    private func loadDictionaryWithBatching(fileName: String, promise: @escaping (Result<[DictionaryWord], Error>) -> Void) async {
+        let startTime = Date()
+        
+        do {
+            // 获取词典信息
+            guard let dictionaryInfo = dictionaryLoader.getDictionaryInfos().first(where: { $0.fileName == fileName }) else {
+                promise(.failure(DictionaryServiceError.dictionaryNotFound))
+                return
+            }
+            
+            // 如果词典较小，直接加载
+            if dictionaryInfo.totalWords <= batchSize {
+                let words = try await loadFullDictionary(fileName: fileName)
+                promise(.success(words))
+                return
+            }
+            
+            // 大词典分批加载
+            var allWords: [DictionaryWord] = []
+            let totalBatches = (dictionaryInfo.totalWords + batchSize - 1) / batchSize
+            
+            for batchIndex in 0..<totalBatches {
+                // 检查是否超时
+                if Date().timeIntervalSince(startTime) > maxLoadTime {
+                    logger.warning("Dictionary loading timeout, loaded \(allWords.count) words")
+                    break
+                }
+                
+                let offset = batchIndex * batchSize
+                let batchWords = try await loadDictionaryBatch(fileName: fileName, offset: offset, limit: batchSize)
+                allWords.append(contentsOf: batchWords)
+                
+                // 添加小延迟以避免阻塞主线程
+                try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+            }
+            
+            logger.info("Loaded \(allWords.count) words from \(fileName) in \(Date().timeIntervalSince(startTime))s")
+            promise(.success(allWords))
+            
+        } catch {
+            logger.error("Failed to load dictionary \(fileName): \(error.localizedDescription)")
+            promise(.failure(error))
+        }
+    }
+    
+    /// 加载完整词典（小词典）
+    private func loadFullDictionary(fileName: String) async throws -> [DictionaryWord] {
+        // fileName已经包含.json扩展名，直接使用Bundle.main.url查找文件
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: nil) else {
+            throw DictionaryServiceError.fileNotFound
+        }
+        
+        do {
+            // 使用有道词典解析器
+            let (_, words) = try await youdaoParser.parseDictionaryFile(url)
+            logger.info("Successfully loaded \(words.count) words from Youdao format: \(fileName)")
+            return words
+        } catch {
+            logger.error("Failed to parse Youdao dictionary \(fileName): \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// 加载词典批次
+    private func loadDictionaryBatch(fileName: String, offset: Int, limit: Int) async throws -> [DictionaryWord] {
+        // fileName已经包含.json扩展名，直接使用Bundle.main.url查找文件
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: nil) else {
+            throw DictionaryServiceError.fileNotFound
+        }
+        
+        do {
+            // 使用有道词典解析器加载完整词典，然后取批次
+            let (_, allWords) = try await youdaoParser.parseDictionaryFile(url)
+            
+            let endIndex = min(offset + limit, allWords.count)
+            guard offset < allWords.count else {
+                return []
+            }
+            
+            let batchWords = Array(allWords[offset..<endIndex])
+            logger.info("Loaded batch \(offset)-\(endIndex-1) from \(fileName): \(batchWords.count) words")
+            return batchWords
+        } catch {
+            logger.error("Failed to parse Youdao dictionary batch \(fileName): \(error.localizedDescription)")
+            throw error
+        }
+    }
     
     // 加载词典数据
     private func loadDictionary() async {
@@ -82,7 +214,8 @@ class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObjec
                             definitions: definitions,
                             frequency: wordData.frequency,
                             difficulty: wordData.difficulty,
-                            tags: wordData.tags
+                            tags: wordData.tags,
+                            categories: wordData.categories
                         )
                         tempDictionary[wordData.word.lowercased()] = word
                     }
@@ -542,11 +675,11 @@ class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObjec
         }.count
         
         // 本周查词数
-        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
         let weeklyLookups = userRecords.filter { $0.lastLookupDate >= weekAgo }.count
         
         // 平均每日查词数
-        let studyDays = userRecords.isEmpty ? 1 : max(1, Calendar.current.dateComponents([.day], from: userRecords.last?.firstLookupDate ?? Date(), to: Date()).day ?? 1)
+        let studyDays = userRecords.isEmpty ? 1 : max(1, Calendar.current.dateComponents([.day], from: userRecords.last?.firstLookupDate ?? Date(), to: Date()).day!)
         let averageLookupPerDay = Double(totalWords) / Double(studyDays)
         
         // 最常查询的单词
@@ -595,7 +728,8 @@ class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObjec
                 ],
                 frequency: 85,
                 difficulty: .medium,
-                tags: ["高频词", "科技"]
+                tags: ["高频词", "科技"],
+                categories: ["科技", "计算机"]
             ),
             DictionaryWordData(
                 word: "intelligence",
@@ -618,7 +752,8 @@ class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObjec
                 ],
                 frequency: 92,
                 difficulty: .medium,
-                tags: ["高频词", "核心词汇"]
+                tags: ["高频词", "核心词汇"],
+                categories: ["核心", "认知"]
             )
         ]
         
@@ -640,7 +775,8 @@ class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObjec
                 definitions: definitions,
                 frequency: wordData.frequency,
                 difficulty: wordData.difficulty,
-                tags: wordData.tags
+                tags: wordData.tags,
+                categories: wordData.categories
             )
             self.dictionaryWords[wordData.word.lowercased()] = word
         }
@@ -663,6 +799,7 @@ struct DictionaryWordData: Codable {
     let frequency: Int
     let difficulty: WordDifficulty
     let tags: [String]
+    let categories: [String]?
 }
 
 // 词汇释义数据结构（用于JSON导入）

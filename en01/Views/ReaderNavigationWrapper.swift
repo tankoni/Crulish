@@ -70,29 +70,51 @@ struct ReaderNavigationWrapper<Content: View>: View {
                         backButton
                     }
                     
-                    // 右侧按钮组
+                    // 右侧按钮组 - 多行显示避免重叠
                     ToolbarItemGroup(placement: .navigationBarTrailing) {
-                        HStack(spacing: 16) {
-    if standardButtons.contains(.settings) {
-        settingsButton
-    }
-    
-    ForEach(0..<customButtons.count, id: \.self) { index in
-        customButtons[index]
-    }
-    
-    if standardButtons.contains(.bookmark) {
-        bookmarkButton
-    }
-    
-    if standardButtons.contains(.share) {
-        shareButton
-    }
-    
-    if standardButtons.contains(.fullScreen) {
-        fullScreenButton
-    }
-}
+                        VStack(spacing: 2) {
+                            // 第一行：主要操作按钮
+                            HStack(spacing: 8) {
+                                if standardButtons.contains(.bookmark) {
+                                    bookmarkButton
+                                }
+                                
+                                if standardButtons.contains(.share) {
+                                    shareButton
+                                }
+                                
+                                if standardButtons.contains(.settings) {
+                                    settingsButton
+                                }
+                            }
+                            
+                            // 第二行：次要操作按钮和自定义按钮
+                            if standardButtons.contains(.fullScreen) || !customButtons.isEmpty {
+                                HStack(spacing: 8) {
+                                    if standardButtons.contains(.fullScreen) {
+                                        fullScreenButton
+                                    }
+                                    
+                                    // 自定义按钮
+                                    ForEach(0..<min(customButtons.count, 3), id: \.self) { index in
+                                        customButtons[index]
+                                    }
+                                    
+                                    // 如果自定义按钮超过3个，显示更多菜单
+                                    if customButtons.count > 3 {
+                                        Menu {
+                                            ForEach(3..<customButtons.count, id: \.self) { index in
+                                                customButtons[index]
+                                            }
+                                        } label: {
+                                            Image(systemName: "ellipsis.circle")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(.primary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
         }

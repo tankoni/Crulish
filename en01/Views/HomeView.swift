@@ -286,6 +286,15 @@ struct HomeView: View {
                 ) {
                     viewModel.selectProgressTab()
                 }
+                
+                QuickActionButton(
+                    title: "词汇量测试",
+                    subtitle: "测试词汇水平",
+                    icon: "brain.head.profile",
+                    color: .orange
+                ) {
+                    viewModel.startVocabularyTest()
+                }
             }
         }
         .padding()

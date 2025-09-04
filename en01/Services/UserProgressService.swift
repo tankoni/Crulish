@@ -883,48 +883,57 @@ extension UserProgressService {
         // 基于连续学习天数的建议
         if progress.currentStreak == 0 {
             recommendations.append(StudyRecommendation(
-                type: .startLearning,
                 title: "开始学习之旅",
                 description: "今天开始阅读第一篇文章，建立学习习惯！",
-                priority: .high
+                priority: .high,
+                action: nil
             ))
         } else if progress.currentStreak < 7 {
             recommendations.append(StudyRecommendation(
-                type: .maintainStreak,
                 title: "保持学习连续性",
                 description: "连续学习是进步的关键，继续加油！",
-                priority: .medium
+                priority: .medium,
+                action: nil
             ))
         } else {
             recommendations.append(StudyRecommendation(
-                type: .challengeYourself,
                 title: "挑战更高目标",
                 description: "你已经保持了很好的学习习惯，尝试一些更有挑战性的文章吧！",
-                priority: .low
+                priority: .low,
+                action: nil
             ))
         }
         
         // 基于阅读文章数量的建议
         if progress.totalArticlesRead < 10 {
             recommendations.append(StudyRecommendation(
-                type: .exploreTopics,
                 title: "探索不同主题",
                 description: "多阅读不同类型的文章，找到你的兴趣所在。",
-                priority: .medium
+                priority: .medium,
+                action: nil
             ))
         }
         
         // 基于等级的建议
         if progress.level != .advanced && progress.level != .expert {
             recommendations.append(StudyRecommendation(
-                type: .levelUp,
                 title: "向更高等级迈进",
                 description: "通过持续学习提升等级，解锁更多功能。",
-                priority: .medium
+                priority: .medium,
+                action: nil
             ))
         }
         
-        return recommendations.sorted { $0.priority.rawValue > $1.priority.rawValue }
+        return recommendations.sorted { (lhs, rhs) in
+            switch (lhs.priority, rhs.priority) {
+            case (.high, .medium), (.high, .low), (.medium, .low):
+                return true
+            case (.medium, .high), (.low, .high), (.low, .medium):
+                return false
+            default:
+                return false
+            }
+        }
     }
     
     // 获取学习目标完成情况
@@ -955,29 +964,16 @@ extension UserProgressService {
     }
 }
 
-// 学习建议
-struct StudyRecommendation {
-    let type: RecommendationType
-    let title: String
-    let description: String
-    let priority: Priority
-    
-    enum RecommendationType {
-        case startLearning
-        case maintainStreak
-        case increaseReadingTime
-        case expandVocabulary
-        case reviewWords
-        case challengeYourself
-        case exploreTopics
-        case levelUp
-    }
-    
-    enum Priority: Int {
-        case low = 1
-        case medium = 2
-        case high = 3
-    }
+// 学习建议类型枚举
+enum RecommendationType {
+    case startLearning
+    case maintainStreak
+    case increaseReadingTime
+    case expandVocabulary
+    case reviewWords
+    case challengeYourself
+    case exploreTopics
+    case levelUp
 }
 
 // 目标进度

@@ -28,8 +28,8 @@ class AppViewModel {
     
     // MARK: - Initialization
     
-    func setModelContext(_ context: ModelContext) {
-        coordinator.setModelContext(context)
+    func setModelContext(_ context: ModelContext, appSettings: AppSettings) {
+        coordinator.setModelContext(context, appSettings: appSettings)
     }
     
     // MARK: - Tab Navigation
@@ -46,6 +46,10 @@ class AppViewModel {
     
     var vocabularyViewModel: VocabularyViewModel? {
         return coordinator.vocabularyViewModel
+    }
+    
+    var intelligentRankingViewModel: IntelligentRankingViewModel? {
+        return coordinator.intelligentRankingViewModel
     }
     
     var progressViewModel: ProgressViewModel? {
@@ -117,6 +121,11 @@ class AppViewModel {
         selectedTab = .vocabulary
     }
     
+    func startVocabularyTest() {
+        coordinator.startVocabularyTest()
+        selectedTab = .vocabulary
+    }
+    
     func finishVocabularyReview() {
         coordinator.finishVocabularyReview()
     }
@@ -137,45 +146,3 @@ class AppViewModel {
         coordinator.handleDeepLink(url)
     }
 }
-
-// MARK: - Tab Selection
-
-enum TabSelection: String, CaseIterable {
-    case home = "home"
-    case reading = "reading"
-    case vocabulary = "vocabulary"
-    case progress = "progress"
-    case settings = "settings"
-    
-    var title: String {
-        switch self {
-        case .home:
-            return "首页"
-        case .reading:
-            return "阅读"
-        case .vocabulary:
-            return "词汇"
-        case .progress:
-            return "进度"
-        case .settings:
-            return "设置"
-        }
-    }
-    
-    var iconName: String {
-        switch self {
-        case .home:
-            return "house"
-        case .reading:
-            return "book"
-        case .vocabulary:
-            return "text.book.closed"
-        case .progress:
-            return "chart.bar"
-        case .settings:
-            return "gear"
-        }
-    }
-}
-// Remove the following invalid line:
-// ProgressDashboardView(viewModel: progressViewModel)

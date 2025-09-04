@@ -27,6 +27,7 @@ CruEnglish（考研英语无痛阅读器）是一款专为考研英语学习设�
 - **掌握度管理**: 三级标记系统（生疏/熟悉/掌握）
 - **复习算法**: 基于艾宾浩斯遗忘曲线的智能复习提醒
 - **词频统计**: 个人查词频率分析和重点词汇突出
+- **词汇量测试**: 智能词汇量评估系统，支持多词典测试和历史记录
 
 ### 📖 真题文章库
 - **内容覆盖**: 考研英语近20年阅读理解真题（98-09，10-22年）
@@ -63,24 +64,32 @@ en01/
 │   ├── Word.swift            # 词汇数据模型
 │   ├── UserProgress.swift    # 用户进度模型
 │   ├── Settings.swift        # 应用设置模型
-│   └── PDFDocument.swift     # PDF文档模型
+│   ├── PDFDocument.swift     # PDF文档模型
+│   ├── TestWord.swift        # 词汇测试数据模型
+│   └── VocabularyTest.swift  # 词汇量测试模型
 ├── Views/                     # 视图层
 │   ├── HomeView.swift        # 主页视图
 │   ├── ReadingView.swift     # 阅读页面
 │   ├── ArticleReaderView.swift # 文章阅读器
 │   ├── PDFReaderView.swift   # PDF阅读器
 │   ├── VocabularyView.swift  # 词汇管理视图
+│   ├── VocabularyTestView.swift # 词汇量测试视图
+│   ├── WordTestCard.swift    # 单词测试卡片
+│   ├── TestResultView.swift  # 测试结果视图
+│   ├── TestHistoryListView.swift # 测试历史列表
 │   ├── ProgressView.swift    # 进度统计视图
 │   └── SettingsView.swift    # 设置页面
 ├── ViewModels/                # 视图模型层
 │   ├── AppViewModel.swift    # 主应用视图模型
 │   ├── ReadingViewModel.swift # 阅读视图模型
-│   └── PDFViewModel.swift    # PDF视图模型
+│   ├── PDFViewModel.swift    # PDF视图模型
+│   └── VocabularyTestViewModel.swift # 词汇量测试视图模型
 ├── Services/                  # 服务层
 │   ├── ArticleService.swift  # 文章服务
 │   ├── PDFService.swift      # PDF处理服务
 │   ├── DictionaryService.swift # 词典服务
 │   ├── UserProgressService.swift # 进度服务
+│   ├── VocabularyTestService.swift # 词汇量测试服务
 │   └── PerformanceService.swift # 性能监控服务
 └── Utils/                     # 工具类
     ├── TextProcessor.swift   # 文本处理工具
@@ -97,6 +106,7 @@ en01/
 - ✅ 基础阅读界面和文本渲染
 - ✅ 简单点击取词功能
 - ✅ 基础个人词典管理
+- ✅ 词汇量测试系统（智能测试、历史记录、结果分析）
 - ✅ 颜色系统优化和安全解析
 - ✅ PDF文档阅读支持
 - ✅ 基本的用户设置和主题切换
@@ -192,6 +202,13 @@ open en01.xcodeproj
 - ✅ 基础阅读界面和文本渲染
 - ✅ 简单点击取词功能
 - ✅ 基础个人词典管理
+- ✅ 词汇量测试系统完整实现
+  - ✅ 智能词典选择和自适应测试
+  - ✅ 单词测试卡片和掌握程度选择
+  - ✅ 测试结果统计和可视化展示
+  - ✅ 测试历史记录和详情查看
+  - ✅ 暂停恢复和进度跟踪功能
+  - ✅ TestWord类型冲突解决和数据模型优化
 - ✅ 颜色系统优化和安全解析
 - ✅ PDF文档阅读支持
 - ✅ 基本用户设置和主题切换

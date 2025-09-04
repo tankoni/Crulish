@@ -7,6 +7,9 @@
 
 import Foundation
 import Combine
+import SwiftData
+import SwiftUI
+import Foundation
 
 // MARK: - Mock Article Service
 class MockArticleService: ArticleServiceProtocol {
@@ -123,12 +126,69 @@ class MockArticleService: ArticleServiceProtocol {
 
 // MARK: - Mock Dictionary Service
 class MockDictionaryService: DictionaryServiceProtocol {
+    // MARK: - Dictionary Management
+    func getAvailableDictionaries() -> AnyPublisher<[DictionaryInfo], Error> {
+        let mockDictionaries = [
+            DictionaryInfo(
+                name: "考研核心词汇",
+                displayName: "考研核心词汇",
+                fileName: "KaoYan_1.json",
+                filePath: "/path/to/KaoYan_1.json",
+                version: "1.0",
+                description: "考研必备核心词汇，包含高频词汇和重点词汇",
+                language: "en",
+                totalWords: 3000,
+                difficultyLevels: [1, 2, 3],
+                categories: ["考研", "学术"]
+            ),
+            DictionaryInfo(
+                name: "托福核心词汇",
+                displayName: "托福核心词汇",
+                fileName: "TOEFL_Core.json",
+                filePath: "/path/to/TOEFL_Core.json",
+                version: "1.0",
+                description: "托福考试核心词汇集合",
+                language: "en",
+                totalWords: 2500,
+                difficultyLevels: [2, 3, 4],
+                categories: ["TOEFL", "学术"]
+            )
+        ]
+        
+        return Just(mockDictionaries)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func loadDictionary(fileName: String) -> AnyPublisher<[DictionaryWord], Error> {
+        let mockWords = [
+            DictionaryWord(
+                word: "test",
+                phonetic: "/test/",
+                definitions: [WordDefinition(partOfSpeech: .noun, meaning: "测试；考试", examples: ["This is a test."])],
+                difficulty: .medium,
+                categories: ["基础词汇"]
+            ),
+            DictionaryWord(
+                word: "example",
+                phonetic: "/ɪɡˈzæmpəl/",
+                definitions: [WordDefinition(partOfSpeech: .noun, meaning: "例子；实例", examples: ["For example, this is a sample."])],
+                difficulty: .basic,
+                categories: ["常用词汇"]
+            )
+        ]
+        
+        return Just(mockWords)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
     func lookupWord(_ word: String) async throws -> UserWord {
         return UserWord(
             word: word,
             context: "Sample context",
             sentence: "This is a sample sentence.",
-            selectedDefinition: WordDefinition(partOfSpeech: .noun, meaning: "A sample definition")
+            selectedDefinition: WordDefinition(partOfSpeech: PartOfSpeech.noun, meaning: "A sample definition")
         )
     }
     
@@ -137,7 +197,8 @@ class MockDictionaryService: DictionaryServiceProtocol {
             word: word,
             phonetic: "/ˈsæmpəl/",
             definitions: [WordDefinition(partOfSpeech: .noun, meaning: "A sample definition")],
-            difficulty: .medium
+            difficulty: .medium,
+            categories: ["示例词汇"]
         )
     }
     
@@ -154,11 +215,12 @@ class MockDictionaryService: DictionaryServiceProtocol {
     }
     
     func recordWordLookup(word: String, context: String, sentence: String, article: Article) -> UserWord {
+        let definition = WordDefinition(partOfSpeech: .noun, meaning: "A sample definition")
         let userWord = UserWord(
             word: word,
             context: context,
             sentence: sentence,
-            selectedDefinition: WordDefinition(partOfSpeech: .noun, meaning: "A sample definition")
+            selectedDefinition: definition
         )
         userWord.articleID = article.id.uuidString
         return userWord
@@ -277,26 +339,69 @@ class MockDictionaryService: DictionaryServiceProtocol {
 
 // MARK: - Mock User Progress Service
 class MockUserProgressService: UserProgressServiceProtocol {
-    func getUserProgress() -> UserProgress? {
-        return nil
-    }
-
-    func addReadingTime(_ time: Double) {}
-    func addWordLookup() {}
-    func addExperience(_ points: Int, for activity: ExperienceAction) {}
-    func incrementArticleRead() {}
-    func completeReview() {}
+    private var userProgress: UserProgress = {
+        let progress = UserProgress()
+        progress.totalReadingTime = 3600
+        progress.articlesRead = 5
+        progress.totalWordsLookedUp = 50
+        progress.currentStreak = 7
+        progress.longestStreak = 15
+        progress.lastStudyDate = Date()
+        progress.level = .intermediate
+        progress.experience = 750
+        progress.achievements = []
+        return progress
+    }()
     
-    func recordWordReview(word: String, correct: Bool) async throws {}
-    func recordReviewSession(wordsReviewed: Int, correctAnswers: Int) async throws {}
-    func recordArticleCompletion(articleId: String, readingTime: TimeInterval, wordsLookedUp: Int) async throws {}
-    func updateReadingProgress(articleId: String, progress: Double, readingTime: TimeInterval) async throws {}
-    func recordWordLookup(word: String, articleId: String) async throws {}
-    func addBookmark(articleId: String) async throws {}
-    func removeBookmark(articleId: String) async throws {}
-    func isBookmarked(articleId: String) async throws -> Bool { return false }
-    func markArticleAsCompleted(articleId: String) async throws {}
-    func isCompleted(articleId: String) async throws -> Bool { return false }
+    func getUserProgress() -> UserProgress? {
+        return userProgress
+    }
+    
+    func addReadingTime(_ time: Double) {
+        userProgress.totalReadingTime += time
+    }
+    
+    func addWordLookup() {
+        userProgress.totalWordsLookedUp += 1
+    }
+    
+    func addExperience(_ points: Int, for activity: ExperienceAction) {
+        userProgress.experience += points
+    }
+    
+    func incrementArticleRead() {
+        userProgress.articlesRead += 1
+    }
+    
+    func completeReview() {
+        // Mock implementation
+    }
+    
+    func markArticleAsCompleted(articleId: String) async throws {
+        userProgress.articlesRead += 1
+    }
+    
+    func recordWordReview(word: String, correct: Bool) async throws {
+        // Mock implementation
+    }
+    
+    func recordReviewSession(wordsReviewed: Int, correctAnswers: Int) async throws {
+        // Mock implementation
+    }
+    
+    func recordArticleCompletion(articleId: String, readingTime: TimeInterval, wordsLookedUp: Int) async throws {
+        userProgress.articlesRead += 1
+        userProgress.totalReadingTime += readingTime
+        userProgress.totalWordsLookedUp += wordsLookedUp
+    }
+    
+    func updateReadingProgress(articleId: String, progress: Double, readingTime: TimeInterval) async throws {
+        userProgress.totalReadingTime += readingTime
+    }
+    
+    func recordWordLookup(word: String, articleId: String) async throws {
+        userProgress.totalWordsLookedUp += 1
+    }
     
     func getTodayRecord() -> DailyStudyRecord? {
         return nil
@@ -307,39 +412,141 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
     
     func getWeeklyComparison() -> WeeklyComparison {
-        return WeeklyComparison(thisWeekReadingTime: 0, lastWeekReadingTime: 0, thisWeekArticles: 0, lastWeekArticles: 0, thisWeekWords: 0, lastWeekWords: 0)
+        return WeeklyComparison(
+            thisWeekReadingTime: 3600,
+            lastWeekReadingTime: 2400,
+            thisWeekArticles: 5,
+            lastWeekArticles: 3,
+            thisWeekWords: 25,
+            lastWeekWords: 18
+        )
     }
     
     func getStudyStatistics() -> StudyStatistics {
         return StudyStatistics()
     }
     
+    func addBookmark(articleId: String) async throws {
+        // Mock implementation
+    }
+    
+    func removeBookmark(articleId: String) async throws {
+        // Mock implementation
+    }
+    
+    func isBookmarked(articleId: String) async throws -> Bool {
+        return false
+    }
+    
+    func isCompleted(articleId: String) async throws -> Bool {
+        return false
+    }
+    
     func getTodayStatistics() async throws -> TodayStatistics {
-        return TodayStatistics()
+        return TodayStatistics(
+            readingTime: 1800,
+            articlesRead: 2,
+            wordsLookedUp: 15,
+            reviewsCompleted: 10,
+            dailyReadingGoalProgress: 0.6,
+            consecutiveDays: userProgress.currentStreak
+        )
     }
     
     func getWeeklyStatistics() async throws -> WeeklyStatistics {
-        return WeeklyStatistics()
+        return WeeklyStatistics(
+            totalReadingTime: 3600 * 8, // 8小时
+            totalArticlesRead: 12,
+            totalWordsLookedUp: 85,
+            totalReviewsCompleted: 45,
+            dailyAverageReadingTime: 1200,
+            studyDaysThisWeek: 5,
+            weeklyGoalProgress: 0.8
+        )
     }
     
     func getMonthlyStatistics() async throws -> MonthlyStatistics {
-        return MonthlyStatistics()
+        return MonthlyStatistics(
+            totalReadingTime: 3600 * 35, // 35小时
+            totalArticlesRead: 48,
+            totalWordsLookedUp: 320,
+            totalReviewsCompleted: 180,
+            dailyAverageReadingTime: 1200,
+            studyDaysThisMonth: 22,
+            monthlyGoalProgress: 0.75,
+            bestWeekReadingTime: 3600 * 10
+        )
     }
     
     func getOverallStatistics() async throws -> OverallStatistics {
-        return OverallStatistics()
+        return OverallStatistics(
+            totalReadingTime: 3600 * 25, // 25小时
+            totalArticlesRead: 45,
+            totalWordsLookedUp: 320,
+            totalReviewsCompleted: 180,
+            longestStreak: 15,
+            currentStreak: 7,
+            totalStudyDays: 30,
+            averageReadingSpeed: 250.0
+        )
+    }
+    
+    func getReadingStatistics() async throws -> ReadingStatistics {
+        return ReadingStatistics(
+            completedArticles: 35,
+            inProgressArticles: 5,
+            bookmarkedArticles: 12,
+            averageReadingTime: 480,
+            favoriteTopics: ["Technology", "Science", "Business"],
+            difficultyDistribution: ["Easy": 10, "Medium": 20, "Hard": 5],
+            yearDistribution: ["2024": 35]
+        )
     }
     
     func getVocabularyProgressStatistics() async throws -> VocabularyProgressStats {
-        return VocabularyProgressStats()
-    }
-    
-    func getVocabularyStatistics() async throws -> VocabularyStatistics {
-        return VocabularyStatistics(totalWords: 0, unknownWords: 0, learningWords: 0, familiarWords: 0, masteredWords: 0, wordsNeedingReview: 0)
+        return VocabularyProgressStats(
+            totalWords: 1250,
+            masteredWords: 850,
+            learningWords: 300,
+            reviewWords: 100,
+            masteryRate: 0.68,
+            weeklyNewWords: 25,
+            monthlyNewWords: 95,
+            averageReviewAccuracy: 0.85
+        )
     }
     
     func getAchievementStatistics() async throws -> AchievementStatistics {
-        return AchievementStatistics()
+        return AchievementStatistics(
+            totalAchievements: 15,
+            unlockedAchievements: 8,
+            recentAchievements: [],
+            nextMilestones: []
+        )
+    }
+    
+    func getGoalProgress() -> GoalProgress {
+        return GoalProgress(
+            dailyReadingProgress: 0.6,
+            weeklyArticleProgress: 0.8,
+            weeklyWordProgress: 0.7,
+            dailyReadingGoal: 30,
+            weeklyArticleGoal: 5,
+            weeklyWordGoal: 25
+        )
+    }
+    
+    func getVocabularyStatistics() async throws -> VocabularyStatistics {
+        return VocabularyStatistics(
+            totalWords: userProgress.totalWordsLookedUp,
+            unknownWords: 10,
+            learningWords: 15,
+            familiarWords: 20,
+            masteredWords: 5,
+            wordsNeedingReview: 8,
+            averageLookupCount: 2.5,
+            totalLookups: 125
+        )
     }
     
     func getReadingTimeChartData(for timeRange: TimeRange) async throws -> [ChartDataPoint] {
@@ -355,31 +562,27 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
     
     func getCurrentLevel() -> UserLevel {
-        return .beginner
+        return userProgress.level
     }
     
     func getLevelProgress() -> Double {
-        return 0.0
+        return 0.65
     }
     
     func getExperienceToNextLevel() -> Int {
-        return 100
-    }
-    
-    func getGoalProgress() -> GoalProgress {
-        return GoalProgress()
+        return 250
     }
     
     func getConsecutiveDays() -> Int {
-        return 0
+        return userProgress.currentStreak
     }
     
     func getUnlockedAchievements() -> [Achievement] {
-        return []
+        return userProgress.achievements
     }
     
     func getAvailableAchievements() -> [AchievementType] {
-        return []
+        return [.firstArticle, .streak7Days, .streak30Days]
     }
     
     func getStudyRecommendations() -> [StudyRecommendation] {
@@ -391,10 +594,12 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
     
     func importProgressData(_ data: Data) -> Bool {
-        return false
+        return true
     }
     
-    func resetProgress() {}
+    func resetProgress() {
+        // Mock implementation
+    }
     
     func getUserSettings() async throws -> UserSettings {
         return UserSettings()
@@ -420,14 +625,33 @@ class MockUserProgressService: UserProgressServiceProtocol {
         return AppearanceSettings()
     }
     
-    func updateUserSettings(_ settings: UserSettings) async throws {}
-    func updateReadingSettings(_ settings: ReadingSettings) async throws {}
-    func updateVocabularySettings(_ settings: VocabularySettings) async throws {}
-    func updateNotificationSettings(_ settings: NotificationSettings) async throws {}
-    func updatePrivacySettings(_ settings: PrivacySettings) async throws {}
-    func updateAppearanceSettings(_ settings: AppearanceSettings) async throws {}
+    func updateUserSettings(_ settings: UserSettings) async throws {
+        // Mock implementation
+    }
     
-    func resetAllData() async throws {}
+    func updateReadingSettings(_ settings: ReadingSettings) async throws {
+        // Mock implementation
+    }
+    
+    func updateVocabularySettings(_ settings: VocabularySettings) async throws {
+        // Mock implementation
+    }
+    
+    func updateNotificationSettings(_ settings: NotificationSettings) async throws {
+        // Mock implementation
+    }
+    
+    func updatePrivacySettings(_ settings: PrivacySettings) async throws {
+        // Mock implementation
+    }
+    
+    func updateAppearanceSettings(_ settings: AppearanceSettings) async throws {
+        // Mock implementation
+    }
+    
+    func resetAllData() async throws {
+        // Mock implementation
+    }
 }
 
 // MARK: - Mock Text Processor
@@ -536,14 +760,8 @@ class MockErrorHandler: ErrorHandlerProtocol {
     var isShowingError: Bool = false
     
     func handle(_ error: Error, context: String) {
-        let appError: AppError
-        if let existingAppError = error as? AppError {
-            appError = existingAppError
-        } else {
-            appError = AppError.unknown(error)
-        }
-        handle(appError)
-        print("Mock Error: \(error.localizedDescription) in \(context)")
+        // 简化的错误处理，直接打印错误信息
+        print("❌ 错误 [\(context)]: \(error.localizedDescription)")
     }
     
     func handle(_ appError: AppError) {
@@ -592,6 +810,74 @@ class MockErrorHandler: ErrorHandlerProtocol {
     
     func recordRecovery(from error: Error, context: String) {
         // Mock implementation
+    }
+}
+
+// MARK: - Mock Translation Service
+class MockTranslationService: TranslationServiceProtocol {
+    func translateWord(_ word: String, context: String) async throws -> Translation? {
+        return Translation(
+            originalText: word,
+            translatedText: "翻译: \(word)",
+            sourceLanguage: "en",
+            targetLanguage: "zh",
+            confidence: 0.95,
+            provider: TranslationProvider.local,
+            contextualMeaning: "在上下文中的含义",
+            grammarAnalysis: nil as GrammarAnalysis?
+        )
+    }
+    
+    func translateSentence(_ sentence: String) async throws -> Translation? {
+        return Translation(
+            originalText: sentence,
+            translatedText: "句子翻译: \(sentence)",
+            sourceLanguage: "en",
+            targetLanguage: "zh",
+            confidence: 0.90,
+            provider: TranslationProvider.local,
+            contextualMeaning: nil as String?,
+            grammarAnalysis: nil as GrammarAnalysis?
+        )
+    }
+    
+    func translateParagraph(_ paragraph: String) async throws -> Translation? {
+        return Translation(
+            originalText: paragraph,
+            translatedText: "段落翻译: \(paragraph)",
+            sourceLanguage: "en",
+            targetLanguage: "zh",
+            confidence: 0.85,
+            provider: TranslationProvider.local,
+            contextualMeaning: nil as String?,
+            grammarAnalysis: nil as GrammarAnalysis?
+        )
+    }
+    
+    func setTranslationProvider(_ provider: TranslationProvider) {
+        // Mock implementation - no actual provider change
+    }
+    
+    func getAvailableProviders() -> [TranslationProvider] {
+        return [.local, .openai, .google]
+    }
+    
+    func isLocalModelAvailable() -> Bool {
+        return true
+    }
+    
+    func clearTranslationCache() {
+        // Mock implementation - no actual cache to clear
+    }
+    
+    func getCacheStatistics() -> TranslationCacheStats {
+        return TranslationCacheStats(
+            totalEntries: 100,
+            hitRate: 0.85,
+            missRate: 0.15,
+            cacheSize: 1024,
+            lastCleanup: Date()
+        )
     }
 }
 

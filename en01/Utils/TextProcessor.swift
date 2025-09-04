@@ -271,12 +271,64 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     func splitIntoSentences(_ text: String) -> [String] {
         let cleanedText = cleanText(text)
         
-        // 使用正则表达式分割句子
-        let sentences = cleanedText.components(separatedBy: .init(charactersIn: ".!?"))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        // 改进的句子分割逻辑，处理缩写和特殊情况
+        var sentences: [String] = []
+        var currentSentence = ""
+        var i = cleanedText.startIndex
+        
+        while i < cleanedText.endIndex {
+            let char = cleanedText[i]
+            currentSentence.append(char)
+            
+            // 检查是否是句子结束符
+            if char == "." || char == "!" || char == "?" {
+                // 检查下一个字符是否是空格或文本结束
+                let nextIndex = cleanedText.index(after: i)
+                if nextIndex >= cleanedText.endIndex || cleanedText[nextIndex].isWhitespace {
+                    // 检查是否是常见缩写（如 Mr., Dr., etc.）
+                    if !isCommonAbbreviation(currentSentence.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        let trimmedSentence = currentSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmedSentence.isEmpty {
+                            sentences.append(trimmedSentence)
+                        }
+                        currentSentence = ""
+                    }
+                }
+            }
+            
+            i = cleanedText.index(after: i)
+        }
+        
+        // 添加最后一个句子（如果有）
+        let finalSentence = currentSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !finalSentence.isEmpty {
+            sentences.append(finalSentence)
+        }
         
         return sentences
+    }
+    
+    /// 检查是否是常见缩写
+    private func isCommonAbbreviation(_ text: String) -> Bool {
+        let commonAbbreviations = ["Mr.", "Mrs.", "Dr.", "Prof.", "vs.", "etc.", "i.e.", "e.g.", "Inc.", "Ltd.", "Co."]
+        let lowercaseText = text.lowercased()
+        return commonAbbreviations.contains { lowercaseText.hasSuffix($0.lowercased()) }
+    }
+    
+    /// 根据字符位置提取句子
+    func extractSentenceAtPosition(_ position: Int, from text: String) -> String? {
+        let sentences = splitIntoSentences(text)
+        var currentPosition = 0
+        
+        for sentence in sentences {
+            let sentenceLength = sentence.count
+            if position >= currentPosition && position <= currentPosition + sentenceLength {
+                return sentence
+            }
+            currentPosition += sentenceLength + 1 // +1 for sentence separator
+        }
+        
+        return sentences.first // 如果无法确定，返回第一个句子
     }
     
     // MARK: - 相似度计算

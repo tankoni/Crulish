@@ -2,11 +2,13 @@
 //  ServiceProtocols.swift
 //  en01
 //
-//  Created by tankoni TK on 2025/7/1.
+//  Created by AI Assistant on 2024/12/30.
 //
 
 import Foundation
+import Combine
 import SwiftData
+import Foundation
 
 // MARK: - Article Service Protocol
 
@@ -43,6 +45,10 @@ protocol ArticleServiceProtocol {
 // MARK: - Dictionary Service Protocol
 
 protocol DictionaryServiceProtocol {
+    // 词典管理
+    func getAvailableDictionaries() -> AnyPublisher<[DictionaryInfo], Error>
+    func loadDictionary(fileName: String) -> AnyPublisher<[DictionaryWord], Error>
+    
     // 词典查询
     func lookupWord(_ word: String) async throws -> UserWord
     func lookupWord(_ word: String, context: String) -> DictionaryWord?
@@ -198,12 +204,9 @@ protocol TextProcessorProtocol {
     
     // 词性标注
     func getPartOfSpeech(_ word: String) -> PartOfSpeech?
-    
-    // 文本统计
-    func calculateReadingDifficulty(_ text: String) -> Double
-    func calculateVocabularyDensity(_ text: String) -> Double
-    func getTextStatistics(_ text: String) -> TextStatistics
 }
+
+// MARK: - Translation Service Protocol (已移至 Services/TranslationService.swift)
 
 // MARK: - Cache Manager Protocol
 

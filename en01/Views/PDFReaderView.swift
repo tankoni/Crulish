@@ -76,9 +76,7 @@ struct PDFContentView: View {
     @State private var currentPage: Int = 1
     @State private var totalPages: Int = 0
     @State private var selectedText = ""
-    @State private var selectedWord = ""
     @State private var selectedSentence = ""
-    @State private var showingWordDefinition = false
     @State private var showingSentenceTranslation = false
     @State private var searchText = ""
     @State private var isSearching = false
@@ -86,6 +84,9 @@ struct PDFContentView: View {
     @State private var fontSize: CGFloat = 16
     @State private var lineSpacing: CGFloat = 6
     @State private var colorScheme: ColorScheme = .light
+    
+    @EnvironmentObject private var dictionaryService: DictionaryService
+    @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
     
     var body: some View {
         VStack(spacing: 0) {
@@ -112,11 +113,7 @@ struct PDFContentView: View {
             }
         }
         .background(Color(.systemBackground))
-        .sheet(isPresented: $showingWordDefinition) {
-            PDFWordDefinitionSheet(word: selectedWord, viewModel: viewModel) {
-                showingWordDefinition = false
-            }
-        }
+        // PDF模式下的弹窗已移除，统一在HybridReaderView中管理
         .sheet(isPresented: $showingSentenceTranslation) {
             PDFSentenceTranslationSheet(sentence: selectedSentence, viewModel: viewModel) {
                 showingSentenceTranslation = false
@@ -151,10 +148,9 @@ struct PDFContentView: View {
     private func setupGestureRecognizers() {
         gestureHandler = PDFGestureHandler(
             onWordSelection: { word in
-                selectedWord = word
-                showingWordDefinition = true
-                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                impactFeedback.impactOccurred()
+                // 设置当前交互模式为PDF模式
+                wordInteractionCoordinator.setInteractionMode(.pdf)
+                wordInteractionCoordinator.handleWordTap(word)
             },
             onSentenceSelection: { sentence in
                 selectedSentence = sentence
@@ -215,6 +211,8 @@ struct PDFContentView: View {
         let onNextPage: () -> Void
         let onSearch: () -> Void
         
+        @StateObject private var inputManager = UnifiedInputManager.shared
+        
         var body: some View {
             HStack {
                 // 页面导航
@@ -240,11 +238,18 @@ struct PDFContentView: View {
                 HStack {
                     TextField("搜索...", text: $searchText)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .onTapGesture {
+                            inputManager.beginInputSession(fieldId: "pdf_search")
+                        }
                         .onSubmit {
+                            inputManager.endInputSession()
                             onSearch()
                         }
                     
-                    Button(action: onSearch) {
+                    Button(action: {
+                        inputManager.endInputSession()
+                        onSearch()
+                    }) {
                         if isSearching {
                             SwiftUI.ProgressView()
                                 .scaleEffect(0.8)
@@ -357,24 +362,105 @@ struct PDFContentView: View {
         }
         
         private func getWordAt(point: CGPoint, in page: PDFPage) -> String? {
-            // 使用更大的选择区域来确保能够选中完整单词
-            let selectionRect = CGRect(x: point.x - 30, y: point.y - 20, width: 60, height: 40)
+            // 增强的智能单词边界检测：从小范围开始，逐步扩大
+            let searchSizes = [
+                CGSize(width: 15, height: 12),  // 超小范围 - 精确点击
+                CGSize(width: 25, height: 18),  // 小范围 - 单个字符
+                CGSize(width: 40, height: 25),  // 中等范围 - 短单词
+                CGSize(width: 60, height: 35),  // 较大范围 - 长单词
+                CGSize(width: 80, height: 45)   // 最大范围 - 词组
+            ]
             
-            if let selection = page.selection(for: selectionRect) {
-                let text = selection.string?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
+            var bestWord: String?
+            var bestScore = 0.0
+            
+            for (index, size) in searchSizes.enumerated() {
+                let selectionRect = CGRect(
+                    x: point.x - size.width/2,
+                    y: point.y - size.height/2,
+                    width: size.width,
+                    height: size.height
+                )
                 
-                // 如果选中的文本为空，尝试扩大选择范围
-                if text.isEmpty {
-                    let largerRect = CGRect(x: point.x - 50, y: point.y - 30, width: 100, height: 60)
-                    if let largerSelection = page.selection(for: largerRect) {
-                        let largerText = largerSelection.string?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
-                        return extractValidWord(from: largerText)
+                if let selection = page.selection(for: selectionRect),
+                   let text = selection.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !text.isEmpty {
+                    
+                    // 尝试提取最接近点击位置的单词
+                    if let word = extractWordNearPoint(from: text, clickPoint: point, selectionRect: selectionRect) {
+                        // 计算单词质量分数（优先选择较小范围内找到的单词）
+                        let sizeScore = 1.0 - (Double(index) * 0.2) // 范围越小分数越高
+                        let lengthScore = min(Double(word.count) / 10.0, 1.0) // 长度适中的单词分数更高
+                        let validityScore = isValidWordForLookup(word) ? 1.0 : 0.5
+                        
+                        let totalScore = sizeScore * lengthScore * validityScore
+                        
+                        if totalScore > bestScore {
+                            bestWord = word
+                            bestScore = totalScore
+                        }
+                        
+                        // 如果在最小范围内找到有效单词，直接返回
+                        if index == 0 && isValidWordForLookup(word) {
+                            return word
+                        }
                     }
-                } else {
-                    return extractValidWord(from: text)
                 }
             }
-            return nil
+            
+            return bestWord
+        }
+        
+        private func extractWordNearPoint(from text: String, clickPoint: CGPoint, selectionRect: CGRect) -> String? {
+            // 清理文本，移除多余的空白字符
+            let cleanedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\t", with: " ")
+            
+            // 如果是单个单词，直接返回
+            let singleWordText = cleanedText.trimmingCharacters(in: .punctuationCharacters)
+            if !singleWordText.contains(" ") && !singleWordText.isEmpty {
+                return isValidWordForLookup(singleWordText) ? singleWordText : nil
+            }
+            
+            // 分割成单词，保留标点符号信息用于更精确的匹配
+            let words = cleanedText.components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+            
+            var candidates: [(word: String, score: Double)] = []
+            
+            for word in words {
+                let cleanWord = word.trimmingCharacters(in: .punctuationCharacters)
+                guard isValidWordForLookup(cleanWord) else { continue }
+                
+                // 计算单词质量分数
+                var score = 0.0
+                
+                // 长度分数：3-12个字符的单词得分最高
+                if cleanWord.count >= 3 && cleanWord.count <= 12 {
+                    score += 1.0
+                } else if cleanWord.count >= 2 {
+                    score += 0.7
+                } else {
+                    score += 0.3
+                }
+                
+                // 字母组成分数：全字母单词得分更高
+                if cleanWord.allSatisfy({ $0.isLetter }) {
+                    score += 0.5
+                }
+                
+                // 常见词汇分数：避免选择过于简单的词汇
+                let commonWords = ["a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"]
+                if !commonWords.contains(cleanWord.lowercased()) {
+                    score += 0.3
+                }
+                
+                candidates.append((word: cleanWord, score: score))
+            }
+            
+            // 返回得分最高的单词
+            return candidates.max(by: { $0.score < $1.score })?.word
         }
         
         private func extractValidWord(from text: String) -> String? {
@@ -449,54 +535,7 @@ struct PDFContentView: View {
     }
     
     // MARK: - Sheet Views
-    struct PDFWordDefinitionSheet: View {
-        let word: String
-        let viewModel: ProgressViewModel
-        let onDismiss: () -> Void
-        @State private var definition = "加载中..."
-        @State private var isLoading = true
-        
-        var body: some View {
-            NavigationView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(word)
-                        .font(.title)
-                        .fontWeight(.bold)
-                    
-                    if isLoading {
-                        SwiftUI.ProgressView("加载定义中...")
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    } else {
-                        Text(definition)
-                            .font(.body)
-                    }
-                    
-                    Spacer()
-                }
-                .padding()
-                .navigationTitle("词汇释义")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("完成") {
-                            onDismiss()
-                        }
-                    }
-                }
-            }
-            .onAppear {
-                loadDefinition()
-            }
-        }
-        
-        private func loadDefinition() {
-            // 模拟加载定义
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                definition = "\(word): 示例定义"
-                isLoading = false
-            }
-        }
-    }
+
     
     struct PDFSentenceTranslationSheet: View {
         let sentence: String

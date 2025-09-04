@@ -367,11 +367,15 @@ class ProgressViewModel: ObservableObject {
 
 // MARK: - Supporting Types
 
-struct ChartDataPoint: Identifiable {
+struct ChartDataPoint: Identifiable, Equatable {
     let id = UUID()
     let date: Date
     let value: Double
     let label: String
+    
+    static func == (lhs: ChartDataPoint, rhs: ChartDataPoint) -> Bool {
+        return lhs.date == rhs.date && lhs.value == rhs.value && lhs.label == rhs.label
+    }
 }
 
 struct TodayStatistics {
@@ -441,6 +445,42 @@ struct AchievementStatistics {
     var unlockedAchievements: Int = 0
     var recentAchievements: [String] = []
     var nextMilestones: [String] = []
+    var longestStreak: Int = 0
+    var recentBadges: [AchievementBadge] = []
+}
+
+struct AchievementBadge: Identifiable, Codable {
+    let id = UUID()
+    let name: String
+    let iconName: String
+    let color: Color
+    let unlockedDate: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case name, iconName, unlockedDate
+    }
+    
+    init(name: String, iconName: String, color: Color, unlockedDate: Date = Date()) {
+        self.name = name
+        self.iconName = iconName
+        self.color = color
+        self.unlockedDate = unlockedDate
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        iconName = try container.decode(String.self, forKey: .iconName)
+        unlockedDate = try container.decode(Date.self, forKey: .unlockedDate)
+        color = .blue // 默认颜色，实际应该根据成就类型设置
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(iconName, forKey: .iconName)
+        try container.encode(unlockedDate, forKey: .unlockedDate)
+    }
 }
 
 

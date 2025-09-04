@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Foundation
+import SwiftData
 
 
 
@@ -110,6 +111,9 @@ struct ModernWordPopupView: View {
                         )
                     }
                     
+                    // AI翻译区域
+                    TranslationSection(word: definition.word)
+                    
                     // 例句区域
                     ExampleSection()
                     
@@ -181,6 +185,9 @@ struct WordHeaderSection: View {
                 
                 Spacer()
             }
+            
+            // 翻译模式切换按钮
+            TranslationModeToggle()
             
             // 发音标注
             if let usPhonetic = definition.usPhonetic {
@@ -290,6 +297,37 @@ struct ExampleSection: View {
                     )
             )
         }
+    }
+}
+
+// MARK: - 翻译模式切换组件
+struct TranslationModeToggle: View {
+    @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(TranslationMode.allCases, id: \.self) { mode in
+                Button(action: {
+                    wordInteractionCoordinator.setTranslationMode(mode)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: mode.iconName)
+                            .font(.system(size: 12, weight: .medium))
+                        Text(mode.displayName)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(wordInteractionCoordinator.currentTranslationMode == mode ? .white : .blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(wordInteractionCoordinator.currentTranslationMode == mode ? Color.blue : Color.blue.opacity(0.1))
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
 
@@ -650,6 +688,143 @@ struct ErrorPopupView: View {
             .frame(height: 200)
         }
         .padding(20)
+    }
+}
+
+// MARK: - AI翻译区域
+struct TranslationSection: View {
+    let word: String
+    @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 标题和翻译按钮
+            HStack {
+                Text("AI翻译")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Spacer()
+                
+                Button(action: {
+                    wordInteractionCoordinator.handleWordTranslation(word)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 14))
+                        Text("翻译")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.blue)
+                    )
+                }
+                .disabled(wordInteractionCoordinator.isTranslating)
+            }
+            
+            // 翻译状态和结果
+            if wordInteractionCoordinator.isTranslating {
+                // 加载状态
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("正在翻译...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                .padding(.vertical, 8)
+            } else if wordInteractionCoordinator.showTranslation {
+                // 翻译结果卡片
+                VStack(alignment: .leading, spacing: 12) {
+                    // 翻译文本
+                    if let translation = wordInteractionCoordinator.currentTranslation {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(translation.translatedText)
+                                .font(.system(size: 16))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.blue.opacity(0.05))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                            
+                            // 置信度显示
+                            if translation.confidence > 0 {
+                                HStack {
+                                    Text("置信度:")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.gray)
+                                    
+                                    Text("\(Int(translation.confidence * 100))%")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(translation.confidence > 0.8 ? .green : translation.confidence > 0.6 ? .orange : .red)
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+                        
+                        // 翻译来源和时间
+                        HStack {
+                            Text("来源: \(translation.provider.displayName)")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                            
+                            Spacer()
+                            
+                            Text(formatTimestamp(translation.timestamp))
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                        }
+                    } else {
+                        Text("AI翻译结果将在此显示")
+                            .font(.system(size: 16))
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.gray.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                    }
+                }
+                .padding(.vertical, 8)
+            } else if let error = wordInteractionCoordinator.translationError {
+                // 错误信息
+                HStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.red)
+                    Text(error)
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.gray.opacity(0.05))
+        )
+    }
+    
+    private func formatTimestamp(_ timestamp: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: timestamp)
     }
 }
 

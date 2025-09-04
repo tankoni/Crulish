@@ -2,6 +2,7 @@ import Foundation
 import PDFKit
 import SwiftData
 import OSLog
+import SwiftUI
 
 class PDFService: BaseService, PDFServiceProtocol {
     
@@ -282,83 +283,200 @@ class PDFService: BaseService, PDFServiceProtocol {
         let pageRect = page.bounds(for: .mediaBox)
         
         // 使用更智能的文本分割方法
-        let textBlocks = extractTextBlocks(from: pageString, pageRect: pageRect)
+        let textBlocks = extractTextBlocks(from: pageString, pageSize: pageRect.size)
         
         for (index, textBlock) in textBlocks.enumerated() {
-            let trimmedText = textBlock.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedText = textBlock.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             guard !trimmedText.isEmpty else { continue }
             
             // 增强的文本类型分析
-            let elementType = analyzeElementTypeEnhanced(trimmedText, index: index, position: textBlock.bounds)
-            let fontInfo = analyzeFontInfoEnhanced(trimmedText, elementType: elementType, bounds: textBlock.bounds)
+            let bounds = CGRect(origin: textBlock.position, size: textBlock.size)
+            let elementType = analyzeElementTypeEnhanced(trimmedText, index: index, position: bounds)
+            let fontInfo = analyzeFontInfoEnhanced(trimmedText, elementType: elementType, bounds: bounds)
+            
+            // 提取布局信息
+            let layoutInfo = extractLayoutInfo(from: textBlock, elementType: elementType)
+            let textAlignment = detectTextAlignment(from: trimmedText, bounds: bounds)
+            let indentation = detectIndentation(from: textBlock)
             
             let element = TextElement(
                 content: trimmedText,
                 type: elementType,
-                bounds: textBlock.bounds,
+                bounds: bounds,
                 fontInfo: fontInfo,
-                level: getElementLevel(elementType)
+                level: getElementLevel(elementType),
+                layoutInfo: layoutInfo,
+                textAlignment: textAlignment,
+                indentation: indentation
             )
             
             elements.append(element)
         }
         
-        // 按Y坐标排序，确保阅读顺序正确
-        elements.sort { $0.bounds.maxY > $1.bounds.maxY }
+        // 增强的排序逻辑：优先按Y坐标排序，然后按X坐标排序
+        // 这样可以更好地保持PDF原始的文本排列格式
+        elements.sort { element1, element2 in
+            let yDifference = abs(element1.bounds.minY - element2.bounds.minY)
+            
+            // 如果Y坐标差异很小（在同一行），则按X坐标排序
+            if yDifference < 5.0 {
+                return element1.bounds.minX < element2.bounds.minX
+            }
+            
+            // 否则按Y坐标排序（从上到下）
+            return element1.bounds.minY < element2.bounds.minY
+        }
         
         return elements
     }
     
-    /// 提取文本块信息
-    private func extractTextBlocks(from pageString: String, pageRect: CGRect) -> [(content: String, bounds: CGRect)] {
-        var textBlocks: [(content: String, bounds: CGRect)] = []
+    /// 提取文本块信息（增强版本）- 改进段落结构保持
+    private func extractTextBlocks(from text: String, pageSize: CGSize) -> [TextBlock] {
+        var blocks: [TextBlock] = []
         
-        // 按段落分割文本
-        let paragraphs = pageString.components(separatedBy: .newlines)
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        // 增强的段落分割策略：保持PDF原始格式
+        // 1. 首先按双换行符分割主要段落
+        // 2. 然后处理单换行符保持的子段落结构
+        let majorParagraphs = text.components(separatedBy: "\n\n")
         
-        var currentY: CGFloat = pageRect.maxY - 50 // 从页面顶部开始，留出边距
-        let baseLineHeight: CGFloat = 20.0
-        let paragraphSpacing: CGFloat = 10.0
+        var currentY: CGFloat = 40 // 从页面顶部开始，留出边距
+        let baseLineHeight: CGFloat = 18
+        let paragraphSpacing: CGFloat = 12
         
-        for paragraph in paragraphs {
-            let trimmedParagraph = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedParagraph.isEmpty else { continue }
+        for (majorIndex, majorParagraph) in majorParagraphs.enumerated() {
+            let cleanMajorParagraph = majorParagraph.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleanMajorParagraph.isEmpty else { continue }
             
-            // 根据文本长度估算行数
-            let charactersPerLine = Int(pageRect.width / 8.0) // 假设每个字符8点宽
-            let estimatedLines = max(1, trimmedParagraph.count / charactersPerLine + 1)
-            let blockHeight = CGFloat(estimatedLines) * baseLineHeight
+            // 检测是否需要进一步分割（保持原始换行结构）
+            let subParagraphs = cleanMajorParagraph.components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
             
-            // 计算文本块边界
-            let bounds = CGRect(
-                x: 40, // 左边距
-                y: currentY - blockHeight,
-                width: pageRect.width - 80, // 左右边距
-                height: blockHeight
-            )
-            
-            textBlocks.append((content: trimmedParagraph, bounds: bounds))
-            currentY -= blockHeight + paragraphSpacing
+            // 如果子段落数量较少，作为一个整体处理
+            if subParagraphs.count <= 2 {
+                let block = createTextBlock(
+                    content: cleanMajorParagraph,
+                    index: majorIndex,
+                    currentY: &currentY,
+                    pageSize: pageSize,
+                    baseLineHeight: baseLineHeight,
+                    paragraphSpacing: paragraphSpacing
+                )
+                blocks.append(block)
+            } else {
+                // 多个子段落时，分别处理以保持结构
+                for (subIndex, subParagraph) in subParagraphs.enumerated() {
+                    guard !subParagraph.isEmpty else { continue }
+                    
+                    let block = createTextBlock(
+                        content: subParagraph,
+                        index: majorIndex * 100 + subIndex, // 确保索引唯一性
+                        currentY: &currentY,
+                        pageSize: pageSize,
+                        baseLineHeight: baseLineHeight,
+                        paragraphSpacing: subIndex == subParagraphs.count - 1 ? paragraphSpacing : paragraphSpacing / 2
+                    )
+                    blocks.append(block)
+                }
+            }
         }
-        
-        return textBlocks
+         
+         return blocks
+     }
+     
+     /// 创建文本块的辅助方法
+     private func createTextBlock(
+         content: String,
+         index: Int,
+         currentY: inout CGFloat,
+         pageSize: CGSize,
+         baseLineHeight: CGFloat,
+         paragraphSpacing: CGFloat
+     ) -> TextBlock {
+         let leftMargin: CGFloat = 40
+         let rightMargin: CGFloat = 40
+         let blockWidth = pageSize.width - leftMargin - rightMargin
+         
+         // 检测缩进和特殊格式
+         let originalLines = content.components(separatedBy: "\n")
+         let hasIndentation = originalLines.first?.hasPrefix("    ") == true || originalLines.first?.hasPrefix("\t") == true
+         
+         // 保留段落内的换行符和格式
+         let lines = content.components(separatedBy: "\n")
+         
+         // 根据内容类型调整行高
+         let blockHeight = CGFloat(lines.count) * baseLineHeight
+         let position = CGRect(x: leftMargin, y: currentY, width: blockWidth, height: blockHeight)
+         let elementType = analyzeElementTypeEnhanced(content, index: index, position: position)
+         let lineHeight = getLineHeightForElementType(elementType, baseHeight: baseLineHeight)
+         let finalBlockHeight = CGFloat(lines.count) * lineHeight
+         
+         // 根据缩进调整位置
+         let xPosition = hasIndentation ? leftMargin + 20 : leftMargin
+         let adjustedWidth = hasIndentation ? blockWidth - 20 : blockWidth
+         
+         let block = TextBlock(
+             content: content,
+             position: CGPoint(x: xPosition, y: currentY),
+             size: CGSize(width: adjustedWidth, height: finalBlockHeight),
+             elementType: elementType
+         )
+         
+         // 根据元素类型调整间距
+         let spacing = getSpacingForElementType(elementType, defaultSpacing: paragraphSpacing)
+         currentY += finalBlockHeight + spacing
+         
+         return block
+     }
+    
+    /// 根据元素类型获取行高
+    private func getLineHeightForElementType(_ elementType: ElementType, baseHeight: CGFloat) -> CGFloat {
+        switch elementType {
+        case .title:
+            return baseHeight * 1.4
+        case .subtitle:
+            return baseHeight * 1.2
+        case .list:
+            return baseHeight * 0.9
+        case .quote:
+            return baseHeight * 1.1
+        default:
+            return baseHeight
+        }
     }
     
-    /// 增强的文本元素类型分析
+    /// 根据元素类型获取间距
+    private func getSpacingForElementType(_ elementType: ElementType, defaultSpacing: CGFloat) -> CGFloat {
+        switch elementType {
+        case .title:
+            return defaultSpacing * 2.0
+        case .subtitle:
+            return defaultSpacing * 1.5
+        case .list:
+            return defaultSpacing * 0.5
+        case .quote:
+            return defaultSpacing * 1.2
+        default:
+            return defaultSpacing
+        }
+    }
+    
+    /// 更新analyzeElementTypeEnhanced以考虑多行
     private func analyzeElementTypeEnhanced(_ text: String, index: Int, position: CGRect) -> ElementType {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = text.components(separatedBy: .newlines)
+        let firstLine = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         
         // 基于位置的标题检测（页面顶部的短文本）
-        if position.maxY > position.minY + 400 && trimmedText.count < 100 {
-            if trimmedText.contains("Section") || trimmedText.contains("Part") || 
-               trimmedText.contains("章") || trimmedText.contains("节") ||
-               trimmedText.matches("^[A-Z][A-Z\\s]+$") { // 全大写标题
+        if position.maxY > position.minY + 400 && firstLine.count < 100 {
+            if firstLine.contains("Section") || firstLine.contains("Part") || 
+               firstLine.contains("章") || firstLine.contains("节") ||
+               firstLine.matches("^[A-Z][A-Z\\s]+$") { // 全大写标题
                 return .title
             }
         }
         
-        // 检查是否为副标题（居中或特殊格式）
+        // 其他检测类似，保留原有逻辑
         if trimmedText.count < 120 {
             if trimmedText.contains(":") || trimmedText.hasSuffix("?") ||
                trimmedText.matches("^[0-9]+\\.[0-9]+") || // 编号格式如 1.1
@@ -468,6 +586,86 @@ class PDFService: BaseService, PDFServiceProtocol {
         default:
             return nil
         }
+    }
+    
+    /// 提取布局信息
+    private func extractLayoutInfo(from textBlock: TextBlock, elementType: ElementType) -> LayoutInfo {
+        let baseLineHeight: CGFloat = 18
+        let lineHeight = getLineHeightForElementType(elementType, baseHeight: baseLineHeight)
+        let paragraphSpacing = getSpacingForElementType(elementType, defaultSpacing: 12)
+        
+        // 根据元素类型设置边距
+        let margins: EdgeInsets
+        switch elementType {
+        case .title:
+            margins = EdgeInsets(top: 20, leading: 0, bottom: 16, trailing: 0)
+        case .subtitle:
+            margins = EdgeInsets(top: 16, leading: 0, bottom: 12, trailing: 0)
+        case .quote:
+            margins = EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20)
+        case .list:
+            margins = EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0)
+        default:
+            margins = EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
+        }
+        
+        return LayoutInfo(
+            lineHeight: lineHeight,
+            paragraphSpacing: paragraphSpacing,
+            margins: margins,
+            columnCount: nil,
+            columnSpacing: nil,
+            backgroundColor: nil,
+            borderInfo: nil
+        )
+    }
+    
+    /// 检测文本对齐方式
+    private func detectTextAlignment(from text: String, bounds: CGRect) -> TextAlignment {
+        // 简化的对齐检测逻辑
+        let lines = text.components(separatedBy: .newlines)
+        
+        // 检查是否居中对齐（标题通常居中）
+        if text.count < 50 && lines.count == 1 {
+            // 短文本可能是标题，检查是否居中
+            return .center
+        }
+        
+        // 检查是否右对齐（通过检测行尾的空格模式）
+        let hasConsistentRightSpacing = lines.allSatisfy { line in
+            line.hasSuffix("  ") || line.hasSuffix("\t")
+        }
+        
+        if hasConsistentRightSpacing {
+            return .trailing
+        }
+        
+        // 默认左对齐
+        return .leading
+    }
+    
+    /// 检测缩进
+    private func detectIndentation(from textBlock: TextBlock) -> CGFloat {
+        let content = textBlock.content
+        let lines = content.components(separatedBy: .newlines)
+        
+        guard let firstLine = lines.first else { return 0 }
+        
+        // 计算前导空格或制表符
+        var indentationCount: CGFloat = 0
+        
+        for char in firstLine {
+            if char == " " {
+                indentationCount += 1
+            } else if char == "\t" {
+                indentationCount += 4 // 制表符通常等于4个空格
+            } else {
+                break
+            }
+        }
+        
+        // 转换为像素值（假设每个字符宽度约为8像素）
+        return indentationCount * 8
     }
     
     /// 检测文本语言

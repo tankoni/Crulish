@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="23C71" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="TestedWordEntity" representedClassName="TestedWordEntity" syncable="YES">
+        <attribute name="difficulty" optional="YES" attributeType="String"/>
+        <attribute name="dictionaryFileName" optional="YES" attributeType="String"/>
+        <attribute name="dictionaryName" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="masteryLevel" optional="YES" attributeType="String"/>
+        <attribute name="responseTime" optional="NO" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="testedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="testSessionId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="word" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="VocabularyTestEntity" representedClassName="VocabularyTestEntity" syncable="YES">
+        <attribute name="accuracyPercentage" optional="NO" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="completedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="dictionaryFileName" optional="YES" attributeType="String"/>
+        <attribute name="dictionaryName" optional="YES" attributeType="String"/>
+        <attribute name="estimatedVocabularySize" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="familiarCount" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isCompleted" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="masteredCount" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalWords" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="unfamiliarCount" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+    </entity>
+</model>

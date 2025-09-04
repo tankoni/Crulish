@@ -7,6 +7,11 @@
 
 import Foundation
 import SwiftUI
+import Observation
+
+// 导入统一错误处理模块
+// 这确保了AppError类型能够被正确识别
+// 注意：这是架构优化的一部分，统一了错误处理方式
 
 /// 错误处理器实现
 @Observable
@@ -175,16 +180,27 @@ class ErrorHandler: ErrorHandlerProtocol {
             return true
         case .dataCorruption, .serviceUnavailable, .storageError, .parsingError:
             return true
-        case .unknown:
+        case .initializationFailed, .configurationError:
+            return true
+        case .translationFailed, .translationUnsupportedLanguage,
+             .translationModelNotAvailable, .translationApiKeyMissing,
+             .translationRateLimitExceeded, .translationServiceUnavailable,
+             .translationInvalidConfiguration, .translationInvalidRequest,
+             .translationApiError:
+            return true
+        case .translationInvalidInput, .translationInvalidURL, .translationInvalidResponse,
+             .translationInvalidProvider, .translationProviderNotConfigured:
+            return false
+        case .unknown, .unexpectedError:
             return false // 未知错误通常不显示给用户
         }
     }
     
     private func shouldReportError(_ error: AppError) -> Bool {
         switch error {
-        case .dataCorruption, .unknown:
+        case .dataCorruption, .unknown, .unexpectedError:
             return true
-        case .storageError, .parsingError:
+        case .storageError, .parsingError, .initializationFailed:
             return true
         default:
             return false
@@ -228,6 +244,40 @@ class ErrorHandler: ErrorHandlerProtocol {
             logger.error("Storage error: \(underlyingError.localizedDescription)\(contextInfo)")
         case .parsingError(let underlyingError):
             logger.error("Parsing error: \(underlyingError.localizedDescription)\(contextInfo)")
+        case .initializationFailed:
+            logger.error("Initialization failed\(contextInfo)")
+        case .configurationError(let message):
+            logger.error("Configuration error: \(message)\(contextInfo)")
+        case .translationFailed(let message):
+            logger.error("Translation failed: \(message)\(contextInfo)")
+        case .translationUnsupportedLanguage(let language):
+            logger.error("Translation unsupported language: \(language)\(contextInfo)")
+        case .translationModelNotAvailable(let model):
+            logger.error("Translation model not available: \(model)\(contextInfo)")
+        case .translationApiKeyMissing:
+            logger.error("Translation API key missing\(contextInfo)")
+        case .translationRateLimitExceeded:
+            logger.error("Translation rate limit exceeded\(contextInfo)")
+        case .translationServiceUnavailable:
+            logger.error("Translation service unavailable\(contextInfo)")
+        case .translationInvalidConfiguration(let message):
+            logger.error("Translation invalid configuration: \(message)\(contextInfo)")
+        case .translationInvalidRequest(let message):
+            logger.error("Translation invalid request: \(message)\(contextInfo)")
+        case .translationApiError(let code, let message):
+            logger.error("Translation API error (\(code)): \(message)\(contextInfo)")
+        case .translationInvalidInput(let message):
+            logger.warning("Translation invalid input: \(message)\(contextInfo)")
+        case .translationInvalidURL(let url):
+            logger.error("Translation invalid URL: \(url)\(contextInfo)")
+        case .translationInvalidResponse(let message):
+            logger.error("Translation invalid response: \(message)\(contextInfo)")
+        case .translationInvalidProvider(let provider):
+            logger.error("Translation invalid provider: \(provider)\(contextInfo)")
+        case .translationProviderNotConfigured(let provider):
+            logger.error("Translation provider not configured: \(provider)\(contextInfo)")
+        case .unexpectedError(let underlyingError):
+            logger.error("Unexpected error: \(underlyingError.localizedDescription)\(contextInfo)")
         case .unknown(let underlyingError):
             logger.error("Unknown error: \(underlyingError.localizedDescription)\(contextInfo)")
         }
@@ -246,115 +296,7 @@ class ErrorHandler: ErrorHandlerProtocol {
     }
 }
 
-// MARK: - 应用错误类型
-
-/// 应用错误类型
-enum AppError: LocalizedError {
-    case networkError(Error)
-    case dataCorruption
-    case fileNotFound(String)
-    case invalidInput(String)
-    case serviceUnavailable(String)
-    case authenticationFailed
-    case permissionDenied
-    case storageError(Error)
-    case parsingError(Error)
-    case unknown(Error)
-    
-    var errorDescription: String? {
-        switch self {
-        case .networkError(let error):
-            return "网络错误: \(error.localizedDescription)"
-        case .dataCorruption:
-            return "数据损坏，请重新导入数据"
-        case .fileNotFound(let fileName):
-            return "文件未找到: \(fileName)"
-        case .invalidInput(let message):
-            return "输入无效: \(message)"
-        case .serviceUnavailable(let service):
-            return "服务不可用: \(service)"
-        case .authenticationFailed:
-            return "身份验证失败"
-        case .permissionDenied:
-            return "权限不足"
-        case .storageError(let error):
-            return "存储错误: \(error.localizedDescription)"
-        case .parsingError(let error):
-            return "数据解析错误: \(error.localizedDescription)"
-        case .unknown(let error):
-            return "未知错误: \(error.localizedDescription)"
-        }
-    }
-    
-    var recoverySuggestion: String? {
-        switch self {
-        case .networkError:
-            return "请检查网络连接后重试"
-        case .dataCorruption:
-            return "请重新导入数据或联系技术支持"
-        case .fileNotFound:
-            return "请确认文件存在或重新下载"
-        case .invalidInput:
-            return "请检查输入格式是否正确"
-        case .serviceUnavailable:
-            return "请稍后重试或联系技术支持"
-        case .authenticationFailed:
-            return "请重新登录"
-        case .permissionDenied:
-            return "请在设置中授予必要权限"
-        case .storageError:
-            return "请检查存储空间是否充足"
-        case .parsingError:
-            return "请检查数据格式或联系技术支持"
-        case .unknown:
-            return "请重试或联系技术支持"
-        }
-    }
-}
-
-// MARK: - 扩展
-
-extension AppError {
-    /// 错误的唯一标识符
-    var errorKey: String {
-        switch self {
-        case .networkError:
-            return "network_error"
-        case .dataCorruption:
-            return "data_corruption"
-        case .fileNotFound:
-            return "file_not_found"
-        case .invalidInput:
-            return "invalid_input"
-        case .serviceUnavailable:
-            return "service_unavailable"
-        case .authenticationFailed:
-            return "authentication_failed"
-        case .permissionDenied:
-            return "permission_denied"
-        case .storageError:
-            return "storage_error"
-        case .parsingError:
-            return "parsing_error"
-        case .unknown:
-            return "unknown_error"
-        }
-    }
-    
-    /// 错误的严重程度
-    var severity: ErrorSeverity {
-        switch self {
-        case .networkError, .invalidInput:
-            return .warning
-        case .dataCorruption, .storageError, .parsingError:
-            return .error
-        case .fileNotFound, .serviceUnavailable, .authenticationFailed, .permissionDenied:
-            return .error
-        case .unknown:
-            return .critical
-        }
-    }
-}
+// MARK: - 应用错误类型 (已移至 Models/ErrorTypes.swift)
 
 // MARK: - 支持类型
 

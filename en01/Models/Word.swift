@@ -18,6 +18,7 @@ final class DictionaryWord: @unchecked Sendable {
     var frequency: Int // 在考研真题中的出现频率
     var difficulty: WordDifficulty
     private var tagsString: String // 内部存储，用分号分隔
+    private var categoriesString: String // 内部存储，用分号分隔
     
     // 计算属性，用于访问标签数组
     var tags: [String] {
@@ -29,13 +30,24 @@ final class DictionaryWord: @unchecked Sendable {
         }
     }
     
-    init(word: String, phonetic: String? = nil, definitions: [WordDefinition], frequency: Int = 0, difficulty: WordDifficulty = .medium, tags: [String] = []) {
+    // 计算属性，用于访问分组数组
+    var categories: [String]? {
+        get {
+            return categoriesString.isEmpty ? nil : categoriesString.components(separatedBy: ";")
+        }
+        set {
+            categoriesString = newValue?.joined(separator: ";") ?? ""
+        }
+    }
+    
+    init(word: String, phonetic: String? = nil, definitions: [WordDefinition], frequency: Int = 0, difficulty: WordDifficulty = .medium, tags: [String] = [], categories: [String]? = nil) {
         self.word = word.lowercased()
         self.phonetic = phonetic
         self.definitions = definitions
         self.frequency = frequency
         self.difficulty = difficulty
         self.tagsString = tags.joined(separator: ";")
+        self.categoriesString = categories?.joined(separator: ";") ?? ""
     }
 }
 
@@ -179,7 +191,33 @@ final class UserWord: @unchecked Sendable {
     // 存储文章ID而不是直接引用，避免复杂的关系管理
     var articleID: String?
     
-    init(word: String, context: String, sentence: String, selectedDefinition: WordDefinition? = nil) {
+    // 新增：测试相关字段
+    var testSource: String? // 测试来源（词典名称）
+    var isFromTest: Bool // 是否来自词汇量测试
+    var testID: String? // 关联的测试ID
+    var clickCount: Int // 点击次数（包括查词、复习等所有交互）
+    var lastClickDate: Date? // 最后点击时间
+    
+    // 新增：学习行为追踪
+    var studySessionCount: Int // 学习会话次数
+    var totalStudyTime: TimeInterval // 总学习时间（秒）
+    var averageResponseTime: TimeInterval // 平均响应时间
+    var correctAnswers: Int // 正确回答次数（在测试或复习中）
+    var incorrectAnswers: Int // 错误回答次数
+    
+    // 新增：智能排序相关
+    var learningPriority: Double // 学习优先级（0-100）
+    var difficultyRating: Double // 用户感知难度（0-10）
+    var importanceRating: Double // 重要性评级（0-10）
+    var lastPriorityUpdate: Date? // 优先级最后更新时间
+    
+    // 新增：记忆曲线相关
+    var memoryStrength: Double // 记忆强度（0-1）
+    var forgettingCurve: Double // 遗忘曲线参数
+    var optimalReviewInterval: TimeInterval // 最佳复习间隔
+    var reviewHistory: String // 复习历史记录（JSON格式）
+    
+    init(word: String, context: String, sentence: String, selectedDefinition: WordDefinition? = nil, testSource: String? = nil, isFromTest: Bool = false) {
         self.id = UUID()
         self.word = word.lowercased()
         self.selectedDefinition = selectedDefinition
@@ -193,6 +231,29 @@ final class UserWord: @unchecked Sendable {
         self.nextReviewDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())
         self.isMarkedForReview = true
         self.notes = nil
+        
+        // 初始化新字段
+        self.testSource = testSource
+        self.isFromTest = isFromTest
+        self.testID = nil
+        self.clickCount = 1
+        self.lastClickDate = Date()
+        
+        self.studySessionCount = 1
+        self.totalStudyTime = 0
+        self.averageResponseTime = 0
+        self.correctAnswers = 0
+        self.incorrectAnswers = 0
+        
+        self.learningPriority = isFromTest ? 80.0 : 50.0 // 测试来源的单词优先级更高
+        self.difficultyRating = 5.0 // 默认中等难度
+        self.importanceRating = 5.0 // 默认中等重要性
+        self.lastPriorityUpdate = Date()
+        
+        self.memoryStrength = 0.1 // 初始记忆强度很低
+        self.forgettingCurve = 0.5 // 默认遗忘曲线参数
+        self.optimalReviewInterval = 24 * 60 * 60 // 默认24小时
+        self.reviewHistory = "[]"
     }
 
 
@@ -256,6 +317,125 @@ extension UserWord {
     func incrementLookupCount() {
         self.lookupCount += 1
         self.lastLookupDate = Date()
+        self.clickCount += 1
+        self.lastClickDate = Date()
+    }
+    
+    // 新增：记录点击行为
+    func recordClick(responseTime: TimeInterval = 0) {
+        self.clickCount += 1
+        self.lastClickDate = Date()
+        
+        if responseTime > 0 {
+            // 更新平均响应时间
+            let totalResponseTime = averageResponseTime * Double(clickCount - 1) + responseTime
+            self.averageResponseTime = totalResponseTime / Double(clickCount)
+        }
+    }
+    
+    // 新增：记录学习会话
+    func recordStudySession(duration: TimeInterval) {
+        self.studySessionCount += 1
+        self.totalStudyTime += duration
+    }
+    
+    // 新增：记录测试结果
+    func recordTestResult(isCorrect: Bool, responseTime: TimeInterval) {
+        if isCorrect {
+            self.correctAnswers += 1
+            // 正确回答提升记忆强度
+            self.memoryStrength = min(1.0, memoryStrength + 0.1)
+        } else {
+            self.incorrectAnswers += 1
+            // 错误回答降低记忆强度
+            self.memoryStrength = max(0.0, memoryStrength - 0.05)
+        }
+        
+        recordClick(responseTime: responseTime)
+        updateOptimalReviewInterval()
+    }
+    
+    // 新增：更新学习优先级
+    func updateLearningPriority() {
+        var priority: Double = 50.0 // 基础优先级
+        
+        // 基于掌握程度调整
+        switch masteryLevel {
+        case .unfamiliar:
+            priority += 30.0
+        case .familiar:
+            priority += 10.0
+        case .mastered:
+            priority -= 20.0
+        }
+        
+        // 基于错误率调整
+        let totalAnswers = correctAnswers + incorrectAnswers
+        if totalAnswers > 0 {
+            let errorRate = Double(incorrectAnswers) / Double(totalAnswers)
+            priority += errorRate * 20.0
+        }
+        
+        // 基于记忆强度调整
+        priority += (1.0 - memoryStrength) * 15.0
+        
+        // 基于用户评级调整
+        priority += (difficultyRating - 5.0) * 2.0
+        priority += (importanceRating - 5.0) * 3.0
+        
+        // 基于时间衰减调整
+        if let lastClick = lastClickDate {
+            let daysSinceLastClick = Date().timeIntervalSince(lastClick) / (24 * 60 * 60)
+            priority += min(10.0, daysSinceLastClick * 2.0)
+        }
+        
+        self.learningPriority = max(0.0, min(100.0, priority))
+        self.lastPriorityUpdate = Date()
+    }
+    
+    // 新增：更新最佳复习间隔
+    private func updateOptimalReviewInterval() {
+        // 基于记忆强度和遗忘曲线计算最佳复习间隔
+        let baseInterval: TimeInterval = 24 * 60 * 60 // 24小时
+        let strengthMultiplier = 1.0 + memoryStrength * 6.0 // 1-7倍
+        let masteryMultiplier: Double
+        
+        switch masteryLevel {
+        case .unfamiliar: masteryMultiplier = 1.0
+        case .familiar: masteryMultiplier = 2.0
+        case .mastered: masteryMultiplier = 4.0
+        }
+        
+        self.optimalReviewInterval = baseInterval * strengthMultiplier * masteryMultiplier
+    }
+    
+    // 新增：添加复习记录
+    func addReviewRecord(result: ReviewResult) {
+        var history = getReviewHistory()
+        history.append(result)
+        
+        // 只保留最近20条记录
+        if history.count > 20 {
+            history = Array(history.suffix(20))
+        }
+        
+        do {
+            let data = try JSONEncoder().encode(history)
+            self.reviewHistory = String(data: data, encoding: .utf8) ?? "[]"
+        } catch {
+            print("Failed to encode review history: \(error)")
+        }
+    }
+    
+    // 新增：获取复习历史
+    func getReviewHistory() -> [ReviewResult] {
+        guard let data = reviewHistory.data(using: .utf8) else { return [] }
+        
+        do {
+            return try JSONDecoder().decode([ReviewResult].self, from: data)
+        } catch {
+            return []
+        }
     }
     
     // 是否需要复习
@@ -282,6 +462,69 @@ extension UserWord {
     
     var lastQueryDate: Date {
         return lastLookupDate
+    }
+    
+    // 新增：计算学习效率
+    var learningEfficiency: Double {
+        let totalAnswers = correctAnswers + incorrectAnswers
+        guard totalAnswers > 0 else { return 0 }
+        return Double(correctAnswers) / Double(totalAnswers) * 100
+    }
+    
+    // 新增：计算平均学习时间
+    var averageStudyTime: TimeInterval {
+        guard studySessionCount > 0 else { return 0 }
+        return totalStudyTime / Double(studySessionCount)
+    }
+    
+    // 新增：是否需要紧急复习
+    var needsUrgentReview: Bool {
+        guard let nextReview = nextReviewDate else { return false }
+        let urgentThreshold = Date().addingTimeInterval(-24 * 60 * 60) // 超期1天
+        return nextReview < urgentThreshold
+    }
+    
+    // 新增：获取记忆状态描述
+    var memoryStatusDescription: String {
+        switch memoryStrength {
+        case 0.8...1.0: return "记忆牢固"
+        case 0.6..<0.8: return "记忆良好"
+        case 0.4..<0.6: return "记忆一般"
+        case 0.2..<0.4: return "记忆模糊"
+        default: return "几乎遗忘"
+        }
+    }
+    
+    // 新增：获取学习建议
+    var learningRecommendation: String {
+        if needsUrgentReview {
+            return "建议立即复习"
+        } else if memoryStrength < 0.3 {
+            return "建议加强练习"
+        } else if learningEfficiency < 60 {
+            return "建议重点学习"
+        } else if masteryLevel == .mastered {
+            return "可以减少复习频率"
+        } else {
+            return "继续保持学习"
+        }
+    }
+}
+
+// 复习结果记录
+struct ReviewResult: Codable {
+    let date: Date
+    let isCorrect: Bool
+    let responseTime: TimeInterval
+    let masteryLevelBefore: MasteryLevel
+    let masteryLevelAfter: MasteryLevel
+    let reviewType: ReviewType
+    
+    enum ReviewType: String, Codable {
+        case scheduled = "定时复习"
+        case manual = "手动复习"
+        case test = "测试复习"
+        case practice = "练习复习"
     }
 }
 

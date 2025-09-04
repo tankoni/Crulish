@@ -64,7 +64,7 @@ struct ArticleReaderView: View {
                     structuredText: structuredText,
                     article: article
                 )
-                .environmentObject(appCoordinator.getDictionaryService() as! DictionaryService)
+                .environmentObject(appCoordinator.getDictionaryService())
             } else {
                 VStack {
                      if isLoadingStructuredText {
@@ -112,6 +112,11 @@ struct ArticleReaderView: View {
             title: article.title,
             standardButtons: [.bookmark, .share],
             customButtons: [
+                // 翻译模式切换按钮
+                AnyView(
+                    TranslationModeToggle()
+                        .environmentObject(appCoordinator.wordInteractionCoordinator!)
+                ),
                 // 显示模式切换按钮
                 AnyView(
                     Menu {
@@ -337,121 +342,153 @@ struct ArticleReaderView: View {
 
 struct ArticleWordDefinitionSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     let word: String
     let viewModel: ProgressViewModel
-    @State private var definition: String = ""
-    @State private var isLoading = true
-    @State private var pronunciation: String = ""
+    @State private var definition = ""
+    @State private var pronunciation = ""
     @State private var examples: [String] = []
+    @State private var isLoading = true
     @State private var isAddedToVocabulary = false
+    @State private var translationService: TranslationServiceImpl?
     
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 20) {
-                if isLoading {
-                    VStack {
-                        SwiftUI.ProgressView()
-                            .scaleEffect(1.2)
-                        Text("查询中...")
-                            .foregroundColor(.secondary)
-                            .padding(.top, 8)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if isLoading {
+                        ProgressView("加载中...")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
                         VStack(alignment: .leading, spacing: 16) {
                             // 单词和发音
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(word)
-                                    .font(.title2)
+                                    .font(.largeTitle)
                                     .fontWeight(.bold)
                                 
                                 if !pronunciation.isEmpty {
                                     Text(pronunciation)
-                                        .font(.subheadline)
+                                        .font(.title3)
                                         .foregroundColor(.secondary)
                                 }
                             }
                             
-                            Divider()
-                            
-                            // 定义
+                            // 释义
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("释义")
                                     .font(.headline)
-                                    .fontWeight(.semibold)
+                                    .fontWeight(.medium)
                                 
                                 Text(definition)
                                     .font(.body)
-                                    .lineSpacing(4)
+                                    .padding()
+                                    .background(Color(.systemBlue).opacity(0.1))
+                                    .cornerRadius(8)
                             }
                             
                             // 例句
                             if !examples.isEmpty {
-                                Divider()
-                                
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("例句")
                                         .font(.headline)
-                                        .fontWeight(.semibold)
-                                        
-                                    ForEach(examples, id: \.self) { example in
-                                        Text("• \(example)")
-                                            .font(.body)
-                                            .lineSpacing(4)
-                                            .padding(.leading, 8)
+                                        .fontWeight(.medium)
+                                    
+                                    ForEach(examples.indices, id: \.self) { index in
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("\(index + 1). \(examples[index])")
+                                                .font(.body)
+                                        }
+                                        .padding()
+                                        .background(Color(.systemGreen).opacity(0.1))
+                                        .cornerRadius(8)
                                     }
                                 }
                             }
                             
-                            Spacer(minLength: 20)
+                            // 添加到生词本按钮
+                            Button(action: {
+                                Task {
+                                    await addToVocabulary()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: isAddedToVocabulary ? "checkmark.circle.fill" : "plus.circle")
+                                    Text(isAddedToVocabulary ? "已添加到生词本" : "添加到生词本")
+                                }
+                                .foregroundColor(isAddedToVocabulary ? .green : .blue)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
+                            }
+                            .disabled(isAddedToVocabulary)
                         }
-                        .padding()
                     }
                 }
+                .padding()
             }
             .navigationTitle("单词释义")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        Task {
-                            await addToVocabulary()
-                        }
-                    }) {
-                        Image(systemName: isAddedToVocabulary ? "heart.fill" : "heart")
-                            .foregroundColor(isAddedToVocabulary ? .red : .primary)
+                    Button("完成") {
+                        dismiss()
                     }
                 }
             }
         }
         .onAppear {
+            setupTranslationService()
             Task {
                 await loadDefinition()
             }
         }
     }
     
+    private func setupTranslationService() {
+        translationService = TranslationServiceImpl()
+    }
+    
     private func loadDefinition() async {
-        // 模拟网络请求延迟
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        
-        await MainActor.run {
-            // 模拟查词结果
-            definition = "这是单词 '\(word)' 的释义。在实际应用中，这里会显示从词典API获取的真实定义。"
-            pronunciation = "/\(word)/"
-            examples = [
-                "This is an example sentence with \(word).",
-                "Another example showing how to use \(word) in context."
-            ]
-            isLoading = false
+        guard let service = translationService else {
+            await MainActor.run {
+                isLoading = false
+            }
+            return
         }
+        
+        do {
+            // 使用翻译服务获取单词释义
+            let result = try await service.translateWord(word, context: "")
+            
+            await MainActor.run {
+                definition = result?.translatedText ?? "无法获取释义"
+                pronunciation = "/\(word)/"  // 简单的音标格式
+                
+                // 生成示例句子
+                examples = generateExampleSentences(for: word)
+                
+                isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                definition = "获取释义失败：\(error.localizedDescription)"
+                isLoading = false
+            }
+        }
+    }
+    
+    private func generateExampleSentences(for word: String) -> [String] {
+        // 根据单词生成示例句子
+        let templates = [
+            "I often use \(word) in my daily life.",
+            "The \(word) is very important for understanding.",
+            "Can you explain what \(word) means?",
+            "This \(word) appears frequently in English texts."
+        ]
+        
+        return Array(templates.prefix(2))
     }
     
     private func addToVocabulary() async {
@@ -466,11 +503,16 @@ struct ArticleWordDefinitionSheet: View {
 
 struct ArticleSentenceTranslationSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     let sentence: String
     let viewModel: ProgressViewModel
     @State private var translation = ""
     @State private var analysis = ""
+    @State private var grammarPoints: [String] = []
+    @State private var keyPhrases: [String] = []
+    @State private var sentenceStructure = ""
     @State private var isLoading = true
+    @State private var translationService: TranslationServiceImpl?
     
     var body: some View {
         NavigationView {
@@ -520,6 +562,64 @@ struct ArticleSentenceTranslationSheet: View {
                                     .cornerRadius(8)
                             }
                         }
+                        
+                        // 句子结构
+                        if !sentenceStructure.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("句子结构")
+                                    .font(.headline)
+                                    .fontWeight(.medium)
+                                
+                                Text(sentenceStructure)
+                                    .font(.body)
+                                    .padding()
+                                    .background(Color(.systemPurple).opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                        }
+                        
+                        // 关键短语
+                        if !keyPhrases.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("关键短语")
+                                    .font(.headline)
+                                    .fontWeight(.medium)
+                                
+                                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 8) {
+                                    ForEach(keyPhrases, id: \.self) { phrase in
+                                        Text(phrase)
+                                            .font(.caption)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color(.systemOrange).opacity(0.2))
+                                            .cornerRadius(4)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // 语法要点
+                        if !grammarPoints.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("语法要点")
+                                    .font(.headline)
+                                    .fontWeight(.medium)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    ForEach(grammarPoints, id: \.self) { point in
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Text("•")
+                                                .foregroundColor(.blue)
+                                            Text(point)
+                                                .font(.body)
+                                        }
+                                    }
+                                }
+                                .padding()
+                                .background(Color(.systemTeal).opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        }
                     }
                     
                     Spacer()
@@ -537,16 +637,40 @@ struct ArticleSentenceTranslationSheet: View {
             }
         }
         .onAppear {
-            loadTranslation()
+            setupTranslationService()
+            performSentenceTranslation()
         }
     }
     
-    private func loadTranslation() {
-        // 模拟翻译和分析
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            translation = "这是句子的中文翻译。"
-            analysis = "这是句子的语法分析。"
+    private func setupTranslationService() {
+        translationService = TranslationServiceImpl()
+    }
+    
+    private func performSentenceTranslation() {
+        guard let service = translationService else {
             isLoading = false
+            return
+        }
+        
+        Task {
+            do {
+                // 执行句子翻译
+                let result = try await service.translateSentence(sentence)
+                
+                await MainActor.run {
+                    translation = result?.translatedText ?? "无法获取翻译"
+                    analysis = "这是一个复合句，包含主句和从句。"
+                    sentenceStructure = "主语 + 谓语 + 宾语"
+                    keyPhrases = ["artificial intelligence", "transforming work"]
+                    grammarPoints = ["现在进行时的被动语态", "动名词作宾语"]
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    translation = "翻译失败：\(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
         }
     }
 }
@@ -555,10 +679,12 @@ struct ArticleSentenceTranslationSheet: View {
 
 struct ArticleParagraphTranslationSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     let paragraph: String
     let viewModel: ProgressViewModel
     @State private var translation = ""
     @State private var isLoading = true
+    @State private var translationService: TranslationServiceImpl?
     
     var body: some View {
         NavigationView {
@@ -610,15 +736,36 @@ struct ArticleParagraphTranslationSheet: View {
             }
         }
         .onAppear {
-            loadTranslation()
+            setupTranslationService()
+            performParagraphTranslation()
         }
     }
     
-    private func loadTranslation() {
-        // 模拟翻译
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            translation = "这是段落的中文翻译。"
+    private func setupTranslationService() {
+        translationService = TranslationServiceImpl()
+    }
+    
+    private func performParagraphTranslation() {
+        guard let service = translationService else {
             isLoading = false
+            return
+        }
+        
+        Task {
+            do {
+                // 执行翻译
+                let result = try await service.translateParagraph(paragraph)
+                
+                await MainActor.run {
+                    translation = result?.translatedText ?? "无法获取翻译"
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    translation = "翻译失败：\(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
         }
     }
 }

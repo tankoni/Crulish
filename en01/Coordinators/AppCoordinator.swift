@@ -8,6 +8,51 @@
 import SwiftUI
 import SwiftData
 import Combine
+import Foundation
+
+// MARK: - Tab Selection
+enum TabSelection: String, CaseIterable {
+    case home = "home"
+    case reading = "reading"
+    case vocabulary = "vocabulary"
+    case intelligentRanking = "intelligentRanking"
+    case progress = "progress"
+    case settings = "settings"
+    
+    var title: String {
+        switch self {
+        case .home:
+            return "首页"
+        case .reading:
+            return "阅读"
+        case .vocabulary:
+            return "词汇"
+        case .intelligentRanking:
+            return "智能排序"
+        case .progress:
+            return "进度"
+        case .settings:
+            return "设置"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .home:
+            return "house"
+        case .reading:
+            return "book"
+        case .vocabulary:
+            return "text.book.closed"
+        case .intelligentRanking:
+            return "brain.head.profile"
+        case .progress:
+            return "chart.bar"
+        case .settings:
+            return "gear"
+        }
+    }
+}
 
 /// 应用协调器，负责管理全局导航和状态协调
 @MainActor
@@ -22,6 +67,7 @@ class AppCoordinator: ObservableObject {
     @Published var homeViewModel: HomeViewModel?
     @Published var readingViewModel: ReadingViewModel?
     @Published var vocabularyViewModel: VocabularyViewModel?
+    @Published var intelligentRankingViewModel: IntelligentRankingViewModel?
     @Published var progressViewModel: ProgressViewModel?
     @Published var settingsViewModel: SettingsViewModel?
     
@@ -51,12 +97,24 @@ class AppCoordinator: ObservableObject {
         return serviceContainer.getArticleService()
     }
     
-    func getDictionaryService() -> DictionaryServiceProtocol {
-        return serviceContainer.getDictionaryService()
+    func getDictionaryService() -> DictionaryService {
+        return serviceContainer.getDictionaryService() as! DictionaryService
     }
     
-    func getTextProcessor() -> TextProcessorProtocol {
-        return serviceContainer.getTextProcessor()
+    func getTextProcessor() -> TextProcessor {
+        return serviceContainer.getTextProcessor() as! TextProcessor
+    }
+    
+    func getTranslationService() -> TranslationServiceImpl {
+        return serviceContainer.getTranslationService() as! TranslationServiceImpl
+    }
+    
+    func getVocabularyTestService() -> VocabularyTestServiceProtocol {
+        return serviceContainer.getVocabularyTestService()
+    }
+    
+    func getUnifiedErrorHandler() -> UnifiedErrorHandler {
+        return serviceContainer.getUnifiedErrorHandler()
     }
     
     // MARK: - Initialization
@@ -72,78 +130,66 @@ class AppCoordinator: ObservableObject {
         autoreleasepool {
             // 初始化单词交互协调器
             self.wordInteractionCoordinator = WordInteractionCoordinator(
-                dictionaryService: serviceContainer.getDictionaryService()
+                dictionaryService: serviceContainer.getDictionaryService(),
+                translationService: serviceContainer.getTranslationService(),
+                settings: AppSettings()
             )
             
-            // 分阶段初始化 ViewModels 以减少内存压力
-            initializeViewModelsGradually()
+            // 同步初始化所有 ViewModels 以避免TabView异步重新渲染
+            initializeAllViewModels()
         }
         
         isConfigured = true
+        
+        // 设置协调逻辑
         setupCoordination()
         
-        // 延迟执行PDF导入以避免启动时的内存压力
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.checkAndImportPDFs()
-        }
+        // 检查并导入PDF文件
+        checkAndImportPDFs()
     }
     
-    /// 分阶段初始化 ViewModels
-    private func initializeViewModelsGradually() {
-        // 立即初始化关键的 HomeViewModel
+    /// 同步初始化所有 ViewModels
+    private func initializeAllViewModels() {
+        // 同步初始化所有 ViewModels 以避免TabView异步重新渲染
         self.homeViewModel = HomeViewModel(
             articleService: serviceContainer.getArticleService(),
             userProgressService: serviceContainer.getUserProgressService(),
             errorHandler: serviceContainer.getErrorHandler()
         )
         
-        // 延迟初始化其他 ViewModels
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            guard let self = self else { return }
-            autoreleasepool {
-                self.progressViewModel = ProgressViewModel(
-                    userProgressService: self.serviceContainer.getUserProgressService(),
-                    articleService: self.serviceContainer.getArticleService(),
-                    errorHandler: self.serviceContainer.getErrorHandler()
-                )
-            }
-        }
+        self.progressViewModel = ProgressViewModel(
+            userProgressService: serviceContainer.getUserProgressService(),
+            articleService: serviceContainer.getArticleService(),
+            errorHandler: serviceContainer.getErrorHandler()
+        )
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self = self else { return }
-            autoreleasepool {
-                self.settingsViewModel = SettingsViewModel(
-                    userProgressService: self.serviceContainer.getUserProgressService(),
-                    errorHandler: self.serviceContainer.getErrorHandler(),
-                    cacheManager: self.serviceContainer.getCacheManager(),
-                    coordinator: self
-                )
-            }
-        }
+        self.vocabularyViewModel = VocabularyViewModel(
+            dictionaryService: serviceContainer.getDictionaryService(),
+            userProgressService: serviceContainer.getUserProgressService(),
+            errorHandler: serviceContainer.getErrorHandler()
+        )
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            guard let self = self else { return }
-            autoreleasepool {
-                self.vocabularyViewModel = VocabularyViewModel(
-                    dictionaryService: self.serviceContainer.getDictionaryService(),
-                    userProgressService: self.serviceContainer.getUserProgressService(),
-                    errorHandler: self.serviceContainer.getErrorHandler()
-                )
-            }
-        }
+        self.intelligentRankingViewModel = IntelligentRankingViewModel(
+            articleService: serviceContainer.getArticleService(),
+            dictionaryService: serviceContainer.getDictionaryService(),
+            userProgressService: serviceContainer.getUserProgressService(),
+            errorHandler: serviceContainer.getErrorHandler()
+        )
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            guard let self = self else { return }
-            autoreleasepool {
-                self.readingViewModel = ReadingViewModel(
-                    articleService: self.serviceContainer.getArticleService(),
-                    userProgressService: self.serviceContainer.getUserProgressService(),
-                    dictionaryService: self.serviceContainer.getDictionaryService(),
-                    textProcessor: self.serviceContainer.getTextProcessor() as! TextProcessor,
-                    errorHandler: self.serviceContainer.getErrorHandler()
-                )
-            }
-        }
+        self.readingViewModel = ReadingViewModel(
+            articleService: serviceContainer.getArticleService(),
+            userProgressService: serviceContainer.getUserProgressService(),
+            dictionaryService: serviceContainer.getDictionaryService(),
+            textProcessor: serviceContainer.getTextProcessor(),
+            errorHandler: serviceContainer.getErrorHandler()
+        )
+        
+        self.settingsViewModel = SettingsViewModel(
+            userProgressService: serviceContainer.getUserProgressService(),
+            errorHandler: serviceContainer.getErrorHandler(),
+            cacheManager: serviceContainer.getCacheManager(),
+            coordinator: self
+        )
     }
     
     // MARK: - Setup
@@ -307,6 +353,13 @@ class AppCoordinator: ObservableObject {
         selectedTab = .vocabulary
     }
     
+    /// 开始词汇量测试
+    func startVocabularyTest() {
+        selectedTab = .vocabulary
+        // 通过通知触发词汇量测试
+        NotificationCenter.default.post(name: NSNotification.Name("StartVocabularyTest"), object: nil)
+    }
+    
     /// 完成词汇复习
     func finishVocabularyReview() {
         // 更新进度统计
@@ -426,8 +479,8 @@ class AppCoordinator: ObservableObject {
         isLoading = loading
     }
     
-    func setModelContext(_ context: ModelContext) {
-        serviceContainer.configure(with: context)
+    func setModelContext(_ context: ModelContext, appSettings: AppSettings) {
+        serviceContainer.configure(with: context, appSettings: appSettings)
         initializeViewModels()
     }
     

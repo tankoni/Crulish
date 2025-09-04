@@ -13,6 +13,7 @@ import Combine
 @MainActor
 class SettingsViewModel: ObservableObject {
     // MARK: - Published Properties
+    @Published var appSettings: AppSettings = AppSettings()
     @Published var userSettings: UserSettings = UserSettings()
     @Published var readingSettings: ReadingSettings = ReadingSettings()
     @Published var vocabularySettings: VocabularySettings = VocabularySettings()

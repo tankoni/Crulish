@@ -34,7 +34,7 @@ class ReadingViewModel: ObservableObject {
     let articleService: ArticleServiceProtocol
     private let userProgressService: UserProgressServiceProtocol
     private let dictionaryService: DictionaryServiceProtocol
-    let textProcessor: TextProcessor
+    let textProcessor: TextProcessorProtocol
     private let errorHandler: ErrorHandlerProtocol
     
     // MARK: - Timers
@@ -56,7 +56,7 @@ class ReadingViewModel: ObservableObject {
         articleService: ArticleServiceProtocol,
         userProgressService: UserProgressServiceProtocol,
         dictionaryService: DictionaryServiceProtocol,
-        textProcessor: TextProcessor,
+        textProcessor: TextProcessorProtocol,
         errorHandler: ErrorHandlerProtocol
     ) {
         self.articleService = articleService
@@ -183,7 +183,8 @@ class ReadingViewModel: ObservableObject {
             if let definitions = result.selectedDefinition {
                 let dictWord = DictionaryWord(
                     word: word,
-                    definitions: [definitions]
+                    definitions: [definitions],
+                    categories: nil
                 )
                 return [dictWord]
             }
@@ -208,6 +209,9 @@ class ReadingViewModel: ObservableObject {
                 let newWord = UserWord(word: word, context: context, sentence: sentence, selectedDefinition: currentWord.selectedDefinition)
                 
                 try await dictionaryService.addUnknownWord(newWord)
+                
+                // 实时更新词汇分类和学习跟踪
+                await updateWordLearningProgress(newWord)
                 
                 await MainActor.run {
                     self.onWordAdded?(newWord)
@@ -258,6 +262,10 @@ class ReadingViewModel: ObservableObject {
                     word: word.word,
                     articleId: article.id.uuidString
                 )
+                
+                // 实时更新词汇学习跟踪
+                await updateWordLearningProgress(word)
+                
             } catch {
                 errorHandler.handle(error, context: "ReadingViewModel.recordWordLookup")
             }
@@ -375,6 +383,110 @@ class ReadingViewModel: ObservableObject {
         totalReadingTime += minutes * 60.0
         userProgressService.addReadingTime(minutes)
         errorHandler.logSuccess("记录阅读时间: \(String(format: "%.1f", minutes))分钟")
+    }
+    
+    // MARK: - Learning Progress Tracking
+    private func updateWordLearningProgress(_ word: UserWord) async {
+        do {
+            // 更新词汇学习优先级
+            word.updateLearningPriority()
+            
+            // 记录学习会话
+            let sessionDuration = Date().timeIntervalSince(word.lastLookupDate)
+            word.recordStudySession(duration: sessionDuration)
+            
+            // 根据查询频率动态调整分类
+            await updateWordCategory(word)
+            
+            // 更新记忆强度
+            await updateMemoryStrength(word)
+            
+            // 发送学习进度更新通知
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("WordLearningProgressUpdated"),
+                    object: word
+                )
+            }
+            
+            errorHandler.logSuccess("更新词汇学习进度: \(word.word)")
+        } catch {
+            errorHandler.handle(error, context: "ReadingViewModel.updateWordLearningProgress")
+        }
+    }
+    
+    private func updateWordCategory(_ word: UserWord) async {
+        // 根据查询次数和掌握程度动态调整分类
+        var newCategories: [String] = []
+        
+        // 基于查询频率分类
+        switch word.lookupCount {
+        case 1:
+            newCategories.append("新学词汇")
+        case 2...5:
+            newCategories.append("学习中")
+        case 6...10:
+            newCategories.append("复习词汇")
+        default:
+            newCategories.append("重点词汇")
+        }
+        
+        // 基于掌握程度分类
+        switch word.masteryLevel {
+        case .unfamiliar:
+            newCategories.append("待掌握")
+        case .familiar:
+            newCategories.append("基本掌握")
+        case .mastered:
+            newCategories.append("已掌握")
+        }
+        
+        // 基于学习效率分类
+        if word.learningEfficiency >= 80 {
+            newCategories.append("高效学习")
+        } else if word.learningEfficiency >= 60 {
+            newCategories.append("正常学习")
+        } else {
+            newCategories.append("需要加强")
+        }
+        
+        // 基于记忆强度分类
+        if word.memoryStrength >= 0.8 {
+            newCategories.append("记忆牢固")
+        } else if word.memoryStrength >= 0.6 {
+            newCategories.append("记忆良好")
+        } else {
+            newCategories.append("记忆模糊")
+        }
+        
+        // 更新词汇分类（这里需要根据实际的UserWord模型结构调整）
+        // word.categories = newCategories
+    }
+    
+    private func updateMemoryStrength(_ word: UserWord) async {
+        // 基于时间间隔和查询频率更新记忆强度
+        let timeSinceLastLookup = Date().timeIntervalSince(word.lastLookupDate)
+        let daysSinceLastLookup = timeSinceLastLookup / (24 * 60 * 60)
+        
+        // 时间衰减因子
+        let decayFactor = exp(-daysSinceLastLookup / 7.0) // 7天半衰期
+        
+        // 查询频率增强因子
+        let frequencyFactor = min(1.0, Double(word.lookupCount) / 10.0)
+        
+        // 更新记忆强度
+        let newMemoryStrength = word.memoryStrength * decayFactor + frequencyFactor * 0.1
+        word.memoryStrength = max(0.0, min(1.0, newMemoryStrength))
+        
+        // 根据记忆强度调整复习间隔
+        if word.memoryStrength < 0.3 {
+            word.isMarkedForReview = true
+            word.updateReviewDate(basedOn: .unfamiliar)
+        } else if word.memoryStrength < 0.6 {
+            word.updateReviewDate(basedOn: .familiar)
+        } else {
+            word.updateReviewDate(basedOn: .mastered)
+        }
     }
     
     // MARK: - Article Actions
@@ -551,10 +663,7 @@ class ReadingViewModel: ObservableObject {
         }
     }
     
-    // 保持向后兼容的方法
-    func loadPDFFiles() async -> [URL] {
-        return await loadPDFFiles(for: nil)
-    }
+
 }
 
 // MARK: - Computed Properties

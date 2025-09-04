@@ -251,16 +251,20 @@ class HomeViewModel: ObservableObject {
         // 返回一些默认的学习建议
         return [
             StudyRecommendation(
-                type: .startLearning,
                 title: "开始今日学习",
                 description: "完成每日阅读目标",
-                priority: .high
+                priority: .high,
+                action: {
+                    // TODO: 实现开始学习逻辑
+                }
             ),
             StudyRecommendation(
-                type: .reviewWords,
                 title: "复习词汇",
                 description: "巩固已学词汇",
-                priority: .medium
+                priority: .medium,
+                action: {
+                    // TODO: 实现复习词汇逻辑
+                }
             )
         ]
     }
@@ -356,6 +360,10 @@ class HomeViewModel: ObservableObject {
     
     func selectProgressTab() {
         NotificationCenter.default.post(name: NSNotification.Name("SelectProgressTab"), object: nil)
+    }
+    
+    func startVocabularyTest() {
+        NotificationCenter.default.post(name: NSNotification.Name("StartVocabularyTest"), object: nil)
     }
     
     // MARK: - Reading Actions

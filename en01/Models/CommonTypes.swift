@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreGraphics
+import SwiftUI
 
 // MARK: - Article Category Types
 
@@ -59,9 +60,24 @@ struct TextElement: Codable, Identifiable {
     let bounds: CGRect
     let fontInfo: FontInfo
     let level: Int? // 用于标题层级
+    let layoutInfo: LayoutInfo? // 新增：布局信息
+    let textAlignment: TextAlignment? // 新增：文本对齐方式
+    let indentation: CGFloat? // 新增：缩进信息
     
     enum CodingKeys: String, CodingKey {
-        case content, type, bounds, fontInfo, level
+        case content, type, bounds, fontInfo, level, layoutInfo, textAlignment, indentation
+    }
+    
+    // 为了向后兼容，提供不包含新属性的初始化方法
+    init(content: String, type: ElementType, bounds: CGRect, fontInfo: FontInfo, level: Int? = nil, layoutInfo: LayoutInfo? = nil, textAlignment: TextAlignment? = nil, indentation: CGFloat? = nil) {
+        self.content = content
+        self.type = type
+        self.bounds = bounds
+        self.fontInfo = fontInfo
+        self.level = level
+        self.layoutInfo = layoutInfo
+        self.textAlignment = textAlignment
+        self.indentation = indentation
     }
 }
 
@@ -107,6 +123,106 @@ enum FontWeight: String, Codable {
     case black = "black"
 }
 
+/// 布局信息
+struct LayoutInfo: Codable {
+    let lineHeight: CGFloat
+    let paragraphSpacing: CGFloat
+    let margins: EdgeInsets
+    let columnCount: Int?
+    let columnSpacing: CGFloat?
+    let backgroundColor: String? // 颜色的十六进制表示
+    let borderInfo: BorderInfo?
+}
+
+/// 边框信息
+struct BorderInfo: Codable {
+    let width: CGFloat
+    let color: String // 颜色的十六进制表示
+    let style: BorderStyle
+}
+
+/// 边框样式
+enum BorderStyle: String, Codable {
+    case solid = "solid"
+    case dashed = "dashed"
+    case dotted = "dotted"
+    case none = "none"
+}
+
+/// 边距信息
+struct EdgeInsets: Codable {
+    let top: CGFloat
+    let leading: CGFloat
+    let bottom: CGFloat
+    let trailing: CGFloat
+    
+    init(top: CGFloat = 0, leading: CGFloat = 0, bottom: CGFloat = 0, trailing: CGFloat = 0) {
+        self.top = top
+        self.leading = leading
+        self.bottom = bottom
+        self.trailing = trailing
+    }
+}
+
+/// 文本对齐方式
+enum TextAlignment: String, Codable {
+    case leading = "leading"
+    case center = "center"
+    case trailing = "trailing"
+    case justified = "justified"
+    
+    var displayName: String {
+        switch self {
+        case .leading: return "左对齐"
+        case .center: return "居中对齐"
+        case .trailing: return "右对齐"
+        case .justified: return "两端对齐"
+        }
+    }
+    
+    /// 英文名称
+    var englishName: String {
+        switch self {
+        case .leading:
+            return "Leading"
+        case .center:
+            return "Center"
+        case .trailing:
+            return "Trailing"
+        case .justified:
+            return "Justified"
+        }
+    }
+    
+    /// 转换为SwiftUI的TextAlignment
+    func toSwiftUITextAlignment() -> SwiftUI.TextAlignment {
+        switch self {
+        case .leading:
+            return .leading
+        case .center:
+            return .center
+        case .trailing:
+            return .trailing
+        case .justified:
+            return .leading // SwiftUI不直接支持两端对齐，使用左对齐
+        }
+    }
+    
+    /// 转换为SwiftUI的Alignment
+    func toSwiftUIAlignment() -> SwiftUI.Alignment {
+        switch self {
+        case .leading:
+            return .leading
+        case .center:
+            return .center
+        case .trailing:
+            return .trailing
+        case .justified:
+            return .leading // SwiftUI不直接支持两端对齐，使用左对齐
+        }
+    }
+}
+
 /// 文本元数据
 struct TextMetadata: Codable {
     let totalPages: Int
@@ -114,6 +230,14 @@ struct TextMetadata: Codable {
     let sourceURL: URL?
     let language: String?
     let wordCount: Int
+}
+
+/// 文本块（用于PDF文本提取）
+struct TextBlock: Codable {
+    let content: String
+    let position: CGPoint
+    let size: CGSize
+    let elementType: ElementType
 }
 
 // MARK: - Display Mode Enum
@@ -493,6 +617,7 @@ enum TimeRange: String, CaseIterable, Codable {
     case day = "day"
     case week = "week"
     case month = "month"
+    case threeMonths = "threeMonths"
     case year = "year"
     case all = "all"
     
@@ -504,6 +629,8 @@ enum TimeRange: String, CaseIterable, Codable {
             return "本周"
         case .month:
             return "本月"
+        case .threeMonths:
+            return "三个月"
         case .year:
             return "今年"
         case .all:
@@ -519,6 +646,8 @@ enum TimeRange: String, CaseIterable, Codable {
             return "周"
         case .month:
             return "月"
+        case .threeMonths:
+            return "三月"
         case .year:
             return "年"
         case .all:
@@ -546,6 +675,10 @@ enum TimeRange: String, CaseIterable, Codable {
             let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
             let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth) ?? now
             return (startOfMonth, endOfMonth)
+            
+        case .threeMonths:
+            let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: now) ?? now
+            return (threeMonthsAgo, now)
             
         case .year:
             let startOfYear = calendar.dateInterval(of: .year, for: now)?.start ?? now

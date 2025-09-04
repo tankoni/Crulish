@@ -20,6 +20,7 @@ struct HybridReaderView: View {
     @State private var showingSettings = false
     @EnvironmentObject private var dictionaryService: DictionaryService
     @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
+    @State private var currentActiveMode: String = "text" // "text" 或 "pdf"
     @State private var selectedSentence = ""
     @State private var showingSentenceTranslation = false
     @State private var splitRatio: CGFloat = 0.5
@@ -51,6 +52,9 @@ struct HybridReaderView: View {
                             viewModel: viewModel
                         )
                         .frame(width: geometry.size.width * splitRatio)
+                        .onTapGesture {
+                            currentActiveMode = "pdf"
+                        }
                         
                         // 分割线
                         Rectangle()
@@ -70,6 +74,9 @@ struct HybridReaderView: View {
                             article: article
                         )
                         .frame(width: geometry.size.width * (1 - splitRatio))
+                        .onTapGesture {
+                            currentActiveMode = "text"
+                        }
                     }
                     
                 case .overlay:
@@ -80,6 +87,9 @@ struct HybridReaderView: View {
                             article: article,
                             viewModel: viewModel
                         )
+                        .onTapGesture {
+                            currentActiveMode = "pdf"
+                        }
                         
                         // 文本覆盖层
                         VStack {
@@ -114,12 +124,23 @@ struct HybridReaderView: View {
                                 lineSpacing: lineSpacing,
                                 onWordTap: handleWordTap,
                                 onSentenceLongPress: handleSentenceLongPress,
-                                viewModel: self.viewModel
+                                viewModel: self.viewModel,
+                                currentActiveMode: $currentActiveMode
                             )
                             .tag(pageIndex)
                         }
                     }
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                    
+                case .continuous:
+                    ContinuousTextView(
+                        structuredText: structuredText,
+                        article: article,
+                        fontSize: fontSize,
+                        lineSpacing: lineSpacing,
+                        onWordTap: handleWordTap,
+                        onSentenceLongPress: handleSentenceLongPress
+                    )
                 }
             }
             .background(Color(.systemBackground))
@@ -133,14 +154,24 @@ struct HybridReaderView: View {
                 splitRatio: $splitRatio
             )
         }
-        .sheet(isPresented: $wordInteractionCoordinator.showDetailedSheet) {
+        .sheet(isPresented: Binding(
+            get: { 
+                wordInteractionCoordinator.showDetailedSheet && 
+                shouldShowWordDefinitionSheet()
+            },
+            set: { newValue in
+                if !newValue {
+                    wordInteractionCoordinator.hideDetailedSheet()
+                }
+            }
+        )) {
             DetailedWordDefinitionView(
                 word: wordInteractionCoordinator.selectedWord,
                 onDismiss: {
                     wordInteractionCoordinator.hideDetailedSheet()
                 }
             )
-            .environmentObject(dictionaryService) // 假设移除多余参数，需根据实际代码调整
+            .environmentObject(dictionaryService)
         }
         .sheet(isPresented: $showingSentenceTranslation) {
             HybridSentenceTranslationSheet(
@@ -148,11 +179,33 @@ struct HybridReaderView: View {
                 onDismiss: { showingSentenceTranslation = false }
             )
         }
+        .onChange(of: wordInteractionCoordinator.currentInteractionMode) { _, newMode in
+            // 同步更新currentActiveMode以确保弹窗在正确的模式下显示
+            switch newMode {
+            case .text:
+                currentActiveMode = "text"
+            case .pdf:
+                currentActiveMode = "pdf"
+            }
+        }
     }
     
     // MARK: - 事件处理
     private func handleWordTap(_ word: String) {
+        // 根据当前活跃模式设置交互模式，保持一致性
+        let interactionMode: WordInteractionCoordinator.InteractionMode = currentActiveMode == "pdf" ? .pdf : .text
+        wordInteractionCoordinator.setInteractionMode(interactionMode)
         wordInteractionCoordinator.handleWordTap(word)
+    }
+    
+    /// 判断是否应该显示单词定义弹窗
+    private func shouldShowWordDefinitionSheet() -> Bool {
+        switch wordInteractionCoordinator.currentInteractionMode {
+        case .text:
+            return currentActiveMode == "text"
+        case .pdf:
+            return currentActiveMode == "pdf"
+        }
     }
     
     private func handleSentenceLongPress(_ sentence: String) {
@@ -186,12 +239,14 @@ enum HybridDisplayMode: String, CaseIterable {
     case sideBySide = "sideBySide"
     case overlay = "overlay"
     case tabbed = "tabbed"
+    case continuous = "continuous"
     
     var displayName: String {
         switch self {
         case .sideBySide: return "并排显示"
         case .overlay: return "覆盖显示"
         case .tabbed: return "标签页显示"
+        case .continuous: return "连续滚动"
         }
     }
     
@@ -200,6 +255,7 @@ enum HybridDisplayMode: String, CaseIterable {
         case .sideBySide: return "rectangle.split.2x1"
         case .overlay: return "square.stack"
         case .tabbed: return "rectangle.3.group"
+        case .continuous: return "scroll"
         }
     }
 }
@@ -237,8 +293,8 @@ struct HybridToolbar: View {
             
             Spacer()
             
-            // 页面导航
-            if hybridMode != .tabbed {
+            // 页面导航控件（连续滚动模式不显示）
+            if hybridMode != .tabbed && hybridMode != .continuous {
                 Button(action: onPreviousPage) {
                     Image(systemName: "chevron.left")
                         .font(.title2)
@@ -254,6 +310,13 @@ struct HybridToolbar: View {
                         .font(.title2)
                 }
                 .disabled(currentPage >= totalPages)
+            }
+            
+            // 连续滚动模式显示总页数
+            if hybridMode == .continuous {
+                Text("共 \(totalPages) 页")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             
             Spacer()
@@ -333,12 +396,18 @@ struct TabbedPageView: View {
     let viewModel: ProgressViewModel
     
     @State private var showPDF = true
+    @Binding var currentActiveMode: String
+    @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
     
     var body: some View {
         VStack(spacing: 0) {
             // 切换按钮
             HStack {
-                Button(action: { showPDF = true }) {
+                Button(action: { 
+                    showPDF = true
+                    currentActiveMode = "pdf"
+                    wordInteractionCoordinator.setInteractionMode(.pdf)
+                }) {
                     Text("PDF")
                         .font(.caption)
                         .padding(.horizontal, 12)
@@ -348,7 +417,11 @@ struct TabbedPageView: View {
                         .cornerRadius(6)
                 }
                 
-                Button(action: { showPDF = false }) {
+                Button(action: { 
+                    showPDF = false
+                    currentActiveMode = "text"
+                    wordInteractionCoordinator.setInteractionMode(.text)
+                }) {
                     Text("文本")
                         .font(.caption)
                         .padding(.horizontal, 12)
@@ -376,6 +449,16 @@ struct TabbedPageView: View {
                     article: article
                 )
             }
+        }
+        .onAppear {
+            // 初始化时设置正确的模式
+            currentActiveMode = showPDF ? "pdf" : "text"
+            wordInteractionCoordinator.setInteractionMode(showPDF ? .pdf : .text)
+        }
+        .onChange(of: showPDF) { _, newValue in
+            // 当切换标签时更新模式
+            currentActiveMode = newValue ? "pdf" : "text"
+            wordInteractionCoordinator.setInteractionMode(newValue ? .pdf : .text)
         }
     }
 }

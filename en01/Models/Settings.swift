@@ -50,6 +50,30 @@ class AppSettings: ObservableObject {
     @Published var showExamples: Bool = true
     @Published var dailyGoalMinutes: Int = 30
     
+    // AI翻译设置
+    @Published var selectedAIModel: AIModel = .gemini25flash // 优先使用Gemini
+    @Published var enableAITranslation: Bool = true
+    @Published var translationMode: TranslationMode = .word
+    
+    // Gemini API密钥（当前可用）
+    @Published var geminiAPIKey: String = "AIzaSyCuGzUTUY_s_lB4NmKULmDqD2Z_gWsSN8w"
+    @Published var geminiBackupAPIKey: String = "AIzaSyDPnQ0nL6aqJ6mVHTa-BZGbPy2Gd_JqHo0"
+    
+    // OpenAI API密钥（待用户配置）
+    @Published var openaiAPIKey: String = ""
+    
+    // Claude API密钥（待用户配置）
+    @Published var claudeAPIKey: String = ""
+    
+    // DeepSeek API密钥（待用户配置）
+    @Published var deepseekAPIKey: String = ""
+    
+    // Qwen API密钥（待用户配置）
+    @Published var qwenAPIKey: String = ""
+    
+    // 豆包 API密钥（待用户配置）
+    @Published var doubaoAPIKey: String = ""
+    
     // 通知设置
     @Published var enableNotifications: Bool = false
     @Published var dailyReminderTime: Date = Calendar.current.date(from: DateComponents(hour: 20, minute: 0)) ?? Date()
@@ -122,6 +146,20 @@ class AppSettings: ObservableObject {
         userDefaults.set(smartReviewReminder, forKey: "smartReviewReminder")
         userDefaults.set(showExamples, forKey: "showExamples")
         userDefaults.set(dailyGoalMinutes, forKey: "dailyGoalMinutes")
+        
+        // 保存AI翻译设置
+        userDefaults.set(selectedAIModel.rawValue, forKey: "selectedAIModel")
+        userDefaults.set(enableAITranslation, forKey: "enableAITranslation")
+        userDefaults.set(translationMode.rawValue, forKey: "translationMode")
+        
+        // 保存所有AI服务商API密钥
+        userDefaults.set(geminiAPIKey, forKey: "geminiAPIKey")
+        userDefaults.set(geminiBackupAPIKey, forKey: "geminiBackupAPIKey")
+        userDefaults.set(openaiAPIKey, forKey: "openaiAPIKey")
+        userDefaults.set(claudeAPIKey, forKey: "claudeAPIKey")
+        userDefaults.set(deepseekAPIKey, forKey: "deepseekAPIKey")
+        userDefaults.set(qwenAPIKey, forKey: "qwenAPIKey")
+        userDefaults.set(doubaoAPIKey, forKey: "doubaoAPIKey")
         
         userDefaults.set(enableNotifications, forKey: "enableNotifications")
         userDefaults.set(dailyReminderTime, forKey: "dailyReminderTime")
@@ -199,6 +237,27 @@ class AppSettings: ObservableObject {
         showExamples = userDefaults.object(forKey: "showExamples") as? Bool ?? true
         dailyGoalMinutes = userDefaults.object(forKey: "dailyGoalMinutes") as? Int ?? 30
         
+        // 加载AI翻译设置
+        selectedAIModel = AIModel(rawValue: userDefaults.string(forKey: "selectedAIModel") ?? "") ?? .gemini25flash
+        enableAITranslation = userDefaults.object(forKey: "enableAITranslation") as? Bool ?? true
+        translationMode = TranslationMode(rawValue: userDefaults.string(forKey: "translationMode") ?? "") ?? .word
+        
+        // 加载所有AI服务商API密钥
+        // 对于Gemini API密钥，如果UserDefaults中没有值或为空，则保持使用默认值
+        if let savedGeminiKey = userDefaults.string(forKey: "geminiAPIKey"), !savedGeminiKey.isEmpty {
+            geminiAPIKey = savedGeminiKey
+        }
+        if let savedGeminiBackupKey = userDefaults.string(forKey: "geminiBackupAPIKey"), !savedGeminiBackupKey.isEmpty {
+            geminiBackupAPIKey = savedGeminiBackupKey
+        }
+        
+        // 其他API密钥保持原有逻辑（默认为空，等待用户配置）
+        openaiAPIKey = userDefaults.string(forKey: "openaiAPIKey") ?? ""
+        claudeAPIKey = userDefaults.string(forKey: "claudeAPIKey") ?? ""
+        deepseekAPIKey = userDefaults.string(forKey: "deepseekAPIKey") ?? ""
+        qwenAPIKey = userDefaults.string(forKey: "qwenAPIKey") ?? ""
+        doubaoAPIKey = userDefaults.string(forKey: "doubaoAPIKey") ?? ""
+        
         enableNotifications = userDefaults.object(forKey: "enableNotifications") as? Bool ?? false
         dailyReminderTime = userDefaults.object(forKey: "dailyReminderTime") as? Date ?? Calendar.current.date(from: DateComponents(hour: 20, minute: 0)) ?? Date()
         reviewReminders = userDefaults.object(forKey: "reviewReminders") as? Bool ?? false
@@ -256,6 +315,11 @@ class AppSettings: ObservableObject {
         showExamples = true
         dailyGoalMinutes = 30
         
+        // 重置AI翻译设置
+        selectedAIModel = .gpt35turbo
+        enableAITranslation = true
+        translationMode = .word
+        
         enableNotifications = false
         dailyReminderTime = Calendar.current.date(from: DateComponents(hour: 20, minute: 0)) ?? Date()
         reviewReminders = false
@@ -303,12 +367,9 @@ enum FontFamily: String, CaseIterable {
     }
 }
 
-// 文本对齐
-enum TextAlignment: String, CaseIterable {
-    case leading = "左对齐"
-    case center = "居中"
-    case trailing = "右对齐"
-    
+// TextAlignment 转换扩展
+extension TextAlignment {
+    /// 转换为 SwiftUI HorizontalAlignment
     var alignment: HorizontalAlignment {
         switch self {
         case .leading:
@@ -317,9 +378,12 @@ enum TextAlignment: String, CaseIterable {
             return .center
         case .trailing:
             return .trailing
+        case .justified:
+            return .leading // justified 在 SwiftUI 中使用 leading
         }
     }
     
+    /// 转换为 SwiftUI TextAlignment
     var textAlignment: SwiftUI.TextAlignment {
         switch self {
         case .leading:
@@ -328,14 +392,13 @@ enum TextAlignment: String, CaseIterable {
             return .center
         case .trailing:
             return .trailing
+        case .justified:
+            return .leading // justified 在 SwiftUI 中使用 leading
         }
     }
     
-    var displayName: String {
-        return rawValue
-    }
-    
-    var iconName: String {
+    /// 获取对应的 SF Symbols 图标名称
+    public var iconName: String {
         switch self {
         case .leading:
             return "text.alignleft"
@@ -343,7 +406,14 @@ enum TextAlignment: String, CaseIterable {
             return "text.aligncenter"
         case .trailing:
             return "text.alignright"
+        case .justified:
+            return "text.justify"
         }
+    }
+    
+    /// 获取适用于设置界面的选项（排除 justified）
+    static var settingsOptions: [TextAlignment] {
+        return [.leading, .center, .trailing]
     }
 }
 
@@ -449,6 +519,215 @@ enum BackupFrequency: String, CaseIterable {
             return 30 * 24 * 60 * 60
         case .manual:
             return nil
+        }
+    }
+}
+
+// AI模型选择
+public enum AIModel: String, CaseIterable {
+    case gpt35turbo = "GPT-3.5 Turbo"
+    case gpt4 = "GPT-4"
+    case gpt4turbo = "GPT-4 Turbo"
+    case gpt4o = "GPT-4o"
+    case gpt4omini = "GPT-4o Mini"
+    case claude3haiku = "Claude 3 Haiku"
+    case claude3sonnet = "Claude 3 Sonnet"
+    case claude3opus = "Claude 3 Opus"
+    case claude35sonnet = "Claude 3.5 Sonnet"
+    // Gemini 2.5 系列（最新）
+    case gemini25pro = "Gemini 2.5 Pro"
+    case gemini25flash = "Gemini 2.5 Flash"
+    // Gemini 2.0 系列
+    case gemini20flash = "Gemini 2.0 Flash"
+    case gemini20flashSpark = "Gemini 2.0 Flash Spark"
+    // Gemini 1.5 系列（稳定版）
+    case gemini15pro = "Gemini 1.5 Pro"
+    case gemini15flash = "Gemini 1.5 Flash"
+    case deepseekV3 = "DeepSeek V3"
+    case qwenMax = "Qwen Max"
+    case doubaoLite = "豆包 Lite"
+    case doubaoPro = "豆包 Pro"
+    
+    public var displayName: String {
+        return rawValue
+    }
+    
+    public var description: String {
+        switch self {
+        case .gpt35turbo:
+            return "快速响应，适合日常翻译"
+        case .gpt4:
+            return "高质量翻译，理解能力强"
+        case .gpt4turbo:
+            return "最新模型，速度与质量兼备"
+        case .gpt4o:
+            return "多模态模型，支持图文理解"
+        case .gpt4omini:
+            return "轻量版GPT-4o，快速高效"
+        case .claude3haiku:
+            return "轻量快速，适合简单翻译"
+        case .claude3sonnet:
+            return "平衡性能，适合大多数场景"
+        case .claude3opus:
+            return "最高质量，适合复杂文本"
+        case .claude35sonnet:
+            return "最新Claude模型，性能卓越"
+        case .gemini25pro:
+            return "最新Gemini 2.5 Pro，性能卓越"
+        case .gemini25flash:
+            return "最新Gemini 2.5 Flash，快速高效"
+        case .gemini20flash:
+            return "Gemini 2.0 Flash，平衡性能"
+        case .gemini20flashSpark:
+            return "Gemini 2.0 Flash Spark，轻量快速"
+        case .gemini15pro:
+            return "Gemini 1.5 Pro，长文本处理"
+        case .gemini15flash:
+            return "Gemini 1.5 Flash，成本效益高"
+        case .deepseekV3:
+            return "国产开源模型，性价比高"
+        case .qwenMax:
+            return "阿里通义千问，中文优化"
+        case .doubaoLite:
+            return "字节豆包轻量版，快速翻译"
+        case .doubaoPro:
+            return "字节豆包专业版，高质量翻译"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .gpt35turbo, .gpt4, .gpt4turbo, .gpt4o, .gpt4omini:
+            return "brain.head.profile"
+        case .claude3haiku, .claude3sonnet, .claude3opus, .claude35sonnet:
+            return "sparkles"
+        case .gemini25pro, .gemini25flash, .gemini20flash, .gemini20flashSpark, .gemini15pro, .gemini15flash:
+            return "star.circle"
+        case .deepseekV3:
+            return "cpu"
+        case .qwenMax:
+            return "globe.asia.australia"
+        case .doubaoLite, .doubaoPro:
+            return "wand.and.rays"
+        }
+    }
+    
+    public var provider: TranslationProvider {
+        switch self {
+        case .gpt35turbo:
+            return .gpt35turbo
+        case .gpt4:
+            return .gpt4
+        case .gpt4turbo:
+            return .gpt4turbo
+        case .gpt4o:
+            return .gpt4o
+        case .gpt4omini:
+            return .gpt4omini
+        case .claude3haiku:
+            return .claude3haiku
+        case .claude3sonnet:
+            return .claude3sonnet
+        case .claude3opus:
+            return .claude3opus
+        case .claude35sonnet:
+            return .claude35sonnet
+        case .gemini25pro:
+            return .gemini25pro
+        case .gemini25flash:
+            return .gemini25flash
+        case .gemini20flash:
+            return .gemini20flash
+        case .gemini20flashSpark:
+            return .gemini20flashSpark
+        case .gemini15pro:
+            return .gemini15pro
+        case .gemini15flash:
+            return .gemini15flash
+        case .deepseekV3:
+            return .deepseekV3
+        case .qwenMax:
+            return .qwenMax
+        case .doubaoLite:
+            return .doubaoLite
+        case .doubaoPro:
+            return .doubaoPro
+        }
+    }
+    
+    public var modelIdentifier: String {
+        switch self {
+        case .gpt35turbo:
+            return "gpt-3.5-turbo"
+        case .gpt4:
+            return "gpt-4"
+        case .gpt4turbo:
+            return "gpt-4-turbo"
+        case .gpt4o:
+            return "gpt-4o"
+        case .gpt4omini:
+            return "gpt-4o-mini"
+        case .claude3haiku:
+            return "claude-3-haiku-20240307"
+        case .claude3sonnet:
+            return "claude-3-sonnet-20240229"
+        case .claude3opus:
+            return "claude-3-opus-20240229"
+        case .claude35sonnet:
+            return "claude-3-5-sonnet-20241022"
+        case .gemini25pro:
+            return "gemini-2.5-pro-001"
+        case .gemini25flash:
+            return "gemini-2.5-flash-001"
+        case .gemini20flash:
+            return "gemini-2.0-flash-001"
+        case .gemini20flashSpark:
+            return "gemini-2.0-flash-spark-001"
+        case .gemini15pro:
+            return "gemini-1.5-pro-001"
+        case .gemini15flash:
+            return "gemini-1.5-flash-001"
+        case .deepseekV3:
+            return "deepseek-chat"
+        case .qwenMax:
+            return "qwen-max"
+        case .doubaoLite:
+            return "doubao-lite-4k"
+        case .doubaoPro:
+            return "doubao-pro-4k"
+        }
+    }
+}
+
+// 翻译模式
+enum TranslationMode: String, CaseIterable {
+    case word = "word"
+    case sentence = "sentence"
+    
+    var displayName: String {
+        switch self {
+        case .word:
+            return "词"
+        case .sentence:
+            return "句"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .word:
+            return "textformat"
+        case .sentence:
+            return "text.alignleft"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .word:
+            return "翻译选中的单词"
+        case .sentence:
+            return "翻译选中的句段，包含上下文分析"
         }
     }
 }

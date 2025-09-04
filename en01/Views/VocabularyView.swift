@@ -10,6 +10,10 @@ import SwiftUI
 struct VocabularyView: View {
     @ObservedObject var viewModel: VocabularyViewModel
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var dictionaryService: DictionaryService
+    @Environment(UnifiedErrorHandler.self) private var errorHandler
+    @EnvironmentObject private var appCoordinator: AppCoordinator
+    @StateObject private var inputManager = UnifiedInputManager.shared
     
     init(viewModel: VocabularyViewModel) {
         self.viewModel = viewModel
@@ -32,17 +36,18 @@ struct VocabularyView: View {
     @State private var selectedDictionariesForImport: Set<String> = []
     @State private var personalDictionaryManager: PersonalDictionaryManager?
     @State private var kaoyanDictionaryImporter: KaoyanDictionaryImporter?
+    @State private var isShowingVocabularyTest = false // 控制词汇量测试界面显示
     
     var body: some View {
         NavigationView {
             mainContent
                 .navigationTitle("词汇宝典")
                 .navigationBarTitleDisplayMode(.large)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        toolbarMenu
-                    }
-                }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                toolbarMenu
+            }
         }
         .onAppear {
             // 避免重复加载数据
@@ -64,6 +69,16 @@ struct VocabularyView: View {
         }
         .onChange(of: sortOption) {
             sortWords()
+        }
+        .sheet(isPresented: $isShowingVocabularyTest) {
+            VocabularyTestView(
+                vocabularyTestService: appCoordinator.getVocabularyTestService(),
+                dictionaryService: dictionaryService,
+                errorHandler: errorHandler
+            )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartVocabularyTest"))) { _ in
+            isShowingVocabularyTest = true
         }
     }
     
@@ -101,6 +116,12 @@ struct VocabularyView: View {
                 viewModel.startReview()
             } label: {
                 Label("开始复习", systemImage: "brain.head.profile")
+            }
+            
+            Button {
+                startVocabularyTest()
+            } label: {
+                Label("词汇量测试", systemImage: "brain.head.profile.fill")
             }
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -150,10 +171,21 @@ struct VocabularyView: View {
             
             TextField("搜索单词或释义", text: $searchText)
                 .textFieldStyle(PlainTextFieldStyle())
+                .onTapGesture {
+                    inputManager.beginInputSession(
+                        fieldId: "vocabulary_search",
+                        priority: 1,
+                        inputType: .search
+                    )
+                }
+                .onSubmit {
+                    inputManager.endInputSession(fieldId: "vocabulary_search")
+                }
             
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
+                    inputManager.endInputSession(fieldId: "vocabulary_search")
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
@@ -253,7 +285,7 @@ struct VocabularyView: View {
                         WordRecordRow(wordRecord: wordRecord) {
                             viewModel.showWordDetail(wordRecord)
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
@@ -729,9 +761,29 @@ struct VocabularyView: View {
         guard let importer = kaoyanDictionaryImporter else { return }
         Task {
             do {
-                let dictionaries = try await importer.getAvailableDictionaries()
+                let kaoyanDictionaries = try await importer.getAvailableDictionaries()
+                let convertedDictionaries = kaoyanDictionaries.map { kaoyanDict in
+                    DictionaryInfo(
+                        name: kaoyanDict.name,
+                        displayName: kaoyanDict.name,
+                        fileName: kaoyanDict.fileName,
+                        filePath: "/path/to/\(kaoyanDict.fileName)",
+                        version: "1.0",
+                        description: kaoyanDict.description,
+                        language: "en",
+                        totalWords: kaoyanDict.wordCount,
+                        difficultyLevels: [1, 2, 3],
+                        categories: ["考研"],
+                        fileSize: 1024000,
+                        checksum: "checksum",
+                        isEnabled: !kaoyanDict.isImported,
+                        priority: 1,
+                        statistics: DictionaryStatistics(),
+                        configuration: DictionaryConfiguration()
+                    )
+                }
                 await MainActor.run {
-                    availableDictionaries = dictionaries
+                    availableDictionaries = convertedDictionaries
                 }
             } catch {
                 print("加载可用词典失败: \(error)")
@@ -799,6 +851,50 @@ struct VocabularyView: View {
             .padding(.horizontal)
             .padding(.top)
             
+            // 词汇量测试入口
+            VStack(spacing: 12) {
+                Button {
+                    startVocabularyTest()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: "brain.head.profile")
+                                    .font(.title2)
+                                    .foregroundColor(.purple)
+                                
+                                Text("词汇量测试")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            Text("测试您的英语词汇量水平")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.purple.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
             if personalDictionaries.isEmpty {
                 // 空状态视图
                 VStack(spacing: 16) {
@@ -857,6 +953,12 @@ struct VocabularyView: View {
                 }
             )
         }
+    }
+    
+    // MARK: - Navigation Methods
+    
+    private func startVocabularyTest() {
+        isShowingVocabularyTest = true
     }
 }
 
@@ -972,33 +1074,7 @@ struct ReviewStatItem: View {
     }
 }
 
-struct StatCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
-            
-            Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.primary)
-            
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-    }
-}
+// StatCard 已在 Components/StatCard.swift 中定义
 
 // MARK: - 子视图组件
 

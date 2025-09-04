@@ -35,21 +35,21 @@ struct DictionaryImportView: View {
                 // 词典列表
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(availableDictionaries.filter { !$0.isImported }, id: \.id) { dictionary in
+                        ForEach(availableDictionaries.filter { $0.isEnabled }, id: \.id) { dictionary in
                             DictionarySelectionCard(
                                 dictionary: dictionary,
-                                isSelected: selectedDictionaries.contains(dictionary.id),
+                                isSelected: selectedDictionaries.contains(dictionary.name),
                                 onToggle: {
-                                    if selectedDictionaries.contains(dictionary.id) {
-                                        selectedDictionaries.remove(dictionary.id)
+                                    if selectedDictionaries.contains(dictionary.name) {
+                                        selectedDictionaries.remove(dictionary.name)
                                     } else {
-                                        selectedDictionaries.insert(dictionary.id)
+                                        selectedDictionaries.insert(dictionary.name)
                                     }
                                 }
                             )
                         }
                         
-                        if availableDictionaries.filter({ !$0.isImported }).isEmpty {
+                        if availableDictionaries.filter({ $0.isEnabled }).isEmpty {
                             // 无可导入词典的提示
                             VStack(spacing: 16) {
                                 Image(systemName: "checkmark.circle.fill")
@@ -74,7 +74,7 @@ struct DictionaryImportView: View {
                 }
                 
                 // 底部操作按钮
-                if !availableDictionaries.filter({ !$0.isImported }).isEmpty {
+                if !availableDictionaries.filter({ $0.isEnabled }).isEmpty {
                     VStack(spacing: 12) {
                         Divider()
                         
@@ -140,20 +140,20 @@ struct DictionarySelectionCard: View {
                     }
                     
                     HStack {
-                        Label("\(dictionary.wordCount) 个单词", systemImage: "book.closed")
+                        Label("\(dictionary.totalWords) 个单词", systemImage: "book.closed")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
                         Spacer()
                         
-                        if dictionary.isImported {
-                            Text("已导入")
+                        if !dictionary.isEnabled {
+                            Text("已禁用")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundColor(.green)
+                                .foregroundColor(.orange)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
-                                .background(Color.green.opacity(0.1))
+                                .background(Color.orange.opacity(0.1))
                                 .cornerRadius(4)
                         }
                     }
@@ -179,23 +179,43 @@ struct DictionarySelectionCard: View {
     DictionaryImportView(
         availableDictionaries: [
             DictionaryInfo(
-                id: "kaoyan_core",
                 name: "考研核心词汇",
+                displayName: "考研核心词汇",
                 fileName: "kaoyan_core.json",
+                filePath: "/path/to/kaoyan_core.json",
+                version: "1.0",
                 description: "包含考研英语核心词汇，适合备考使用",
-                wordCount: 1500,
-                isImported: false
+                language: "en",
+                totalWords: 1500,
+                difficultyLevels: [1, 2, 3],
+                categories: ["考研", "核心词汇"],
+                fileSize: 1024000,
+                checksum: "abc123",
+                isEnabled: true,
+                priority: 1,
+                statistics: DictionaryStatistics(),
+                configuration: DictionaryConfiguration()
             ),
             DictionaryInfo(
-                id: "kaoyan_advanced",
                 name: "考研高频词汇",
+                displayName: "考研高频词汇",
                 fileName: "kaoyan_advanced.json",
+                filePath: "/path/to/kaoyan_advanced.json",
+                version: "1.0",
                 description: "考研英语高频出现的重点词汇",
-                wordCount: 800,
-                isImported: true
+                language: "en",
+                totalWords: 800,
+                difficultyLevels: [2, 3],
+                categories: ["考研", "高频词汇"],
+                fileSize: 512000,
+                checksum: "def456",
+                isEnabled: true,
+                priority: 2,
+                statistics: DictionaryStatistics(),
+                configuration: DictionaryConfiguration()
             )
         ],
-        selectedDictionaries: .constant(["kaoyan_core"]),
+        selectedDictionaries: Binding.constant(["kaoyan_core"]),
         onImport: {},
         onCancel: {}
     )

@@ -17,7 +17,7 @@ struct PerformanceTests {
         let mockUserProgressService = MockUserProgressService()
         let mockErrorHandler = MockErrorHandler()
         
-        let viewModel = HomeViewModel(
+        let viewModel = await HomeViewModel(
             articleService: mockService,
             userProgressService: mockUserProgressService,
             errorHandler: mockErrorHandler
@@ -42,7 +42,7 @@ struct PerformanceTests {
         let mockUserProgressService = MockUserProgressService()
         let mockErrorHandler = MockErrorHandler()
         
-        let viewModel = VocabularyViewModel(
+        let viewModel = await VocabularyViewModel(
             dictionaryService: mockDictionaryService,
             userProgressService: mockUserProgressService,
             errorHandler: mockErrorHandler
@@ -54,7 +54,9 @@ struct PerformanceTests {
         let startTime = Date()
         
         for i in 0..<100 {
-            viewModel.searchText = "test\(i)"
+            await MainActor.run {
+                viewModel.searchText = "test\(i)"
+            }
         }
         
         let endTime = Date()
@@ -71,16 +73,8 @@ struct PerformanceTests {
         let startTime = Date()
         
         // 并发加载多个文章
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<10 {
-                group.addTask {
-                    do {
-                        let _ = try await mockService.getArticles()
-                    } catch {
-                        // Handle error
-                    }
-                }
-            }
+        for _ in 0..<10 {
+            let _ = await mockService.getAllArticles()
         }
         
         let endTime = Date()
@@ -97,7 +91,7 @@ struct PerformanceTests {
         let startTime = Date()
         
         for word in words {
-            let _ = try await mockService.lookupWord(word)
+            let _ = await mockService.lookupWord(word, context: "test context")
         }
         
         let endTime = Date()
@@ -117,7 +111,7 @@ struct PerformanceTests {
         for i in 0..<1000 {
             let key = "test_key_\(i)"
             let value = "test_value_\(i)"
-            cacheManager.set(key: key, value: value, expiration: .seconds(300))
+            cacheManager.set(key, value: value, expiration: 300)
         }
         
         let writeEndTime = Date()
@@ -131,7 +125,7 @@ struct PerformanceTests {
         
         for i in 0..<1000 {
             let key = "test_key_\(i)"
-            let _: String? = cacheManager.get(key: key)
+            let _: String? = cacheManager.get(key, type: String.self)
         }
         
         let readEndTime = Date()
@@ -150,13 +144,13 @@ struct PerformanceTests {
         for i in 0..<10000 {
             let key = "large_key_\(i)"
             let value = String(repeating: "x", count: 1000) // 1KB per item
-            cacheManager.set(key: key, value: value, expiration: .seconds(300))
+            cacheManager.set(key, value: value, expiration: 300)
         }
         
         let midMemory = getMemoryUsage()
         
         // 清理缓存
-        cacheManager.removeAll()
+        cacheManager.clearAll()
         
         // 等待内存回收
         try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
@@ -174,7 +168,7 @@ struct PerformanceTests {
         let mockUserProgressService = MockUserProgressService()
         let mockErrorHandler = MockErrorHandler()
         
-        let viewModel = HomeViewModel(
+        let viewModel = await HomeViewModel(
             articleService: mockArticleService,
             userProgressService: mockUserProgressService,
             errorHandler: mockErrorHandler
@@ -186,9 +180,11 @@ struct PerformanceTests {
         
         // 模拟快速的UI更新
         for i in 0..<100 {
-            viewModel.searchText = "search\(i)"
-            viewModel.selectedYear = i % 2 == 0 ? "2023" : "2024"
-            viewModel.selectedDifficulty = i % 3 == 0 ? "简单" : "中等"
+            await MainActor.run {
+                viewModel.searchText = "search\(i)"
+                viewModel.selectedYear = i % 2 == 0 ? "2023" : "2024"
+                viewModel.selectedDifficulty = i % 3 == 0 ? "简单" : "中等"
+            }
         }
         
         let endTime = Date()
@@ -205,7 +201,7 @@ struct PerformanceTests {
         let mockTextProcessor = MockTextProcessor()
         let mockErrorHandler = MockErrorHandler()
         
-        let viewModel = ReadingViewModel(
+        let viewModel = await ReadingViewModel(
             articleService: mockArticleService,
             userProgressService: mockUserProgressService,
             dictionaryService: mockDictionaryService,
@@ -214,24 +210,23 @@ struct PerformanceTests {
         )
         
         let testArticle = Article(
-            id: "test-1",
-            title: "Test Article",
-            content: "Test content",
-            year: 2023,
-            examType: .english1,
+            title: "测试文章",
+            content: "这是一篇测试文章的内容。",
+            year: 2024,
+            examType: "考研一",
             difficulty: .medium,
-            wordCount: 100,
-            estimatedReadingTime: 5
+            topic: "测试主题",
+            imageName: "test_image"
         )
         
-        viewModel.startReading(article: testArticle)
+        await viewModel.startReading(testArticle)
         
         let startTime = Date()
         
         // 模拟频繁的进度更新
         for i in 0..<100 {
             let progress = Double(i) / 100.0
-            viewModel.updateReadingProgress(progress)
+            await viewModel.updateReadingProgress(progress)
         }
         
         let endTime = Date()
@@ -249,7 +244,7 @@ struct PerformanceTests {
         
         // 模拟频繁的进度保存
         for i in 0..<50 {
-            try await mockService.updateReadingTime(duration: Double(i))
+            mockService.addReadingTime(Double(i))
         }
         
         let endTime = Date()
@@ -266,22 +261,19 @@ struct PerformanceTests {
         
         // 批量添加词汇
         for i in 0..<100 {
-            let word = Word(
-                word: "testword\(i)",
-                definitions: ["Definition \(i)"],
-                pronunciation: "/test\(i)/",
-                partOfSpeech: "noun",
-                examples: ["Example \(i)"],
-                difficulty: .medium,
-                frequency: 0.5,
-                mastery: .unfamiliar,
-                dateAdded: Date(),
-                lastReviewed: nil,
-                reviewCount: 0,
-                correctCount: 0,
-                tags: ["test"]
+            let wordDefinition = WordDefinition(
+                partOfSpeech: .noun,
+                meaning: "Definition \(i)",
+                englishMeaning: "English definition \(i)",
+                examples: ["Example \(i)"]
             )
-            try await mockService.addWord(word)
+            let userWord = UserWord(
+                word: "testword\(i)",
+                context: "Test context \(i)",
+                sentence: "This is a test sentence with testword\(i).",
+                selectedDefinition: wordDefinition
+            )
+            try await mockService.addWord(userWord)
         }
         
         let endTime = Date()

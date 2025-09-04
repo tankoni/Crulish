@@ -59,6 +59,8 @@ class VocabularyViewModel: ObservableObject {
         self.errorHandler = errorHandler
         
         setupSearchDebounce()
+        setupNotificationObservers()
+        setupLearningProgressObserver()
         loadVocabulary()
         loadStatistics()
     }
@@ -70,6 +72,67 @@ class VocabularyViewModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.filterVocabulary()
             }
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleVocabularyTestCompleted(_:)),
+            name: NSNotification.Name("VocabularyTestCompleted"),
+            object: nil
+        )
+    }
+    
+    private func setupLearningProgressObserver() {
+        // 监听词汇学习进度更新通知
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("WordLearningProgressUpdated"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleLearningProgressUpdate(notification)
+        }
+    }
+    
+    @objc private func handleVocabularyTestCompleted(_ notification: Notification) {
+        Task {
+            await MainActor.run {
+                // 清除缓存并重新加载数据
+                self.vocabularyCache = nil
+                self.statsCache = nil
+                self.loadVocabulary()
+                self.loadStatistics()
+                
+                self.errorHandler.logSuccess("词汇测试完成，数据已同步更新")
+            }
+        }
+    }
+    
+    private func handleLearningProgressUpdate(_ notification: Notification) {
+        guard let updatedWord = notification.object as? UserWord else { return }
+        
+        // 更新本地词汇列表中的对应单词
+        if let index = vocabulary.firstIndex(where: { $0.id == updatedWord.id }) {
+            vocabulary[index] = updatedWord
+        }
+        
+        // 清除缓存并重新筛选
+        vocabularyCache = nil
+        statsCache = nil
+        filterVocabulary()
+        
+        // 异步更新统计数据
+        Task {
+            await MainActor.run {
+                self.loadStatistics()
+            }
+        }
+        
+        errorHandler.logSuccess("实时更新词汇学习进度: \(updatedWord.word)")
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Data Loading

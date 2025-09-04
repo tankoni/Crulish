@@ -8,8 +8,8 @@
 import Foundation
 import SwiftData
 
-/// 词典库信息
-struct DictionaryInfo {
+/// 考研词典库信息
+struct KaoyanDictionaryInfo {
     let id: String
     let name: String
     let fileName: String
@@ -18,10 +18,10 @@ struct DictionaryInfo {
     let isImported: Bool
     
     static let availableDictionaries = [
-        DictionaryInfo(id: "kaoyan_1", name: "考研核心词汇 1", fileName: "KaoYan_1.json", description: "考研英语核心词汇第一册", wordCount: 1500, isImported: false),
-        DictionaryInfo(id: "kaoyan_2", name: "考研核心词汇 2", fileName: "KaoYan_2.json", description: "考研英语核心词汇第二册", wordCount: 1500, isImported: false),
-        DictionaryInfo(id: "kaoyan_3", name: "考研核心词汇 3", fileName: "KaoYan_3.json", description: "考研英语核心词汇第三册", wordCount: 1500, isImported: false),
-        DictionaryInfo(id: "kaoyan_luan_1", name: "考研乱序词汇 1", fileName: "KaoYanluan_1.json", description: "考研英语乱序词汇第一册", wordCount: 2000, isImported: false)
+        KaoyanDictionaryInfo(id: "kaoyan_1", name: "考研核心词汇 1", fileName: "KaoYan_1.json", description: "考研英语核心词汇第一册", wordCount: 1500, isImported: false),
+        KaoyanDictionaryInfo(id: "kaoyan_2", name: "考研核心词汇 2", fileName: "KaoYan_2.json", description: "考研英语核心词汇第二册", wordCount: 1500, isImported: false),
+        KaoyanDictionaryInfo(id: "kaoyan_3", name: "考研核心词汇 3", fileName: "KaoYan_3.json", description: "考研英语核心词汇第三册", wordCount: 1500, isImported: false),
+        KaoyanDictionaryInfo(id: "kaoyan_luan_1", name: "考研乱序词汇 1", fileName: "KaoYanluan_1.json", description: "考研英语乱序词汇第一册", wordCount: 2000, isImported: false)
     ]
 }
 
@@ -34,13 +34,13 @@ class KaoyanDictionaryImporter {
     }
     
     /// 获取可用的词典列表
-    func getAvailableDictionaries() async throws -> [DictionaryInfo] {
-        var dictionaries = DictionaryInfo.availableDictionaries
+    func getAvailableDictionaries() async throws -> [KaoyanDictionaryInfo] {
+        var dictionaries = KaoyanDictionaryInfo.availableDictionaries
         
         // 检查每个词典的导入状态
         for i in 0..<dictionaries.count {
             let isImported = try await isDictionaryImported(dictionaries[i].id)
-            dictionaries[i] = DictionaryInfo(
+            dictionaries[i] = KaoyanDictionaryInfo(
                 id: dictionaries[i].id,
                 name: dictionaries[i].name,
                 fileName: dictionaries[i].fileName,
@@ -64,7 +64,7 @@ class KaoyanDictionaryImporter {
     
     /// 导入选定的词典
     func importSelectedDictionaries(_ dictionaryIds: [String]) async throws {
-        let availableDictionaries = DictionaryInfo.availableDictionaries
+        let availableDictionaries = KaoyanDictionaryInfo.availableDictionaries
         let selectedDictionaries = availableDictionaries.filter { dictionaryIds.contains($0.id) }
         
         print("[INFO][KaoyanDictionaryImporter] 准备导入 \(selectedDictionaries.count) 个词典文件")
@@ -86,7 +86,7 @@ class KaoyanDictionaryImporter {
     
     /// 导入所有考研词典文件（保持向后兼容）
     func importAllDictionaries() async throws {
-        let allDictionaryIds = DictionaryInfo.availableDictionaries.map { $0.id }
+        let allDictionaryIds = KaoyanDictionaryInfo.availableDictionaries.map { $0.id }
         try await importSelectedDictionaries(allDictionaryIds)
     }
     
