@@ -69,16 +69,19 @@ struct StructuredTextView: View {
                 }
                 .padding()
             }
-            .animation(.easeInOut(duration: 0.3), value: currentPage)
-        }
-        .sheet(isPresented: $wordInteractionCoordinator.showDetailedSheet) {
-            DetailedWordDefinitionView(
-                word: wordInteractionCoordinator.selectedWord,
-                onDismiss: {
-                    wordInteractionCoordinator.hideDetailedSheet()
-                }
-            )
-            .environmentObject(dictionaryService)
+            .sheet(isPresented: $wordInteractionCoordinator.showDetailedSheet) {
+                DetailedWordDefinitionView(
+                    word: wordInteractionCoordinator.selectedWord,
+                    onDismiss: {
+                        Task {
+                            await MainActor.run {
+                                wordInteractionCoordinator.showDetailedSheet = false
+                            }
+                        }
+                    }
+                )
+                .environmentObject(dictionaryService)
+            }
         }
         .sheet(isPresented: $showingSentenceTranslation) {
             StructuredSentenceTranslationSheet(
@@ -93,20 +96,29 @@ struct StructuredTextView: View {
         )
         }
         .overlay(
-            // 轻量级单词提示tooltip - 只在顶层显示一次
+            // 单词提示层
             ZStack {
                 if wordInteractionCoordinator.showTooltip {
                     WordTooltipView(
                         word: wordInteractionCoordinator.selectedWord,
-                        isLoading: wordInteractionCoordinator.isLoading,
-                        phonetic: wordInteractionCoordinator.simplePhonetic,
-                        definition: wordInteractionCoordinator.simpleDefinition,
+                        isLoading: false,
+                        phonetic: nil,
+                        definition: "定义加载中...",
                         wordPosition: wordInteractionCoordinator.selectedWordPosition,
                         onViewMore: {
-                            wordInteractionCoordinator.showDetailedDefinition()
+                            Task {
+                                await MainActor.run {
+                                    wordInteractionCoordinator.showTooltip = false
+                                    wordInteractionCoordinator.showDetailedSheet = true
+                                }
+                            }
                         },
                         onDismiss: {
-                            wordInteractionCoordinator.hideTooltip()
+                            Task {
+                                await MainActor.run {
+                                    wordInteractionCoordinator.showTooltip = false
+                                }
+                            }
                         }
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -118,7 +130,10 @@ struct StructuredTextView: View {
     
     // MARK: - 事件处理
     private func handleWordTap(_ word: String) {
-        wordInteractionCoordinator.handleWordTap(word, at: CGPoint.zero)
+        // 使用统一的协调器处理单词交互
+        Task {
+            await wordInteractionCoordinator.handleWordTap(word, at: CGPoint.zero)
+        }
     }
     
     private func handleSentenceLongPress(_ sentence: String) {
@@ -532,113 +547,52 @@ struct StructuredElementView: View {
     }
     
     private func extractWordFromTap(at location: CGPoint) -> String? {
-        // 使用TextProcessor提取单词
-        let words = textProcessor.extractWords(element.content)
+        // 简化的单词提取逻辑 - 从文本中提取有效单词
+        let words = extractWords(from: element.content)
         
         // 如果只有一个单词，直接返回
         if words.count == 1 {
-            return words.first
+            return cleanWord(words.first ?? "")
         }
         
-        // 根据点击位置智能选择单词
-        return selectWordByPosition(words: words, tapLocation: location)
+        // 对于多个单词，返回第一个有效单词（简化处理）
+        for word in words {
+            let cleaned = cleanWord(word)
+            if isValidWord(cleaned) {
+                return cleaned
+            }
+        }
+        
+        return nil
     }
     
     private func extractSentenceFromTap(at location: CGPoint) -> String? {
-        // 使用改进的句子提取方法
+        // 简化处理：返回整个元素内容作为句子
         let sentences = textProcessor.splitIntoSentences(element.content)
-        
-        // 如果只有一个句子，直接返回
-        if sentences.count == 1 {
-            return sentences.first
-        }
-        
-        // 改进的字符位置估算
-        let estimatedCharacterWidth: CGFloat = fontSize * 0.5 // 根据字体大小调整
-        let clickPosition = Int(location.x / estimatedCharacterWidth)
-        
-        // 使用TextProcessor的新方法进行精确提取
-        return textProcessor.extractSentenceAtPosition(clickPosition, from: element.content)
+        return sentences.first ?? element.content
     }
     
-    /// 根据点击位置智能选择单词
-    private func selectWordByPosition(words: [String], tapLocation: CGPoint) -> String? {
-        // 如果没有单词，返回nil
-        guard !words.isEmpty else { return nil }
-        
-        // 创建一个临时的Text视图来测量单词位置
-        let content = element.content
-        let wordsInContent = content.components(separatedBy: CharacterSet.whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-        
-        // 估算每个单词的位置
-        var currentX: CGFloat = 0
-        let spaceWidth: CGFloat = 6 // 估算空格宽度
-        
-        for (_, wordInContent) in wordsInContent.enumerated() {
-            let cleanWord = textProcessor.cleanWord(wordInContent)
-            
-            // 估算单词宽度（简化计算）
-            let wordWidth = CGFloat(cleanWord.count) * 8 // 每个字符约8点宽度
-            
-            // 检查点击位置是否在这个单词范围内
-            if tapLocation.x >= currentX && tapLocation.x <= currentX + wordWidth {
-                // 验证这个单词是否在提取的有效单词列表中
-                if words.contains(cleanWord) && isValidWord(cleanWord) {
-                    return cleanWord
-                }
-            }
-            
-            currentX += wordWidth + spaceWidth
-        }
-        
-        // 如果无法精确匹配，返回第一个有效单词
-        return words.first { word in
-            word.count > 1 && !word.isEmpty && isValidWord(word)
-        }
+    private func cleanWord(_ word: String) -> String {
+        return word.trimmingCharacters(in: .punctuationCharacters)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
     
-    /// 验证是否为有效的可查词单词
     private func isValidWord(_ word: String) -> Bool {
-        let cleanedWord = textProcessor.cleanWord(word)
-        
-        // 检查是否为空或太短
-        guard !cleanedWord.isEmpty && cleanedWord.count > 1 else {
-            return false
-        }
-        
-        // 检查是否包含字母
-        guard cleanedWord.rangeOfCharacter(from: CharacterSet.letters) != nil else {
-            return false
-        }
-        
-        // 检查是否包含中文字符
-        let chineseCharacterSet = CharacterSet(charactersIn: "\u{4e00}-\u{9fff}")
-        if cleanedWord.rangeOfCharacter(from: chineseCharacterSet) != nil {
-            return false
-        }
-        
-        // 检查是否为纯数字
-        if cleanedWord.rangeOfCharacter(from: CharacterSet.decimalDigits) != nil &&
-           cleanedWord.rangeOfCharacter(from: CharacterSet.letters) == nil {
-            return false
-        }
-        
-        // 检查是否只包含英文字符
-        let nonEnglishCount = cleanedWord.filter { char in
-            !char.isASCII || (!char.isLetter && !char.isNumber)
-        }.count
-        if nonEnglishCount > 0 {
-            return false
-        }
-        
-        // 检查是否为标题类型的元素（通常不需要查词）
-        let elementType = element.type
-        if elementType == .title || elementType == .subtitle {
-            return false
-        }
-        
-        return true
+        // 检查单词是否有效（长度大于1且不是停用词）
+        return word.count > 1 && !isStopWord(word) && word.allSatisfy { $0.isLetter }
+    }
+    
+    /// 检查是否为停用词
+    private func isStopWord(_ word: String) -> Bool {
+        let stopWords = Set([
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+            "of", "with", "by", "is", "are", "was", "were", "be", "been", "have",
+            "has", "had", "do", "does", "did", "will", "would", "could", "should",
+            "may", "might", "can", "must", "shall", "this", "that", "these", "those",
+            "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them"
+        ])
+        return stopWords.contains(word.lowercased())
     }
 }
 
@@ -1020,7 +974,8 @@ struct StructuredParagraphTranslationSheet: View {
     
     private func loadTranslation() {
         // 模拟加载翻译
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2秒延迟
             translation = "这里是段落的中文翻译..."
             isLoading = false
         }

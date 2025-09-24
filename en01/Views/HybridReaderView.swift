@@ -28,7 +28,7 @@ struct HybridReaderView: View {
     @State private var lineSpacing: CGFloat = 6
     
     var body: some View {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
                 // 混合模式工具栏
                 HybridToolbar(
                     hybridMode: $hybridMode,
@@ -39,7 +39,6 @@ struct HybridReaderView: View {
                     onPreviousPage: previousPage,
                     onNextPage: nextPage
                 )
-            
             // 混合内容视图
             GeometryReader { geometry in
                 switch hybridMode {
@@ -195,7 +194,7 @@ struct HybridReaderView: View {
         // 根据当前活跃模式设置交互模式，保持一致性
         let interactionMode: WordInteractionCoordinator.InteractionMode = currentActiveMode == "pdf" ? .pdf : .text
         wordInteractionCoordinator.setInteractionMode(interactionMode)
-        wordInteractionCoordinator.handleWordTap(word)
+        wordInteractionCoordinator.handleWordTap(word, at: CGPoint.zero, context: nil, articleId: article.id)
     }
     
     /// 判断是否应该显示单词定义弹窗
@@ -598,7 +597,8 @@ struct HybridSentenceTranslationSheet: View {
     }
     
     private func loadTranslation() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5秒
             translation = "这里是句子的中文翻译..."
             isLoading = false
         }

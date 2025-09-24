@@ -17,7 +17,7 @@ class ProgressViewModel: ObservableObject {
     @Published var weeklyStats: WeeklyStatistics = WeeklyStatistics()
     @Published var monthlyStats: MonthlyStatistics = MonthlyStatistics()
     @Published var overallStats: OverallStatistics = OverallStatistics()
-    @Published var readingStats: ReadingStatistics = ReadingStatistics()
+    @Published var readingStats: ReadingStatisticsUI = ReadingStatisticsUI()
     @Published var vocabularyStats: VocabularyProgressStats = VocabularyProgressStats()
     @Published var achievementStats: AchievementStatistics = AchievementStatistics()
     
@@ -142,8 +142,18 @@ class ProgressViewModel: ObservableObject {
     
     private func loadReadingStatistics() async {
         do {
-            let stats = try await articleService.getReadingStatistics()
-            self.readingStats = stats
+            let domainStats = try await articleService.getReadingStatistics()
+            // 将领域模型映射到UI模型
+            let uiStats = ReadingStatisticsUI(
+                completedArticles: domainStats.totalArticlesRead,
+                inProgressArticles: 0, // 领域模型中没有此字段，设为默认值
+                bookmarkedArticles: 0, // 领域模型中没有此字段，设为默认值
+                averageReadingTime: domainStats.totalReadingTime / max(1, TimeInterval(domainStats.totalArticlesRead)),
+                favoriteTopics: domainStats.favoriteCategories,
+                difficultyDistribution: [:], // 领域模型中没有此字段，设为默认值
+                yearDistribution: [:] // 领域模型中没有此字段，设为默认值
+            )
+            self.readingStats = uiStats
             errorHandler.logSuccess("加载阅读统计成功")
         } catch {
             errorHandler.handle(error, context: "ProgressViewModel.loadReadingStatistics")
@@ -419,7 +429,7 @@ struct OverallStatistics {
     var averageReadingSpeed: Double = 0
 }
 
-struct ReadingStatistics {
+struct ReadingStatisticsUI {
     var completedArticles: Int = 0
     var inProgressArticles: Int = 0
     var bookmarkedArticles: Int = 0
@@ -446,10 +456,10 @@ struct AchievementStatistics {
     var recentAchievements: [String] = []
     var nextMilestones: [String] = []
     var longestStreak: Int = 0
-    var recentBadges: [AchievementBadge] = []
+    var recentBadges: [AchievementBadgeUI] = []
 }
 
-struct AchievementBadge: Identifiable, Codable {
+struct AchievementBadgeUI: Identifiable, Codable {
     let id = UUID()
     let name: String
     let iconName: String
@@ -490,6 +500,6 @@ extension TodayStatistics: Codable {}
 extension WeeklyStatistics: Codable {}
 extension MonthlyStatistics: Codable {}
 extension OverallStatistics: Codable {}
-extension ReadingStatistics: Codable {}
+extension ReadingStatisticsUI: Codable {}
 extension VocabularyProgressStats: Codable {}
 extension AchievementStatistics: Codable {}

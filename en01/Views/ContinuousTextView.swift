@@ -302,7 +302,7 @@ struct ContinuousTextElement: View {
             content: "示例内容",
             year: 2023,
             examType: "考研一",
-            difficulty: .medium,
+            difficulty: ArticleDifficulty.medium,
             topic: "阅读理解",
             imageName: "sample"
         ),
@@ -312,7 +312,6 @@ struct ContinuousTextElement: View {
         onSentenceLongPress: { sentence in print("Sentence long pressed: \(sentence)") }
     )
     .environmentObject(WordInteractionCoordinator(
-        dictionaryService: MockDictionaryService(),
-        translationService: MockTranslationService()
+        dictionaryService: MockDictionaryService()
     ))
 }

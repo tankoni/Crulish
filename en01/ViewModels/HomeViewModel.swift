@@ -274,7 +274,7 @@ class HomeViewModel: ObservableObject {
         // 从用户进度服务获取待复习词汇数量
         do {
             let vocabularyStats = try await userProgressService.getVocabularyStatistics()
-            return vocabularyStats.wordsNeedingReview
+            return vocabularyStats.reviewingWords
         } catch {
             errorHandler.handle(error, context: "HomeViewModel.getWordsForReviewCount")
             return 0

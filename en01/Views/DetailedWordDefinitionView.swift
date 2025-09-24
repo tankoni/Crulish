@@ -707,7 +707,7 @@ struct TranslationSection: View {
                 Spacer()
                 
                 Button(action: {
-                    wordInteractionCoordinator.handleWordTranslation(word)
+                    wordInteractionCoordinator.handleWordTap(word, at: .zero)
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "globe")

@@ -30,11 +30,11 @@ class VocabularyViewModel: ObservableObject {
     @Published var reviewStats: ReviewStats = ReviewStats()
     
     // MARK: - Statistics
-    @Published var vocabularyStats: VocabularyStatistics = VocabularyStatistics()
+    @Published var vocabularyStats: VocabularyStatisticsUI = VocabularyStatisticsUI()
     
     // MARK: - Cache Properties
     private var vocabularyCache: (words: [UserWord], timestamp: Date)?
-    private var statsCache: (stats: VocabularyStatistics, timestamp: Date)?
+    private var statsCache: (stats: VocabularyStatisticsUI, timestamp: Date)?
     private let cacheValidityDuration: TimeInterval = 300 // 5分钟
     
     // MARK: - Services
@@ -169,15 +169,38 @@ class VocabularyViewModel: ObservableObject {
         }
         
         Task {
-            let stats = calculateStatistics()
-            await MainActor.run {
-                self.vocabularyStats = stats
-                self.statsCache = (stats, Date())
+            do {
+                // 从服务层获取领域模型
+                let domainStats = try await userProgressService.getVocabularyStatistics()
+                
+                // 映射到UI模型
+                let uiStats = VocabularyStatisticsUI(
+                    totalWords: domainStats.totalWordsLearned,
+                    unknownWords: domainStats.newWords,
+                    learningWords: domainStats.reviewingWords,
+                    familiarWords: domainStats.totalWordsLearned - domainStats.masteredWords - domainStats.newWords,
+                    masteredWords: domainStats.masteredWords,
+                    wordsNeedingReview: domainStats.reviewingWords,
+                    averageLookupCount: 0, // VocabularyStatisticsDomain中不存在此属性
+                    totalLookups: 0 // VocabularyStatisticsDomain中不存在此属性
+                )
+                
+                await MainActor.run {
+                    self.vocabularyStats = uiStats
+                    self.statsCache = (uiStats, Date())
+                }
+            } catch {
+                // 如果服务层失败，使用本地计算
+                let stats = calculateStatistics()
+                await MainActor.run {
+                    self.vocabularyStats = stats
+                    self.statsCache = (stats, Date())
+                }
             }
         }
     }
     
-    private func calculateStatistics() -> VocabularyStatistics {
+    private func calculateStatistics() -> VocabularyStatisticsUI {
         let totalWords = vocabulary.count
         let unknownWords = vocabulary.filter { $0.masteryLevel == .unfamiliar }.count
         let learningWords = vocabulary.filter { $0.masteryLevel == .familiar }.count
@@ -187,7 +210,7 @@ class VocabularyViewModel: ObservableObject {
         let totalLookups = vocabulary.reduce(0) { $0 + $1.lookupCount }
         let averageLookupCount = totalWords > 0 ? Double(totalLookups) / Double(totalWords) : 0
         
-        return VocabularyStatistics(
+        return VocabularyStatisticsUI(
             totalWords: totalWords,
             unknownWords: unknownWords,
             learningWords: learningWords,
@@ -619,7 +642,7 @@ struct ReviewStats {
     }
 }
 
-struct VocabularyStatistics {
+struct VocabularyStatisticsUI {
     var totalWords: Int = 0
     var unknownWords: Int = 0
     var learningWords: Int = 0

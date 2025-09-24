@@ -732,7 +732,8 @@ class VocabularyTestViewModel: ObservableObject {
         vocabularyTestService.saveTestResult(testResult)
             .receive(on: DispatchQueue.main)
             .sink(
-                receiveCompletion: { publisherCompletion in
+                receiveCompletion: { [weak self] publisherCompletion in
+                    guard let self = self else { return }
                     switch publisherCompletion {
                     case .finished:
                         self.errorHandler.logSuccess("保存测试结果成功")
@@ -740,7 +741,8 @@ class VocabularyTestViewModel: ObservableObject {
                         self.errorHandler.handle(error, context: "保存测试结果")
                     }
                 },
-                receiveValue: { _ in
+                receiveValue: { [weak self] _ in
+                    guard let self = self else { return }
                     // 更新历史记录
                     if !self.testHistory.contains(where: { $0.id == testResult.id }) {
                         self.testHistory.insert(testResult, at: 0)

@@ -217,8 +217,8 @@ class CacheManager: CacheManagerProtocol {
     }
     
     private func startCleanupTimer() {
-        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-            self.clearExpiredItems()
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.clearExpiredItems()
         }
     }
     

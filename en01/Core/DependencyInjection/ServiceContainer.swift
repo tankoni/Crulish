@@ -27,6 +27,11 @@ class ServiceContainer {
     private var textProcessor: TextProcessorProtocol?
     private var translationService: TranslationServiceProtocol?
     private var vocabularyTestService: VocabularyTestServiceProtocol?
+    private var learningTrackingService: LearningTrackingService?
+    
+    // 自适应学习相关服务
+    private var adaptiveLearningService: AdaptiveLearningService?
+    private var adaptiveRecommendationEngine: AdaptiveRecommendationEngine?
     
     // MARK: - 模型上下文
     private var modelContext: ModelContext?
@@ -43,7 +48,7 @@ class ServiceContainer {
     // MARK: - 服务配置
     
     /// 配置所有服务
-    func configure(with modelContext: ModelContext, appSettings: AppSettings) {
+    @MainActor func configure(with modelContext: ModelContext, appSettings: AppSettings) {
         self.modelContext = modelContext
         
         // 首先初始化基础服务
@@ -95,6 +100,34 @@ class ServiceContainer {
             config: translationConfig
         )
         
+        // 初始化学习跟踪服务
+        self.learningTrackingService = LearningTrackingService(
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: unifiedErrorHandler
+        )
+        
+        // 初始化自适应学习服务
+        let intelligentRankingService = IntelligentRankingService(dictionaryService: dictionaryService!)
+        
+        self.adaptiveLearningService = AdaptiveLearningService(
+            modelContext: modelContext,
+            learningTrackingService: learningTrackingService!,
+            userProgressService: userProgressService! as! UserProgressService,
+            intelligentRankingService: intelligentRankingService
+        )
+        
+        // 初始化自适应推荐引擎
+        if let adaptiveService = self.adaptiveLearningService {
+            let learningBehaviorAnalyzer = LearningBehaviorAnalyzer(modelContext: modelContext)
+            
+            self.adaptiveRecommendationEngine = AdaptiveRecommendationEngine(
+                modelContext: modelContext,
+                adaptiveLearningService: adaptiveService,
+                intelligentRankingService: intelligentRankingService,
+                learningBehaviorAnalyzer: learningBehaviorAnalyzer
+            )
+        }
         // 设置服务间依赖关系
         setupServiceDependencies()
     }
@@ -286,9 +319,22 @@ class ServiceContainer {
         return processor
     }
     
+    /// 获取学习跟踪服务
+    func getLearningTrackingService() -> LearningTrackingService {
+        guard let service = learningTrackingService else {
+            fatalError("LearningTrackingService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
     /// 获取缓存管理器
     func getCacheManager() -> CacheManagerProtocol {
         return cacheManager
+    }
+    
+    /// 获取模型上下文
+    func getModelContext() -> ModelContext? {
+        return modelContext
     }
     
     /// 获取错误处理器
@@ -317,6 +363,22 @@ class ServiceContainer {
             fatalError("TranslationService not initialized. Call configure(with:) first.")
         }
         return service
+    }
+    
+    /// 获取自适应学习服务
+    func getAdaptiveLearningService() -> AdaptiveLearningService {
+        guard let service = adaptiveLearningService else {
+            fatalError("AdaptiveLearningService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取自适应推荐引擎
+    func getAdaptiveRecommendationEngine() -> AdaptiveRecommendationEngine {
+        guard let engine = adaptiveRecommendationEngine else {
+            fatalError("AdaptiveRecommendationEngine not initialized. Call configure(with:) first.")
+        }
+        return engine
     }
     
     // MARK: - 测试支持
@@ -352,6 +414,9 @@ class ServiceContainer {
         if let textProcessor = textProcessor {
             self.textProcessor = textProcessor
         }
+        if let learningTrackingService = learningTrackingService {
+            self.learningTrackingService = learningTrackingService
+        }
         // 注意：cacheManager 和 errorHandler 是 let 常量，不能重新赋值
         // 如果需要在测试中替换它们，需要重新设计架构
     }
@@ -364,6 +429,9 @@ class ServiceContainer {
         pdfService = nil
         textProcessor = nil
         translationService = nil
+        learningTrackingService = nil
+        adaptiveLearningService = nil
+        adaptiveRecommendationEngine = nil
         modelContext = nil
         // 注意：cacheManager 和 errorHandler 是 let 常量，不会被重置
     }

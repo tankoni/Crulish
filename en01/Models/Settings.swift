@@ -423,7 +423,7 @@ enum AppColorScheme: String, CaseIterable {
     case dark = "深色模式"
     case auto = "跟随系统"
     
-    var colorScheme: ColorScheme? {
+    var colorScheme: SwiftUI.ColorScheme? {
         switch self {
         case .light:
             return .light

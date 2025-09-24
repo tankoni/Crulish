@@ -1,12 +1,19 @@
-# TODO:
+# TODO: 词汇管理系统重构开发进度
 
-- [x] analyze_compilation_errors: 分析AppCoordinator.swift等文件的编译错误，了解当前代码状态 (priority: High)
-- [x] fix_appcoordinator_constructor_errors: 修复AppCoordinator.swift中WordInteractionCoordinator和其他ViewModel的构造函数参数错误 (priority: High)
-- [x] fix_servicecontainer_missing_methods: 在ServiceContainer中添加缺少的getVocabularyService方法 (priority: High)
-- [x] verify_compilation_success: 验证所有编译错误修复后应用能正常编译运行 (priority: High)
-- [x] investigate_dictionary_loading_error: 调查词汇量测试中"加载词典失败"错误的根本原因 (priority: High)
-- [x] test_dictionary_loading_fix: 测试词典加载修复是否解决了"加载词典失败"的问题 (priority: High)
-- [x] run_app_test_vocabulary: 运行应用程序并测试词汇量测试功能，确认"加载词典失败"错误已解决 (priority: High)
-- [x] fix_wordinteractioncoordinator_async: 修复WordInteractionCoordinator.swift第351行的async/await语法错误 (priority: Medium)
-- [x] fix_mockservices_compilation_errors: 修复MockServices.swift中的编译错误，包括数据模型不匹配问题 (priority: Medium)
-- [x] fix_vocabularytestservice_variables: 将VocabularyTestService.swift中的var变量改为let常量 (priority: Low)
+## 已完成任务
+- [x] 修复智能排序文章显示问题（SoloArticleService.swift中的clearMatchCache方法）
+- [x] 检查开发进度（查看需求文档）
+- [x] 创建LearningTrackingService.swift（学习跟踪核心服务）
+- [x] 创建WordMasterySelector.swift（单词掌握程度选择UI组件）
+- [x] 创建InteractiveTextView.swift（可交互文本视图，支持单词点击）
+- [x] 创建StatisticsService.swift（统计分析服务）
+- [x] 创建LearningStatisticsView.swift（学习统计页面UI）
+- [x] 修复WordMasterySelector.swift中的属性名冲突和编译错误
+
+## 未完成任务
+- [ ] 实现单词点击捕获机制（集成到阅读视图中）
+- [ ] 完成第四阶段：动态学习跟踪功能（集成服务到现有视图和模型）
+- [ ] 完成第五阶段：统计分析功能（集成统计服务到应用流程）
+- [ ] 完成第六阶段：系统集成和优化（整体测试、性能优化、数据迁移）
+- [ ] 编写单元测试和UI测试覆盖新功能
+- [ ] 更新README.md以反映最新进度

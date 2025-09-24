@@ -314,15 +314,15 @@ class ConstraintConflictResolver: ObservableObject {
     private func forceLayoutUpdate(for conflict: ConstraintConflict) -> Bool {
         print("[ConstraintConflictResolver] 强制布局更新")
         
-        DispatchQueue.main.async {
+        Task { @MainActor in
             // 使用现代API支持多窗口
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .forEach { window in
-                window.setNeedsLayout()
-                window.layoutIfNeeded()
-            }
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .forEach { window in
+                    window.setNeedsLayout()
+                    window.layoutIfNeeded()
+                }
         }
         
         return true
@@ -341,8 +341,8 @@ class ConstraintConflictResolver: ObservableObject {
     
     private func monitorSystemInputAssistantViews() {
         // 监控SystemInputAssistantView的创建和销毁
-        DispatchQueue.main.async { [weak self] in
-            self?.findSystemInputAssistantViews()
+        Task { @MainActor in
+            self.findSystemInputAssistantViews()
         }
     }
     

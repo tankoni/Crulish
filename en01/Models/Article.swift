@@ -52,41 +52,7 @@ final class Article: @unchecked Sendable {
     }
 }
 
-enum ArticleDifficulty: String, CaseIterable, Codable {
-    case easy = "简单"
-    case medium = "中等"
-    case hard = "困难"
-    
-    var displayName: String {
-        return self.rawValue
-    }
-    
-    var color: Color {
-        switch self {
-        case .easy:
-            return .green
-        case .medium:
-            return .orange
-        case .hard:
-            return .red
-        }
-    }
-    
-    var sortOrder: Int {
-        switch self {
-        case .easy:
-            return 1
-        case .medium:
-            return 2
-        case .hard:
-            return 3
-        }
-    }
-    
-    static func from(string: String) -> ArticleDifficulty? {
-        return ArticleDifficulty.allCases.first { $0.rawValue == string }
-    }
-}
+
 
 // 文章段落模型，用于更精细的阅读控制
 struct ArticleParagraph: Identifiable, Codable {

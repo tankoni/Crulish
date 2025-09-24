@@ -188,8 +188,9 @@ class UnifiedInputManager: ObservableObject {
         lastErrorTime = nil
         
         // 延迟重新初始化
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.initializeInputSystem()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+            self.initializeInputSystem()
         }
     }
     

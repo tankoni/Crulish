@@ -9,7 +9,7 @@ import SwiftUI
 
 /// 成就徽章视图组件
 struct AchievementBadgeView: View {
-    let badge: AchievementBadge
+    let badge: AchievementBadgeUI
     let size: BadgeSize
     
     enum BadgeSize {
@@ -48,7 +48,7 @@ struct AchievementBadgeView: View {
         }
     }
     
-    init(badge: AchievementBadge, size: BadgeSize = .medium) {
+    init(badge: AchievementBadgeUI, size: BadgeSize = .medium) {
         self.badge = badge
         self.size = size
     }
@@ -110,11 +110,11 @@ struct AchievementBadgeView: View {
 
 /// 成就徽章网格视图
 struct AchievementBadgeGrid: View {
-    let badges: [AchievementBadge]
+    let badges: [AchievementBadgeUI]
     let columns: Int
     let size: AchievementBadgeView.BadgeSize
     
-    init(badges: [AchievementBadge], columns: Int = 4, size: AchievementBadgeView.BadgeSize = .medium) {
+    init(badges: [AchievementBadgeUI], columns: Int = 4, size: AchievementBadgeView.BadgeSize = .medium) {
         self.badges = badges
         self.columns = columns
         self.size = size
@@ -134,22 +134,22 @@ struct AchievementBadgeGrid: View {
 
 #Preview {
     let sampleBadges = [
-        AchievementBadge(
+        AchievementBadgeUI(
             name: "首次阅读",
             iconName: "book.fill",
             color: .blue
         ),
-        AchievementBadge(
+        AchievementBadgeUI(
             name: "词汇达人",
             iconName: "textbook.fill",
             color: .green
         ),
-        AchievementBadge(
+        AchievementBadgeUI(
             name: "学习专家",
             iconName: "graduationcap.fill",
             color: .purple
         ),
-        AchievementBadge(
+        AchievementBadgeUI(
             name: "连续学习",
             iconName: "flame.fill",
             color: .orange

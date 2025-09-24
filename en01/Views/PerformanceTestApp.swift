@@ -365,13 +365,13 @@ class PerformanceTestAppViewModel: ObservableObject, MemoryObserver {
     
     // MARK: - MemoryObserver
     func memoryUsageDidChange(_ usage: Int64) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.currentMemoryUsage = usage
         }
     }
     
     func didReceiveMemoryWarning() {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.isLowMemoryMode = true
         }
     }

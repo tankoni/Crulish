@@ -70,6 +70,7 @@ public enum AppError: LocalizedError {
     case initializationFailed
     case configurationError(String)
     case unexpectedError(Error)
+    case serviceNotAvailable
     
     // MARK: - Translation Errors
     case translationInvalidInput(String)
@@ -118,6 +119,8 @@ public extension AppError {
             return "configuration_error"
         case .unexpectedError:
             return "unexpected_error"
+        case .serviceNotAvailable:
+            return "service_not_available"
         case .unknown:
             return "unknown_error"
             
@@ -157,6 +160,8 @@ public extension AppError {
     var severity: ErrorSeverity {
         switch self {
         case .networkError, .serviceUnavailable, .translationServiceUnavailable:
+            return .warning
+        case .serviceNotAvailable:
             return .warning
         case .dataCorruption, .storageError, .initializationFailed:
             return .critical
@@ -205,6 +210,8 @@ public extension AppError {
             return "配置错误: \(message)"
         case .unexpectedError(let error):
             return "意外错误: \(error.localizedDescription)"
+        case .serviceNotAvailable:
+            return "服务不可用"
             
         // MARK: - Translation Error Descriptions
         case .translationInvalidInput(let message):

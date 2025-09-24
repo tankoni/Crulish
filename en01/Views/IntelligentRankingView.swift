@@ -17,12 +17,24 @@ struct IntelligentRankingView: View {
     @State private var selectedSortOption: RankingSortOption = .matchScore
     @State private var isLoading = false
     @State private var showSortOptions = false
+    @State private var showAdaptiveSettings = false
+    @State private var showInsightCard = false
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
                 // 顶部控制栏
                 topControlBar
+                
+                // 自适应洞察卡片
+                if viewModel.isAdaptiveMode && !isLoading {
+                    adaptiveInsightSection
+                }
+                
+                // 统计信息区域
+                if !isLoading && !viewModel.rankedArticles.isEmpty {
+                    statisticsSection
+                }
                 
                 // 内容区域
                 if isLoading {
@@ -37,11 +49,27 @@ struct IntelligentRankingView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    refreshButton
+                    HStack(spacing: 8) {
+                        // 自适应设置按钮
+                        Button(action: { showAdaptiveSettings = true }) {
+                            Image(systemName: viewModel.isAdaptiveMode ? "brain.head.profile.fill" : "brain.head.profile")
+                                .foregroundColor(viewModel.isAdaptiveMode ? .purple : .gray)
+                        }
+                        
+                        refreshButton
+                    }
                 }
             }
             .sheet(isPresented: $showSortOptions) {
                 sortOptionsSheet
+            }
+            .sheet(isPresented: $showAdaptiveSettings) {
+                AdaptiveSettingsSheet(
+                    isPresented: $showAdaptiveSettings,
+                    isAdaptiveEnabled: $viewModel.isAdaptiveMode,
+                    adaptiveWeights: $viewModel.adaptiveWeights,
+                    adaptiveMode: $viewModel.adaptiveMode
+                )
             }
         }
         .onAppear {
@@ -49,9 +77,67 @@ struct IntelligentRankingView: View {
         }
     }
     
+    // MARK: - 自适应洞察区域
+    private var adaptiveInsightSection: some View {
+        Group {
+            if let insights = viewModel.currentLearningInsights {
+                AdaptiveInsightCard(
+                    insights: insights,
+                    isExpanded: showInsightCard,
+                    onToggleExpansion: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showInsightCard.toggle()
+                        }
+                    }
+                )
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+        }
+    }
+    
     // MARK: - 顶部控制栏
     private var topControlBar: some View {
         HStack {
+            // 阅读模式切换按钮
+            Button(action: { 
+                Task {
+                    let newMode: ReadingMode = viewModel.selectedReadingMode == .yearlyExams ? .soloArticles : .yearlyExams
+                    await viewModel.switchReadingMode(to: newMode)
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: viewModel.selectedReadingMode.iconName)
+                    Text(viewModel.selectedReadingMode.displayName)
+                }
+                .font(.subheadline)
+                .foregroundColor(.purple)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.purple.opacity(0.1))
+                .cornerRadius(8)
+            }
+            
+            // 自适应模式指示器
+            if viewModel.isAdaptiveMode {
+                Button(action: { 
+                    Task {
+                        await viewModel.toggleAdaptiveMode()
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "brain.head.profile")
+                        Text("智能推荐")
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.purple)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(8)
+                }
+            }
+            
             // 排序选项按钮
             Button(action: { showSortOptions = true }) {
                 HStack(spacing: 4) {
@@ -71,9 +157,17 @@ struct IntelligentRankingView: View {
             
             // 结果统计
             if !viewModel.rankedArticles.isEmpty {
-                Text("\(viewModel.rankedArticles.count) 篇文章")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(viewModel.rankedArticles.count) 篇文章")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    if viewModel.isAdaptiveMode {
+                        Text("智能推荐")
+                            .font(.caption2)
+                            .foregroundColor(.purple)
+                    }
+                }
             }
         }
         .padding(.horizontal)
@@ -87,7 +181,7 @@ struct IntelligentRankingView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(viewModel.rankedArticles, id: \ArticleMatchResult.article.id) { result in
-                    ArticleRankingCard(result: result)
+                    ArticleRankingCard(result: result, recommendationReason: viewModel.getRecommendationReason(for: result.article.id))
                         .padding(.horizontal)
                 }
             }
@@ -134,11 +228,67 @@ struct IntelligentRankingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
+    // MARK: - 统计信息区域
+    private var statisticsSection: some View {
+        VStack(spacing: 12) {
+            let stats = viewModel.getStatisticsForCurrentMode()
+            
+            // 总体统计卡片
+            HStack(spacing: 12) {
+                StatCard(
+                    title: "文章总数",
+                    value: "\(stats.totalArticles)",
+                    icon: "doc.text.fill",
+                    color: .blue
+                )
+                
+                StatCard(
+                    title: "平均匹配度",
+                    value: "\(Int(stats.averageMatchScore))%",
+                    icon: "target",
+                    color: .green
+                )
+                
+                StatCard(
+                    title: "推荐文章",
+                    value: "\(stats.difficultyDistribution.values.reduce(0, +))",
+                    icon: "star.fill",
+                    color: .orange
+                )
+            }
+            
+            // 难度分布
+            if !stats.difficultyDistribution.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("难度分布")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                    
+                    HStack(spacing: 8) {
+                        ForEach(Array(stats.difficultyDistribution.keys.sorted(by: { $0.rawValue < $1.rawValue })), id: \.self) { difficulty in
+                            let count = stats.difficultyDistribution[difficulty] ?? 0
+                            DifficultyTag(
+                                difficulty: difficulty,
+                                count: count
+                            )
+                        }
+                        Spacer()
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+        .background(Color(.systemGray6))
+    }
+    
     // MARK: - 刷新按钮
     private var refreshButton: some View {
         Button(action: {
-            rankingService.clearCache()
-            loadRankedArticles()
+            Task {
+                await viewModel.refreshRanking()
+            }
         }) {
             Image(systemName: "arrow.clockwise")
         }
@@ -197,11 +347,9 @@ struct IntelligentRankingView: View {
     // MARK: - 方法
     private func loadRankedArticles() {
         isLoading = true
-        
         Task {
             await viewModel.loadRankedArticles()
             await MainActor.run {
-                applySorting()
                 isLoading = false
             }
         }
@@ -212,13 +360,15 @@ struct IntelligentRankingView: View {
     }
 }
 
-// MARK: - 文章排序卡片
+// MARK: - ArticleRankingCard
 struct ArticleRankingCard: View {
     let result: ArticleMatchResult
+    let recommendationReason: String?
+    @State private var showRecommendationReason = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // 标题和推荐等级
+            // 标题和推荐信息
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(result.article.title)
@@ -233,7 +383,7 @@ struct ArticleRankingCard: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
-                    // 推荐等级标签
+                    // 推荐标签
                     Text(result.recommendation.rawValue)
                         .font(.caption)
                         .fontWeight(.medium)
@@ -243,7 +393,7 @@ struct ArticleRankingCard: View {
                         .background(result.recommendation.color)
                         .cornerRadius(6)
                     
-                    // 匹配分数
+                    // 匹配度分数
                     Text("\(Int(result.matchScore))%")
                         .font(.caption)
                         .fontWeight(.semibold)
@@ -251,7 +401,12 @@ struct ArticleRankingCard: View {
                 }
             }
             
-            // 统计信息
+            // 自适应推荐理由（如果有）
+            if let reason = recommendationReason, !reason.isEmpty {
+                adaptiveReasonSection(reason: reason)
+            }
+            
+            // 词汇统计
             HStack(spacing: 16) {
                 StatItem(title: "总词数", value: "\(result.totalWords)", icon: "textformat.123", color: .primary)
                 StatItem(title: "生词数", value: "\(result.unknownWords)", icon: "questionmark.circle", color: .red)
@@ -259,7 +414,7 @@ struct ArticleRankingCard: View {
                 StatItem(title: "掌握词", value: "\(result.masteredWords)", icon: "checkmark.circle", color: .green)
             }
             
-            // 难度和百分比
+            // 难度和生词率
             HStack {
                 // 难度标签
                 HStack(spacing: 4) {
@@ -271,7 +426,7 @@ struct ArticleRankingCard: View {
                 
                 Spacer()
                 
-                // 生词百分比
+                // 生词率
                 Text("生词率: \(String(format: "%.1f", result.unknownPercentage))%")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -288,6 +443,51 @@ struct ArticleRankingCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+    
+    // MARK: - 自适应推荐理由区域
+    @ViewBuilder
+    private func adaptiveReasonSection(reason: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showRecommendationReason.toggle()
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain.head.profile")
+                        .foregroundColor(.purple)
+                        .font(.caption)
+                    
+                    Text("智能推荐理由")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.purple)
+                    
+                    Spacer()
+                    
+                    Image(systemName: showRecommendationReason ? "chevron.up" : "chevron.down")
+                        .foregroundColor(.purple)
+                        .font(.caption2)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            if showRecommendationReason {
+                Text(reason)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.purple.opacity(0.05))
+                    .cornerRadius(8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 6)
+        .background(Color.purple.opacity(0.03))
+        .cornerRadius(8)
     }
 }
 
@@ -322,6 +522,34 @@ struct ProgressBar: View {
         }
         .frame(height: 4)
         .cornerRadius(2)
+    }
+}
+
+// MARK: - 辅助组件
+
+/// 难度标签组件
+struct DifficultyTag: View {
+    let difficulty: IntelligentRankingDifficultyLevel
+    let count: Int
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(difficulty.color)
+                .frame(width: 8, height: 8)
+            
+            Text(difficulty.rawValue)
+                .font(.caption)
+                .foregroundColor(.primary)
+            
+            Text("(\(count))")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.systemBackground))
+        .cornerRadius(6)
     }
 }
 

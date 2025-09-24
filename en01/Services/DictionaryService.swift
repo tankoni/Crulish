@@ -21,7 +21,7 @@ enum DictionaryServiceError: Error {
 // MARK: - Dictionary File Format
 // Note: DictionaryFileFormat is defined in DictionaryLoader.swift
 
-class DictionaryService: BaseService, DictionaryServiceProtocol, ObservableObject { // 添加ObservableObject
+class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗余的ObservableObject
     // 添加@Published属性以支持观察，例如：
     @Published var dictionaryWords: [String: DictionaryWord] = [:] // 使dictionaryWords可观察
     private let textProcessor = TextProcessor()

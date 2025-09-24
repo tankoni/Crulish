@@ -14,13 +14,13 @@ import Combine
 class SettingsViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var appSettings: AppSettings = AppSettings()
-    @Published var userSettings: UserSettings = UserSettings()
-    @Published var readingSettings: ReadingSettings = ReadingSettings()
-    @Published var vocabularySettings: VocabularySettings = VocabularySettings()
-    @Published var notificationSettings: NotificationSettings = NotificationSettings()
-    @Published var privacySettings: PrivacySettings = PrivacySettings()
-    @Published var appearanceSettings: AppearanceSettings = AppearanceSettings()
-    @Published var dataSettings: DataSettings = DataSettings()
+    @Published var userSettings: UserSettingsUI = UserSettingsUI()
+    @Published var readingSettings: ReadingSettingsUI = ReadingSettingsUI()
+    @Published var vocabularySettings: VocabularySettingsUI = VocabularySettingsUI()
+    @Published var notificationSettings: NotificationSettingsUI = NotificationSettingsUI()
+    @Published var privacySettings: PrivacySettingsUI = PrivacySettingsUI()
+    @Published var appearanceSettings: AppearanceSettingsUI = AppearanceSettingsUI()
+    @Published var dataSettings: DataSettingsUI = DataSettingsUI()
     
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
@@ -80,7 +80,7 @@ class SettingsViewModel: ObservableObject {
         // 检查缓存
         if let cache = settingsCache["user"],
            Date().timeIntervalSince(cache.timestamp) < cacheValidityDuration {
-            if let settings = cache.settings as? UserSettings {
+            if let settings = cache.settings as? UserSettingsUI {
                 await MainActor.run {
                     self.userSettings = settings
                 }
@@ -106,7 +106,7 @@ class SettingsViewModel: ObservableObject {
         // 检查缓存
         if let cache = settingsCache["reading"],
            Date().timeIntervalSince(cache.timestamp) < cacheValidityDuration {
-            if let settings = cache.settings as? ReadingSettings {
+            if let settings = cache.settings as? ReadingSettingsUI {
                 await MainActor.run {
                     self.readingSettings = settings
                 }
@@ -132,7 +132,7 @@ class SettingsViewModel: ObservableObject {
         // 检查缓存
         if let cache = settingsCache["vocabulary"],
            Date().timeIntervalSince(cache.timestamp) < cacheValidityDuration {
-            if let settings = cache.settings as? VocabularySettings {
+            if let settings = cache.settings as? VocabularySettingsUI {
                 await MainActor.run {
                     self.vocabularySettings = settings
                 }
@@ -158,10 +158,8 @@ class SettingsViewModel: ObservableObject {
     
 
     
-
-    
     // MARK: - Settings Update
-    func updateUserSettings(_ settings: UserSettings) {
+    func updateUserSettings(_ settings: UserSettingsUI) {
         Task {
             do {
                 try await userProgressService.updateUserSettings(settings)
@@ -176,7 +174,7 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    func updateReadingSettings(_ settings: ReadingSettings) {
+    func updateReadingSettings(_ settings: ReadingSettingsUI) {
         Task {
             do {
                 try await userProgressService.updateReadingSettings(settings)
@@ -191,7 +189,7 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    func updateVocabularySettings(_ settings: VocabularySettings) {
+    func updateVocabularySettings(_ settings: VocabularySettingsUI) {
         Task {
             do {
                 try await userProgressService.updateVocabularySettings(settings)
@@ -206,7 +204,7 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    func updateNotificationSettings(_ settings: NotificationSettings) {
+    func updateNotificationSettings(_ settings: NotificationSettingsUI) {
         Task {
             do {
                 try await userProgressService.updateNotificationSettings(settings)
@@ -221,7 +219,7 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    func updatePrivacySettings(_ settings: PrivacySettings) {
+    func updatePrivacySettings(_ settings: PrivacySettingsUI) {
         Task {
             do {
                 try await userProgressService.updatePrivacySettings(settings)
@@ -236,7 +234,7 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    func updateAppearanceSettings(_ settings: AppearanceSettings) {
+    func updateAppearanceSettings(_ settings: AppearanceSettingsUI) {
         Task {
             do {
                 try await userProgressService.updateAppearanceSettings(settings)
@@ -425,7 +423,7 @@ enum SettingsError: Error, LocalizedError {
 }
 
 // MARK: - Supporting Types
-struct UserSettings: Codable {
+struct UserSettingsUI: Codable {
     var username: String = ""
     var email: String = ""
     var profileImageURL: String? = nil
@@ -435,7 +433,7 @@ struct UserSettings: Codable {
     var lastActiveDate: Date = Date()
 }
 
-struct ReadingSettings: Codable {
+struct ReadingSettingsUI: Codable {
     var fontSize: Double = 16.0
     var fontFamily: String = "System"
     var lineSpacing: Double = 1.2
@@ -463,6 +461,27 @@ struct ReadingSettings: Codable {
     
     init() {
         // Use default values
+    }
+    
+    // 添加接受所有参数的指定初始化器
+    init(fontSize: Double, fontFamily: String, lineSpacing: Double, backgroundColor: String, textColor: String, highlightColor: String, linkColor: String, readingMargin: Double, paragraphSpacing: Double, autoScrollSpeed: Double, enableAutoScroll: Bool, showWordCount: Bool, showReadingTime: Bool, enableImmersiveMode: Bool, dailyReadingGoal: Int, weeklyReadingGoal: Int, colorScheme: String) {
+        self.fontSize = fontSize
+        self.fontFamily = fontFamily
+        self.lineSpacing = lineSpacing
+        self.backgroundColor = backgroundColor
+        self.textColor = textColor
+        self.highlightColor = highlightColor
+        self.linkColor = linkColor
+        self.readingMargin = readingMargin
+        self.paragraphSpacing = paragraphSpacing
+        self.autoScrollSpeed = autoScrollSpeed
+        self.enableAutoScroll = enableAutoScroll
+        self.showWordCount = showWordCount
+        self.showReadingTime = showReadingTime
+        self.enableImmersiveMode = enableImmersiveMode
+        self.dailyReadingGoal = dailyReadingGoal
+        self.weeklyReadingGoal = weeklyReadingGoal
+        self.colorScheme = colorScheme
     }
     
     init(from decoder: Decoder) throws {
@@ -508,7 +527,7 @@ struct ReadingSettings: Codable {
     }
 }
 
-struct VocabularySettings: Codable {
+struct VocabularySettingsUI: Codable {
     var enableAutoLookup: Bool = true
     var showPronunciation: Bool = true
     var showExamples: Bool = true
@@ -521,7 +540,7 @@ struct VocabularySettings: Codable {
     var autoAddToReview: Bool = true
 }
 
-struct NotificationSettings: Codable {
+struct NotificationSettingsUI: Codable {
     var enableDailyReminder: Bool = true
     var dailyReminderTime: Date = Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
     var enableReviewReminder: Bool = true
@@ -534,7 +553,7 @@ struct NotificationSettings: Codable {
     var enableVibration: Bool = true
 }
 
-struct PrivacySettings: Codable {
+struct PrivacySettingsUI: Codable {
     var enableAnalytics: Bool = true
     var enableCrashReporting: Bool = true
     var shareUsageData: Bool = false
@@ -544,7 +563,7 @@ struct PrivacySettings: Codable {
     var enableLocationServices: Bool = false
 }
 
-struct AppearanceSettings: Codable {
+struct AppearanceSettingsUI: Codable {
     var colorScheme: ColorSchemePreference = .system
     var accentColor: String = "#007AFF"
     var enableDynamicType: Bool = true
@@ -555,12 +574,12 @@ struct AppearanceSettings: Codable {
 }
 
 struct SettingsExportData: Codable {
-    let userSettings: UserSettings
-    let readingSettings: ReadingSettings
-    let vocabularySettings: VocabularySettings
-    let notificationSettings: NotificationSettings
-    let privacySettings: PrivacySettings
-    let appearanceSettings: AppearanceSettings
+    let userSettings: UserSettingsUI
+    let readingSettings: ReadingSettingsUI
+    let vocabularySettings: VocabularySettingsUI
+    let notificationSettings: NotificationSettingsUI
+    let privacySettings: PrivacySettingsUI
+    let appearanceSettings: AppearanceSettingsUI
     let exportDate: Date
 }
 
@@ -655,7 +674,7 @@ enum NavigationStyle: String, CaseIterable, Codable {
 
 // AppColorScheme enum is defined in Models/Settings.swift to avoid duplication
 
-struct DataSettings: Codable {
+struct DataSettingsUI: Codable {
     var enableAutoBackup: Bool = true
     var backupFrequency: BackupFrequency = .weekly
     var enableCloudSync: Bool = true

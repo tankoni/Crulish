@@ -10,7 +10,7 @@ import Foundation
 
 /// 统一的单词交互协调器，处理所有单词点击和弹窗逻辑
 @MainActor
-class WordInteractionCoordinator: ObservableObject {
+class WordInteractionCoordinator: ObservableObject, WordInteractionProtocol, LearningTrackingProtocol {
     // MARK: - Published Properties
     @Published var showTooltip = false
     @Published var showDetailedSheet = false
@@ -22,9 +22,27 @@ class WordInteractionCoordinator: ObservableObject {
     @Published var isTranslating = false
     @Published var translationError: String?
     @Published var currentTranslationMode: TranslationMode = .word
+    @Published var isLoading = false
+    
+    // MARK: - Learning Tracking Properties
+    @Published var currentArticleId: UUID?
+    @Published var currentReadingSession: ReadingSession?
+    
+    // MARK: - Computed Properties for UI
+    
+    /// 简单音标，从WordDefinitionViewModel获取
+    var simplePhonetic: String? {
+        return wordDefinitionViewModel.simplePhonetic
+    }
+    
+    /// 简单定义，从WordDefinitionViewModel获取
+    var simpleDefinition: String {
+        return wordDefinitionViewModel.simpleDefinition
+    }
     
     // MARK: - Dependencies
     private var settings: AppSettings?
+    private let learningTrackingService: LearningTrackingService?
     
     // MARK: - Interaction Mode
     enum InteractionMode {
@@ -46,15 +64,117 @@ class WordInteractionCoordinator: ObservableObject {
     private var lastCacheCleanupTime: Date = Date.distantPast
     private let cacheCleanupInterval: TimeInterval = 300 // 5分钟清理一次无效缓存
     
+    // MARK: - Learning Tracking State
+    private var wordViewStartTime: Date?
+    private var sessionWordsEncountered: Set<String> = []
+    
     // MARK: - Initialization
-    init(dictionaryService: DictionaryServiceProtocol, translationService: TranslationServiceProtocol? = nil, settings: AppSettings? = nil) {
+    init(
+        dictionaryService: DictionaryServiceProtocol, 
+        translationService: TranslationServiceProtocol? = nil, 
+        learningTrackingService: LearningTrackingService? = nil,
+        settings: AppSettings? = nil
+    ) {
         self.dictionaryService = dictionaryService
         self.translationService = translationService
+        self.learningTrackingService = learningTrackingService
         self.settings = settings
         self.wordDefinitionViewModel = WordDefinitionViewModel(dictionaryService: dictionaryService)
     }
     
-    // MARK: - Word Interaction Methods
+    // MARK: - Word Interaction Protocol Implementation
+    
+    func handleWordTap(_ word: String, at position: CGPoint, context: String? = nil, articleId: UUID? = nil) {
+        handleWordTapInternal(word, at: position)
+        
+        // 记录单词点击行为
+        if let articleId = articleId ?? currentArticleId {
+            Task {
+                await trackWordClick(word, context: context ?? "", articleId: articleId, position: Int(position.x + position.y))
+            }
+        }
+    }
+    
+    func showWordDefinition(_ word: String, at position: CGPoint) {
+        selectedWord = word
+        selectedWordPosition = position
+        showDetailedDefinition()
+    }
+    
+    func hideWordDefinition() {
+        hideDetailedSheet()
+        
+        // 记录单词查看时长
+        if let startTime = wordViewStartTime, !selectedWord.isEmpty {
+            let viewDuration = Date().timeIntervalSince(startTime)
+            if let articleId = currentArticleId {
+                Task {
+                    await trackWordView(selectedWord, viewDuration: viewDuration, articleId: articleId)
+                }
+            }
+        }
+        wordViewStartTime = nil
+    }
+    
+    func updateWordMastery(_ word: String, mastery: MasteryLevel, context: String) {
+        // 获取之前的掌握程度
+        let previousMastery = getCurrentWordMastery(word) ?? .unfamiliar
+        
+        // 更新掌握程度到学习跟踪服务
+        learningTrackingService?.updateWordMastery(
+            word: word,
+            masteryLevel: mastery,
+            source: "interaction"
+        )
+        
+        // 记录掌握程度变化
+        if let articleId = currentArticleId {
+            Task {
+                await trackMasteryChange(word, mastery: mastery, previousMastery: previousMastery, articleId: articleId)
+            }
+        }
+    }
+    
+    func setCurrentArticle(_ articleId: UUID) {
+        currentArticleId = articleId
+        
+        // 开始新的阅读会话
+        currentReadingSession = ReadingSession(
+            userId: "default",
+            articleId: articleId.uuidString,
+            startTime: Date()
+        )
+        sessionWordsEncountered.removeAll()
+    }
+    
+    // MARK: - Learning Tracking Protocol Implementation
+    
+    func trackWordClick(_ word: String, context: String, articleId: UUID, position: Int) async {
+        learningTrackingService?.recordWordClick(
+            word: word,
+            context: context,
+            articleId: articleId,  // Keep as UUID, no conversion needed
+            position: position
+        )
+        
+        // 添加到当前会话遇到的单词
+        await MainActor.run {
+            sessionWordsEncountered.insert(word.lowercased())
+        }
+    }
+    
+    func trackWordView(_ word: String, viewDuration: TimeInterval, articleId: UUID) async {
+        // 这里可以扩展记录单词查看行为的详细信息
+        print("[Learning] 单词查看: \(word), 时长: \(viewDuration)秒")
+    }
+    
+    func trackMasteryChange(_ word: String, mastery: MasteryLevel, previousMastery: MasteryLevel?, articleId: UUID) async {
+        // 学习跟踪服务已经在updateWordMastery中处理了记录
+        print("[Learning] 掌握程度变化: \(word) \(previousMastery?.rawValue ?? "unknown") -> \(mastery.rawValue)")
+    }
+    
+    
+    // MARK: - Enhanced Word Interaction Methods
     
     /// 设置当前交互模式
     func setInteractionMode(_ mode: InteractionMode) {
@@ -66,8 +186,8 @@ class WordInteractionCoordinator: ObservableObject {
         currentTranslationMode = mode
     }
     
-    /// 处理单词点击事件
-    func handleWordTap(_ word: String, at position: CGPoint = .zero) {
+    /// 处理单词点击事件（增强版）
+    func handleWordTapInternal(_ word: String, at position: CGPoint = .zero) {
         // 移除翻译模式限制，允许单词和句子翻译并存
         print("[DEBUG][WordInteractionCoordinator] 处理单词点击: \(word), 当前翻译模式: \(currentTranslationMode)")
         
@@ -86,14 +206,25 @@ class WordInteractionCoordinator: ObservableObject {
         selectedWord = word
         selectedWordPosition = position
         
+        // 记录单词查看开始时间
+        wordViewStartTime = Date()
+        
         // 添加触觉反馈
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
+        
+        // 记录学习行为
+        if let articleId = currentArticleId {
+            Task {
+                await trackWordClick(word, context: "", articleId: articleId, position: Int(position.x + position.y))
+            }
+        }
         
         // 加载简单定义用于tooltip显示
         Task {
             await wordDefinitionViewModel.loadDefinition(for: word)
             await MainActor.run {
+                isLoading = wordDefinitionViewModel.isLoading
                 showTooltip = true
             }
         }
@@ -102,6 +233,7 @@ class WordInteractionCoordinator: ObservableObject {
     /// 显示详细单词定义
     func showDetailedDefinition() {
         showTooltip = false
+        wordViewStartTime = Date() // 重新记录查看时间
         
         Task {
             await wordDefinitionViewModel.loadDetailedDefinition(for: selectedWord)
@@ -112,266 +244,104 @@ class WordInteractionCoordinator: ObservableObject {
     /// 隐藏tooltip
     func hideTooltip() {
         showTooltip = false
+        
+        // 记录简短查看
+        if let startTime = wordViewStartTime, !selectedWord.isEmpty {
+            let viewDuration = Date().timeIntervalSince(startTime)
+            if let articleId = currentArticleId {
+                Task {
+                    await trackWordView(selectedWord, viewDuration: viewDuration, articleId: articleId)
+                }
+            }
+        }
+        wordViewStartTime = nil
     }
     
     /// 隐藏详细弹窗
     func hideDetailedSheet() {
         showDetailedSheet = false
+        
+        // 记录详细查看时长
+        if let startTime = wordViewStartTime, !selectedWord.isEmpty {
+            let viewDuration = Date().timeIntervalSince(startTime)
+            if let articleId = currentArticleId {
+                Task {
+                    await trackWordView(selectedWord, viewDuration: viewDuration, articleId: articleId)
+                }
+            }
+        }
+        wordViewStartTime = nil
+        
         wordDefinitionViewModel.reset()
     }
     
-    /// 处理单词翻译
-    func handleWordTranslation(_ word: String, context: String = "") {
-        guard let translationService = translationService else {
-            translationError = "翻译服务不可用"
+    /// 结束阅读会话
+    func endReadingSession() {
+        guard let session = currentReadingSession else { return }
+        
+        let readingTime = Date().timeIntervalSince(session.startTime)
+        let wordsCount = sessionWordsEncountered.count
+        
+        guard let articleUUID = currentArticleId else {
+            print("[Learning] 警告: 结束阅读会话时缺少 currentArticleId")
+            currentReadingSession = nil
+            sessionWordsEncountered.removeAll()
             return
         }
         
-        // 定期清理无效缓存
-        performCacheCleanupIfNeeded()
-        
-        isTranslating = true
-        translationError = nil
-        
         Task {
-            do {
-                let translation: Translation?
-                
-                switch currentTranslationMode {
-                case .word:
-                    // 智能识别：优先查询本地数据库
-                    translation = await handleSmartWordTranslation(word, context: context)
-                case .sentence:
-                    // 句段翻译：直接使用AI翻译
-                    translation = try await translationService.translateSentence(context.isEmpty ? word : context)
-                }
-                
-                await MainActor.run {
-                    if let translation = translation, self.isValidTranslationResult(translation) {
-                        self.currentTranslation = translation
-                        self.showTranslation = true
-                    } else {
-                        // 根据翻译模式提供不同的错误信息
-                        if currentTranslationMode == .sentence {
-                            self.translationError = "句段翻译暂时不可用，请检查网络连接后重试"
-                        } else {
-                            self.translationError = "单词翻译暂时不可用，请检查网络连接后重试"
-                        }
-                    }
-                    self.isTranslating = false
-                }
-            } catch {
-                await MainActor.run {
-                    // 提供更友好的错误信息
-                    let errorMessage = self.getFriendlyErrorMessage(from: error)
-                    self.translationError = errorMessage
-                    self.isTranslating = false
-                }
-            }
-        }
-    }
-    
-    /// 智能单词翻译：优先本地数据库，否则AI翻译
-    private func handleSmartWordTranslation(_ word: String, context: String) async -> Translation? {
-        // 始终使用AI进行精准上下文翻译
-        do {
-            if let aiTranslation = try await translationService?.translateWord(word, context: context) {
-                // 检查本地数据库是否有该单词，用于学习记录标记
-                let databaseResults = dictionaryService.searchWords(word)
-                let hasLocalRecord = databaseResults.first(where: { $0.word.lowercased() == word.lowercased() }) != nil
-                
-                // 创建AI翻译结果，包含数据库状态信息
-                var modifiedTranslation = aiTranslation
-                if var grammarAnalysis = modifiedTranslation.grammarAnalysis {
-                    let sourceInfo = hasLocalRecord ? "AI精准翻译（已收录）" : "AI精准翻译"
-                    grammarAnalysis = GrammarAnalysis(
-                        sentenceStructure: "\(sourceInfo)：\(word)\n\n" + grammarAnalysis.sentenceStructure,
-                        keyPhrases: grammarAnalysis.keyPhrases,
-                        grammarPoints: grammarAnalysis.grammarPoints,
-                        partOfSpeech: grammarAnalysis.partOfSpeech,
-                        wordForm: grammarAnalysis.wordForm
-                    )
-                    // 创建新的Translation实例，包含语法分析
-                    let newTranslation = Translation(
-                        originalText: modifiedTranslation.originalText,
-                        translatedText: modifiedTranslation.translatedText,
-                        sourceLanguage: modifiedTranslation.sourceLanguage,
-                        targetLanguage: modifiedTranslation.targetLanguage,
-                        confidence: modifiedTranslation.confidence,
-                        provider: .openai, // 标记为AI翻译
-                        contextualMeaning: modifiedTranslation.contextualMeaning,
-                        grammarAnalysis: grammarAnalysis
-                    )
-                    modifiedTranslation = newTranslation
-                }
-                
-                // 如果本地数据库有记录，标记学习状态
-                if hasLocalRecord {
-                    // 这里可以添加学习记录标记逻辑
-                    print("[DEBUG] 单词 \(word) 已在数据库中，标记学习记录")
-                }
-                
-                return modifiedTranslation
-            }
-        } catch {
-            print("AI翻译失败: \(error)")
-        }
-        
-        // 如果AI翻译失败，尝试本地数据库查询
-        let databaseResults = dictionaryService.searchWords(word)
-        if let localResult = databaseResults.first(where: { $0.word.lowercased() == word.lowercased() }) {
-            // 使用本地数据库结果
-            let definition = localResult.definitions.first ?? WordDefinition(partOfSpeech: .noun, meaning: "暂无释义", examples: [])
-            return Translation(
-                originalText: word,
-                translatedText: definition.meaning,
-                confidence: 0.8,
-                provider: .local,
-                contextualMeaning: "本地词典：\(definition.meaning)",
-                grammarAnalysis: GrammarAnalysis(
-                    sentenceStructure: "词性：\(definition.partOfSpeech.rawValue)\n释义：\(definition.meaning)",
-                    keyPhrases: [],
-                    grammarPoints: [],
-                    partOfSpeech: definition.partOfSpeech.rawValue,
-                    wordForm: nil
-                )
+            await trackReadingSession(
+                articleId: articleUUID,
+                readingTime: readingTime,
+                wordsEncountered: wordsCount
             )
         }
         
-        // 如果本地数据库也没有，返回nil而不是无效的翻译结果
-        return nil
+        currentReadingSession = nil
+        sessionWordsEncountered.removeAll()
     }
     
-    /// 根据上下文选择最合适的释义
-    private func selectBestDefinition(from definitions: [WordDefinition], context: String) -> WordDefinition {
-        // 如果只有一个释义，直接返回
-        guard definitions.count > 1 else {
-            return definitions.first ?? WordDefinition(partOfSpeech: .noun, meaning: "暂无释义", examples: [])
-        }
+    func trackReadingSession(articleId: UUID, readingTime: TimeInterval, wordsEncountered: Int) async {
+        // 移除与协议不一致的实现，保留UUID版本的trackReadingSession
+        print("[Learning] 阅读会话结束: 文章ID=\(articleId.uuidString), 阅读时长=\(readingTime)秒, 遇到单词数=\(wordsEncountered)")
         
-        // 简单的上下文匹配逻辑
-        let contextWords = context.lowercased().components(separatedBy: .whitespacesAndNewlines)
-        
-        for definition in definitions {
-            // 检查释义中是否包含上下文相关词汇
-            let meaningWords = definition.meaning.lowercased().components(separatedBy: .whitespacesAndNewlines)
-            let exampleWords = definition.examples.joined(separator: " ").lowercased().components(separatedBy: .whitespacesAndNewlines)
-            
-            let allDefinitionWords = Set(meaningWords + exampleWords)
-            let contextWordSet = Set(contextWords)
-            
-            // 如果有交集，认为这个释义更合适
-            if !allDefinitionWords.intersection(contextWordSet).isEmpty {
-                return definition
-            }
-        }
-        
-        // 如果没有找到匹配的，返回第一个释义
-        return definitions.first!
-    }
-    
-    /// 隐藏翻译弹窗
-    func hideTranslation() {
-        showTranslation = false
-        currentTranslation = nil
-        translationError = nil
-    }
-    
-    /// 重置所有状态
-    func reset() {
-        showTooltip = false
-        showDetailedSheet = false
-        showTranslation = false
-        selectedWord = ""
-        selectedWordPosition = .zero
-        currentTranslation = nil
-        isTranslating = false
-        translationError = nil
-        lastTappedWord = ""
-        lastTapTime = Date.distantPast
-        wordDefinitionViewModel.reset()
-    }
-    
-    /// 清理翻译缓存
-    func clearTranslationCache() {
-        if let translationService = translationService {
-            translationService.clearTranslationCache()
-            print("[DEBUG] 翻译缓存已清理")
+        // 如果有学习跟踪服务，可以在这里记录阅读会话数据
+        if let service = learningTrackingService {
+            // 暂时使用日志记录，等待实现专门的阅读会话记录方法
+            print("[Learning] 学习跟踪服务记录阅读会话: 文章=\(articleId.uuidString), 时长=\(readingTime), 单词数=\(wordsEncountered)")
+            // TODO: 实现专用阅读会话记录方法
         }
     }
     
-    // MARK: - Private Helper Methods
+    // MARK: - Word Interaction Methods (Legacy - to be removed)
     
-    /// 验证翻译结果是否有效
-    private func isValidTranslationResult(_ translation: Translation) -> Bool {
-        // 检查翻译文本不为空且不是纯空白字符
-        let trimmedTranslation = translation.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTranslation.isEmpty else {
-            return false
-        }
+    func handleWordLongPress(_ word: String, at position: CGPoint, context: String? = nil, articleId: UUID? = nil) {
+        // 长按显示详细定义
+        selectedWord = word
+        selectedWordPosition = position
+        showDetailedDefinition()
         
-        // 检查翻译结果不是错误信息
-        let errorKeywords = ["翻译失败", "翻译服务暂时不可用", "未找到该单词的释义", "translation failed", "service unavailable"]
-        let lowercaseTranslation = trimmedTranslation.lowercased()
-        for keyword in errorKeywords {
-            if lowercaseTranslation.contains(keyword.lowercased()) {
-                return false
-            }
-        }
-        
-        return true
-    }
-    
-    /// 获取友好的错误信息
-    private func getFriendlyErrorMessage(from error: Error) -> String {
-        let errorDescription = error.localizedDescription.lowercased()
-        
-        if errorDescription.contains("network") || errorDescription.contains("internet") {
-            return "网络连接异常，请检查网络设置后重试"
-        } else if errorDescription.contains("timeout") {
-            return "请求超时，请稍后重试"
-        } else if errorDescription.contains("unauthorized") || errorDescription.contains("authentication") {
-            return "翻译服务认证失败，请检查API配置"
-        } else if errorDescription.contains("quota") || errorDescription.contains("limit") {
-            return "翻译服务配额已用完，请稍后重试"
-        } else {
-            return "翻译服务暂时不可用，请稍后重试"
-        }
-    }
-    
-    /// 定期清理无效缓存
-    private func performCacheCleanupIfNeeded() {
-        let currentTime = Date()
-        if currentTime.timeIntervalSince(lastCacheCleanupTime) > cacheCleanupInterval {
-            lastCacheCleanupTime = currentTime
-            
-            // 异步清理缓存，避免阻塞UI
-            if let translationService = self.translationService {
-                translationService.clearTranslationCache()
-                print("[DEBUG] 已清理无效的翻译缓存条目")
+        // 记录长按行为
+        if let articleId = articleId ?? currentArticleId {
+            Task {
+                await trackWordClick(word, context: context ?? "", articleId: articleId, position: 0)
             }
         }
     }
     
-    // MARK: - Computed Properties
-    
-    var isLoading: Bool {
-        wordDefinitionViewModel.isLoading
+    func setWordMastery(_ word: String, mastery: MasteryLevel, context: String? = nil, articleId: UUID? = nil) {
+        updateWordMastery(word, mastery: mastery, context: context ?? "")
     }
     
-    var simpleDefinition: String {
-        wordDefinitionViewModel.simpleDefinition
+    func showDetailedDefinition(for word: String) {
+        selectedWord = word
+        showDetailedDefinition()
     }
     
-    var simplePhonetic: String? {
-        wordDefinitionViewModel.simplePhonetic
-    }
+    // MARK: - LearningTrackingProtocol Methods
     
-    var detailedDefinition: DetailedWordDefinition? {
-        wordDefinitionViewModel.detailedDefinition
-    }
-    
-    var errorMessage: String? {
-        wordDefinitionViewModel.errorMessage
+    func getCurrentWordMastery(_ word: String) -> MasteryLevel {
+        // 返回当前单词的掌握程度，默认为 unfamiliar
+        return .unfamiliar
     }
 }

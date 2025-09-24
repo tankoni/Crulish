@@ -48,7 +48,7 @@ struct PDFReaderView: View {
             ReadingSettingsSheet(
                 fontSize: .constant(16),
                 lineSpacing: .constant(6),
-                colorScheme: .constant(.light)
+                colorScheme: .constant(SwiftUI.ColorScheme.light)
             )
         }
     }
@@ -83,7 +83,7 @@ struct PDFContentView: View {
     @State private var gestureHandler: PDFGestureHandler?
     @State private var fontSize: CGFloat = 16
     @State private var lineSpacing: CGFloat = 6
-    @State private var colorScheme: ColorScheme = .light
+    @State private var colorScheme: SwiftUI.ColorScheme = SwiftUI.ColorScheme.light
     
     @EnvironmentObject private var dictionaryService: DictionaryService
     @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
@@ -148,15 +148,11 @@ struct PDFContentView: View {
     private func setupGestureRecognizers() {
         gestureHandler = PDFGestureHandler(
             onWordSelection: { word in
-                // 设置当前交互模式为PDF模式
-                wordInteractionCoordinator.setInteractionMode(.pdf)
-                wordInteractionCoordinator.handleWordTap(word)
+                wordInteractionCoordinator.handleWordTap(word, at: CGPoint.zero, context: nil, articleId: article.id)
             },
             onSentenceSelection: { sentence in
                 selectedSentence = sentence
                 showingSentenceTranslation = true
-                let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-                impactFeedback.impactOccurred()
             }
         )
         
@@ -224,7 +220,7 @@ struct PDFContentView: View {
                 
                 Text(totalPages > 0 ? "\(currentPage) / \(totalPages)" : "加载中...")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.primary)
                 
                 Button(action: onNextPage) {
                     Image(systemName: "chevron.right")
@@ -590,7 +586,8 @@ struct PDFContentView: View {
         
         private func loadTranslation() {
             // 模拟加载翻译
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1秒延迟
                 translation = "这是句子的翻译示例"
                 isLoading = false
             }

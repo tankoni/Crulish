@@ -371,17 +371,15 @@ class ArticleService: BaseService, ArticleServiceProtocol {
         */
     }
     
-    func getReadingStatistics() async throws -> ReadingStatistics {
+    func getReadingStatistics() async throws -> ReadingStatisticsDomain {
         // Implementation for protocol conformance
         let stats = getArticleStats()
-        return ReadingStatistics(
-            completedArticles: Int(stats.completedArticles),
-            inProgressArticles: Int(stats.inProgressArticles),
-            bookmarkedArticles: 0,
-            averageReadingTime: TimeInterval(stats.averageReadingTimePerArticle),
-            favoriteTopics: Array(stats.topicStats.keys.prefix(5)),
-            difficultyDistribution: Dictionary(uniqueKeysWithValues: stats.difficultyStats.map { (key, value) in (key.rawValue, Int(value.total)) }),
-            yearDistribution: Dictionary(uniqueKeysWithValues: stats.yearStats.map { (key, value) in (String(key), Int(value.total)) })
+        return ReadingStatisticsDomain(
+            totalArticlesRead: Int(stats.completedArticles),
+            totalReadingTime: stats.totalReadingTime,
+            averageReadingSpeed: 200.0, // 默认每分钟200字
+            completionRate: stats.completionRate,
+            favoriteCategories: Array(stats.topicStats.keys.prefix(5))
         )
     }
 

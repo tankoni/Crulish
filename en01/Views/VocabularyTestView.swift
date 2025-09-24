@@ -690,7 +690,7 @@ struct StatisticItem: View {
                 .animation(.easeInOut(duration: 0.2), value: isHighlighted)
         )
         .onChange(of: count) { oldValue, newValue in
-            // 数字变化动画
+            // 动画更新数值
             withAnimation(.easeInOut(duration: 0.3)) {
                 animatedValue = newValue
             }
@@ -700,7 +700,8 @@ struct StatisticItem: View {
                 withAnimation(.easeInOut(duration: 0.1)) {
                     isHighlighted = true
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2秒延迟
                     withAnimation(.easeInOut(duration: 0.1)) {
                         isHighlighted = false
                     }

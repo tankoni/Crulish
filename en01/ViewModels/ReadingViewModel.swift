@@ -23,7 +23,7 @@ class ReadingViewModel: ObservableObject {
     @Published var lookupResult: UserWord?
     @Published var isLookingUp: Bool = false
     @Published var errorMessage: String?
-    @Published var settings: ReadingSettings = ReadingSettings()
+    @Published var settings: ReadingSettingsUI = ReadingSettingsUI()
     
     // MARK: - Reading State
     @Published var isPaused: Bool = false

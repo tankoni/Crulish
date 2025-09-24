@@ -9,6 +9,56 @@ import Foundation
 import CoreGraphics
 import SwiftUI
 
+
+// MARK: - Shared Enums
+
+enum ArticleDifficulty: String, CaseIterable, Codable {
+    case easy = "简单"
+    case medium = "中等"
+    case hard = "困难"
+    
+    var displayName: String {
+        return self.rawValue
+    }
+    
+    var color: Color {
+        switch self {
+        case .easy:
+            return .green
+        case .medium:
+            return .orange
+        case .hard:
+            return .red
+        }
+    }
+    
+    var sortOrder: Int {
+        switch self {
+        case .easy:
+            return 1
+        case .medium:
+            return 2
+        case .hard:
+            return 3
+        }
+    }
+    
+    static func from(string: String) -> ArticleDifficulty? {
+        return ArticleDifficulty.allCases.first { $0.rawValue == string }
+    }
+}
+
+enum ExperienceAction {
+    case readArticle
+    case lookupWord
+    case completeReview
+    case consecutiveDay
+    case achievementUnlocked
+    case levelUp
+    case bookmarkArticle
+}
+
+
 // MARK: - Article Category Types
 
 /// 文章分类类型枚举
@@ -655,6 +705,23 @@ enum TimeRange: String, CaseIterable, Codable {
         }
     }
     
+    var days: Int {
+        switch self {
+        case .day:
+            return 1
+        case .week:
+            return 7
+        case .month:
+            return 30
+        case .threeMonths:
+            return 90
+        case .year:
+            return 365
+        case .all:
+            return 3650 // 约10年
+        }
+    }
+    
     /// 获取对应的日期范围
     var dateRange: (start: Date, end: Date) {
         let calendar = Calendar.current
@@ -691,4 +758,197 @@ enum TimeRange: String, CaseIterable, Codable {
             return (distantPast, now)
         }
     }
+}
+
+// MARK: - Achievement Types
+
+enum AchievementType: String, CaseIterable, Codable {
+    // 阅读相关成就
+    case firstArticle = "首次阅读"
+    case read10Articles = "阅读达人"
+    case read50Articles = "阅读专家"
+    case read100Articles = "阅读大师"
+    
+    // 词汇相关成就
+    case firstWord = "初识单词"
+    case lookup100Words = "词汇探索者"
+    case lookup500Words = "词汇收集家"
+    case lookup1000Words = "词汇大师"
+    case master100Words = "词汇掌握者"
+    
+    // 时间相关成就
+    case study1Hour = "专注学习"
+    case study10Hours = "勤奋学者"
+    case study50Hours = "学习达人"
+    case study100Hours = "学习专家"
+    
+    // 连续学习成就
+    case streak3Days = "三日坚持"
+    case streak7Days = "一周坚持"
+    case streak30Days = "月度坚持"
+    case streak100Days = "百日坚持"
+    
+    var title: String {
+        return rawValue
+    }
+    
+    var displayName: String {
+        switch self {
+        case .firstArticle, .read10Articles, .read50Articles, .read100Articles:
+            return "阅读成就"
+        case .firstWord, .lookup100Words, .lookup500Words, .lookup1000Words, .master100Words:
+            return "词汇成就"
+        case .study1Hour, .study10Hours, .study50Hours, .study100Hours:
+            return "学习时长成就"
+        case .streak3Days, .streak7Days, .streak30Days, .streak100Days:
+            return "连续学习成就"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .firstArticle: return "完成第一篇文章阅读"
+        case .read10Articles: return "累计阅读10篇文章"
+        case .read50Articles: return "累计阅读50篇文章"
+        case .read100Articles: return "累计阅读100篇文章"
+        case .firstWord: return "查询第一个单词"
+        case .lookup100Words: return "累计查询100个单词"
+        case .lookup500Words: return "累计查询500个单词"
+        case .lookup1000Words: return "累计查询1000个单词"
+        case .master100Words: return "掌握100个单词"
+        case .study1Hour: return "累计学习1小时"
+        case .study10Hours: return "累计学习10小时"
+        case .study50Hours: return "累计学习50小时"
+        case .study100Hours: return "累计学习100小时"
+        case .streak3Days: return "连续学习3天"
+        case .streak7Days: return "连续学习7天"
+        case .streak30Days: return "连续学习30天"
+        case .streak100Days: return "连续学习100天"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .firstArticle, .read10Articles, .read50Articles, .read100Articles:
+            return "book"
+        case .firstWord, .lookup100Words, .lookup500Words, .lookup1000Words, .master100Words:
+            return "textbook"
+        case .study1Hour, .study10Hours, .study50Hours, .study100Hours:
+            return "clock"
+        case .streak3Days, .streak7Days, .streak30Days, .streak100Days:
+            return "flame"
+        }
+    }
+    
+    var experienceReward: Int {
+        switch self {
+        case .firstArticle, .firstWord: return 10
+        case .read10Articles, .lookup100Words, .study1Hour, .streak3Days: return 20
+        case .read50Articles, .lookup500Words, .study10Hours, .streak7Days: return 50
+        case .read100Articles, .lookup1000Words, .master100Words, .study50Hours, .streak30Days: return 100
+        case .study100Hours, .streak100Days: return 200
+        }
+    }
+}
+
+// MARK: - Learning Analytics Types
+
+/// 学习模式枚举
+enum LearningPattern: String, CaseIterable, Codable {
+    case intensive = "intensive"
+    case gradual = "gradual"
+    case mixed = "mixed"
+    case exploratory = "exploratory"
+    case balanced = "balanced"
+}
+
+/// 学习趋势枚举
+enum LearningTrend: String, CaseIterable, Codable {
+    case improving = "improving"
+    case stable = "stable"
+    case declining = "declining"
+}
+
+/// 学习洞察数据结构
+struct LearningInsights: Codable {
+    let learningPattern: LearningPattern
+    let recommendationConfidence: Double
+    let adaptabilityScore: Double
+    let vocabularyTrend: LearningTrend
+    let readingSpeedTrend: LearningTrend
+    let comprehensionTrend: LearningTrend
+    let vocabularyMasteryRate: Int
+    let averageReadingSpeed: Int
+    let comprehensionAccuracy: Int
+    let recommendationReasons: [String]
+    let learningRecommendations: [String]
+    
+    init(
+        learningPattern: LearningPattern,
+        recommendationConfidence: Double,
+        adaptabilityScore: Double,
+        vocabularyTrend: LearningTrend,
+        readingSpeedTrend: LearningTrend,
+        comprehensionTrend: LearningTrend,
+        vocabularyMasteryRate: Int,
+        averageReadingSpeed: Int,
+        comprehensionAccuracy: Int,
+        recommendationReasons: [String],
+        learningRecommendations: [String]
+    ) {
+        self.learningPattern = learningPattern
+        self.recommendationConfidence = recommendationConfidence
+        self.adaptabilityScore = adaptabilityScore
+        self.vocabularyTrend = vocabularyTrend
+        self.readingSpeedTrend = readingSpeedTrend
+        self.comprehensionTrend = comprehensionTrend
+        self.vocabularyMasteryRate = vocabularyMasteryRate
+        self.averageReadingSpeed = averageReadingSpeed
+        self.comprehensionAccuracy = comprehensionAccuracy
+        self.recommendationReasons = recommendationReasons
+        self.learningRecommendations = learningRecommendations
+    }
+}
+// MARK: - Fallback Learning Behavior Types
+// These definitions ensure compile-time availability of learning behavior types
+// in case Models/LearningBehavior.swift is not included in the target membership.
+public struct LearningBehavior {
+    public let timestamp: Date
+    public let behaviorType: LearningBehaviorType
+    public let context: [String: String]
+    public let outcome: LearningOutcome
+    public let duration: TimeInterval
+    
+    public init(timestamp: Date,
+                behaviorType: LearningBehaviorType,
+                context: [String: String],
+                outcome: LearningOutcome,
+                duration: TimeInterval) {
+        self.timestamp = timestamp
+        self.behaviorType = behaviorType
+        self.context = context
+        self.outcome = outcome
+        self.duration = duration
+    }
+}
+
+public enum LearningBehaviorType: String, CaseIterable, Codable {
+    case articleRead = "article_read"
+    case wordLookup = "word_lookup"
+    case vocabularyReview = "vocabulary_review"
+    case comprehensionTest = "comprehension_test"
+    case sessionStart = "session_start"
+    case sessionEnd = "session_end"
+    case difficultyAdjustment = "difficulty_adjustment"
+    case contentSkip = "content_skip"
+    case bookmarkAdd = "bookmark_add"
+    case noteCreate = "note_create"
+}
+
+public enum LearningOutcome: String, CaseIterable, Codable {
+    case success = "success"
+    case partial = "partial"
+    case failure = "failure"
+    case skipped = "skipped"
+    case abandoned = "abandoned"
 }

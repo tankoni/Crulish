@@ -33,14 +33,18 @@ struct ArticleMatchResult {
 // MARK: - 智能排序难度等级
 enum IntelligentRankingDifficultyLevel: String, CaseIterable {
     case beginner = "初级"
+    case elementary = "基础"
     case intermediate = "中级"
+    case upperIntermediate = "中高级"
     case advanced = "高级"
     case expert = "专家"
     
     var color: Color {
         switch self {
         case .beginner: return .green
+        case .elementary: return .mint
         case .intermediate: return .orange
+        case .upperIntermediate: return .yellow
         case .advanced: return .red
         case .expert: return .purple
         }
@@ -93,10 +97,13 @@ class IntelligentRankingService: ObservableObject {
     private let dictionaryService: DictionaryServiceProtocol
     private let errorHandler: ErrorHandlerProtocol
     
+    // 新增：自适应推荐引擎
+    private var adaptiveRecommendationEngine: AdaptiveRecommendationEngine?
+    
     // 缓存机制
     private var rankingCache: [String: (results: [ArticleMatchResult], timestamp: Date)] = [:]
     private let cacheValidityDuration: TimeInterval = 300 // 5分钟
-    private let maxCacheSize = 50
+    private let maxCacheSize = 5 // 仅缓存最近5次结果
     
     // 算法参数
     private struct AlgorithmParameters {
@@ -115,6 +122,11 @@ class IntelligentRankingService: ObservableObject {
     init(dictionaryService: DictionaryServiceProtocol? = nil) {
         self.dictionaryService = dictionaryService ?? ServiceContainer.shared.getDictionaryService()
         self.errorHandler = ServiceContainer.shared.getErrorHandler()
+    }
+    
+    // 新增：设置自适应推荐引擎
+    func setAdaptiveRecommendationEngine(_ engine: AdaptiveRecommendationEngine) {
+        self.adaptiveRecommendationEngine = engine
     }
     
     // MARK: - 核心排序算法
@@ -136,14 +148,110 @@ class IntelligentRankingService: ObservableObject {
         return results
     }
     
+    // 新增：自适应推荐方法
+    func getAdaptiveRecommendations(
+        articles: [Article], 
+        userVocabulary: [UserWord],
+        userId: String = "default"
+    ) async throws -> [AdaptiveArticleRecommendation] {
+        guard let adaptiveEngine = adaptiveRecommendationEngine else {
+            throw AppError.serviceNotAvailable
+        }
+        
+        return try await adaptiveEngine.generateAdaptiveRecommendations(
+            articles: articles,
+            userVocabulary: userVocabulary,
+            userId: userId
+        )
+    }
+    
+    // 新增：混合推荐方法（结合基础排序和自适应推荐）
+    func getHybridRecommendations(
+        articles: [Article],
+        userVocabulary: [UserWord],
+        userId: String = "default",
+        adaptiveWeight: Double = 0.7
+    ) async throws -> [ArticleMatchResult] {
+        
+        // 获取基础推荐
+        let baseRecommendations = await rankArticles(articles, userVocabulary: userVocabulary)
+        
+        // 如果没有自适应引擎，返回基础推荐
+        guard let adaptiveEngine = adaptiveRecommendationEngine else {
+            return baseRecommendations
+        }
+        
+        // 获取自适应推荐
+        let adaptiveRecommendations = try await adaptiveEngine.generateAdaptiveRecommendations(
+            articles: articles,
+            userVocabulary: userVocabulary,
+            userId: userId
+        )
+        
+        // 混合两种推荐结果
+        return combineRecommendations(
+            baseRecommendations: baseRecommendations,
+            adaptiveRecommendations: adaptiveRecommendations,
+            adaptiveWeight: adaptiveWeight
+        )
+    }
+    
+    // 新增：组合推荐结果
+    private func combineRecommendations(
+        baseRecommendations: [ArticleMatchResult],
+        adaptiveRecommendations: [AdaptiveArticleRecommendation],
+        adaptiveWeight: Double
+    ) -> [ArticleMatchResult] {
+        
+        // 创建自适应推荐的映射
+        let adaptiveMap = Dictionary(uniqueKeysWithValues: 
+            adaptiveRecommendations.map { ($0.article.id, $0) }
+        )
+        
+        // 为每个基础推荐计算混合分数
+        let hybridResults = baseRecommendations.map { baseResult in
+            if let adaptiveResult = adaptiveMap[baseResult.article.id] {
+                // 计算混合分数
+                let hybridScore = baseResult.matchScore * (1.0 - adaptiveWeight) + 
+                                adaptiveResult.adaptiveScore * adaptiveWeight
+                
+                // 创建新的结果，使用混合分数
+                return ArticleMatchResult(
+                    article: baseResult.article,
+                    matchScore: hybridScore,
+                    totalWords: baseResult.totalWords,
+                    unknownWords: baseResult.unknownWords,
+                    familiarWords: baseResult.familiarWords,
+                    masteredWords: baseResult.masteredWords,
+                    difficulty: baseResult.difficulty,
+                    recommendation: baseResult.recommendation
+                )
+            } else {
+                // 没有自适应推荐，使用原始分数
+                return baseResult
+            }
+        }
+        
+        // 按混合分数排序
+        return hybridResults.sorted { $0.matchScore > $1.matchScore }
+    }
+    
     // MARK: - 匹配度计算
     private func calculateMatchScores(articles: [Article], userVocabulary: [UserWord]) async -> [ArticleMatchResult] {
-        let vocabularyMap = createVocabularyMap(userVocabulary)
+        let unfamiliarSet = Set(userVocabulary.filter { $0.masteryLevel == .unfamiliar }.map { $0.word.lowercased() })
+        let familiarSet = Set(userVocabulary.filter { $0.masteryLevel == .familiar }.map { $0.word.lowercased() })
+        let masteredSet = Set(userVocabulary.filter { $0.masteryLevel == .mastered }.map { $0.word.lowercased() })
+        let vocabularySet = unfamiliarSet.union(familiarSet).union(masteredSet)
         
         return await withTaskGroup(of: ArticleMatchResult?.self) { group in
             for article in articles {
                 group.addTask {
-                    await self.calculateArticleMatch(article: article, vocabularyMap: vocabularyMap)
+                    await self.calculateArticleMatch(
+                        article: article, 
+                        vocabularySet: vocabularySet,
+                        familiarSet: familiarSet,
+                        masteredSet: masteredSet
+                    )
                 }
             }
             
@@ -159,13 +267,23 @@ class IntelligentRankingService: ObservableObject {
     }
     
     // MARK: - 单篇文章匹配度计算
-    private func calculateArticleMatch(article: Article, vocabularyMap: [String: MasteryLevel]) async -> ArticleMatchResult? {
+    private func calculateArticleMatch(
+        article: Article, 
+        vocabularySet: Set<String>,
+        familiarSet: Set<String>,
+        masteredSet: Set<String>
+    ) async -> ArticleMatchResult? {
         // 提取文章词汇
-        let articleWords = extractWordsFromArticle(article)
+        let articleWords = Set(extractWordsFromArticle(article))
         guard !articleWords.isEmpty else { return nil }
         
         // 统计词汇掌握情况
-        let wordStats = analyzeWordMastery(words: articleWords, vocabularyMap: vocabularyMap)
+        let wordStats = analyzeWordMastery(
+            words: articleWords, 
+            vocabularySet: vocabularySet, 
+            familiarSet: familiarSet, 
+            masteredSet: masteredSet
+        )
         
         // 计算匹配分数
         let matchScore = calculateMatchScore(stats: wordStats, totalWords: articleWords.count)
@@ -224,22 +342,10 @@ class IntelligentRankingService: ObservableObject {
     }
     
     // MARK: - 词汇掌握情况分析
-    private func analyzeWordMastery(words: [String], vocabularyMap: [String: MasteryLevel]) -> (unknown: Int, familiar: Int, mastered: Int) {
-        var unknown = 0
-        var familiar = 0
-        var mastered = 0
-        
-        for word in words {
-            switch vocabularyMap[word] {
-            case .unfamiliar, .none:
-                unknown += 1
-            case .familiar:
-                familiar += 1
-            case .mastered:
-                mastered += 1
-            }
-        }
-        
+    private func analyzeWordMastery(words: Set<String>, vocabularySet: Set<String>, familiarSet: Set<String>, masteredSet: Set<String>) -> (unknown: Int, familiar: Int, mastered: Int) {
+        let unknown = words.subtracting(vocabularySet.union(familiarSet).union(masteredSet)).count
+        let familiar = words.intersection(familiarSet).count
+        let mastered = words.intersection(masteredSet).count
         return (unknown, familiar, mastered)
     }
     
@@ -312,13 +418,7 @@ class IntelligentRankingService: ObservableObject {
     }
     
     // MARK: - 辅助方法
-    private func createVocabularyMap(_ vocabulary: [UserWord]) -> [String: MasteryLevel] {
-        var map: [String: MasteryLevel] = [:]
-        for word in vocabulary {
-            map[word.word.lowercased()] = word.masteryLevel
-        }
-        return map
-    }
+    // Removed createVocabularyMap, using sets instead
     
     private func generateCacheKey(articles: [Article], vocabulary: [UserWord]) -> String {
         let articleIds = articles.map { $0.id.uuidString }.sorted().joined(separator: ",")

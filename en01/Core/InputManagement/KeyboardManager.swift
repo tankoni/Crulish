@@ -123,8 +123,9 @@ class KeyboardManager: ObservableObject {
         disableConflictingConstraints(for: view)
         
         // 延迟重新启用
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.enableConstraints(for: view)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+            self.enableConstraints(for: view)
         }
     }
     

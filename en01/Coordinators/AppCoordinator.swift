@@ -55,8 +55,7 @@ enum TabSelection: String, CaseIterable {
 }
 
 /// 应用协调器，负责管理全局导航和状态协调
-@MainActor
-class AppCoordinator: ObservableObject {
+@MainActor class AppCoordinator: ObservableObject {
     // MARK: - Published Properties
     @Published var selectedTab: TabSelection = .home
     @Published var isLoading: Bool = false
@@ -117,6 +116,14 @@ class AppCoordinator: ObservableObject {
         return serviceContainer.getUnifiedErrorHandler()
     }
     
+    func getAdaptiveLearningService() -> AdaptiveLearningService {
+        return serviceContainer.getAdaptiveLearningService()
+    }
+    
+    func getAdaptiveRecommendationEngine() -> AdaptiveRecommendationEngine {
+        return serviceContainer.getAdaptiveRecommendationEngine()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer
@@ -132,6 +139,7 @@ class AppCoordinator: ObservableObject {
             self.wordInteractionCoordinator = WordInteractionCoordinator(
                 dictionaryService: serviceContainer.getDictionaryService(),
                 translationService: serviceContainer.getTranslationService(),
+                learningTrackingService: serviceContainer.getLearningTrackingService(),
                 settings: AppSettings()
             )
             
@@ -173,7 +181,12 @@ class AppCoordinator: ObservableObject {
             articleService: serviceContainer.getArticleService(),
             dictionaryService: serviceContainer.getDictionaryService(),
             userProgressService: serviceContainer.getUserProgressService(),
-            errorHandler: serviceContainer.getErrorHandler()
+            errorHandler: serviceContainer.getErrorHandler(),
+            soloArticleService: SoloArticleService(
+                modelContext: serviceContainer.getModelContext()!,
+                cacheManager: serviceContainer.getCacheManager(),
+                errorHandler: serviceContainer.getErrorHandler()
+            )
         )
         
         self.readingViewModel = ReadingViewModel(

@@ -20,7 +20,7 @@ struct ArticleReaderView: View {
     @State private var showingSettings = false
     @State private var fontSize: CGFloat = 16
     @State private var lineSpacing: CGFloat = 6
-    @State private var colorScheme: ColorScheme = .light
+    @State private var colorScheme: SwiftUI.ColorScheme? = nil
     @State private var readingStartTime = Date()
     @State private var readingTimer: Timer?
     @State private var displayMode: DisplayMode = .pdf
@@ -65,6 +65,7 @@ struct ArticleReaderView: View {
                     article: article
                 )
                 .environmentObject(appCoordinator.getDictionaryService())
+                .environmentObject(appCoordinator.wordInteractionCoordinator!)
             } else {
                 VStack {
                      if isLoadingStructuredText {
@@ -90,6 +91,8 @@ struct ArticleReaderView: View {
                     article: article,
                     viewModel: progressViewModel
                 )
+                .environmentObject(appCoordinator.getDictionaryService())
+                .environmentObject(appCoordinator.wordInteractionCoordinator!)
             } else {
                 VStack {
                     Image(systemName: "doc.text.below.ecg")
@@ -776,7 +779,7 @@ struct ReadingSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var fontSize: CGFloat
     @Binding var lineSpacing: CGFloat
-    @Binding var colorScheme: ColorScheme
+    @Binding var colorScheme: SwiftUI.ColorScheme?
     
     var body: some View {
         NavigationView {
@@ -811,8 +814,8 @@ struct ReadingSettingsSheet: View {
                 
                 Section("主题设置") {
                     Picker("主题", selection: $colorScheme) {
-                        Text("浅色").tag(ColorScheme.light)
-                        Text("深色").tag(ColorScheme.dark)
+                        Text("浅色").tag(SwiftUI.ColorScheme.light)
+                        Text("深色").tag(SwiftUI.ColorScheme.dark)
                     }
                     .pickerStyle(SegmentedPickerStyle())
                 }

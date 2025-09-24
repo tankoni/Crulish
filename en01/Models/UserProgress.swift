@@ -26,9 +26,36 @@ final class UserProgress: @unchecked Sendable {
     var streakDays: Int // 连续学习天数（别名）
     var maxStreakDays: Int // 最大连续学习天数（别名）
     var articlesRead: Int // 已读文章数（别名）
-    var achievements: [Achievement] // 成就列表
+    var achievements: [AchievementData] // 成就列表
     
-    // 计算属性
+    // 新增字段
+    var readingProgress: [ReadingProgressRecord] = [] // 阅读进度记录
+    var bookmarkedArticles: [String] = [] // 收藏的文章ID列表
+    var completedArticleIds: [String] = [] // 已完成的文章ID列表
+    
+    // 每日学习记录
+    @Relationship(deleteRule: .cascade)
+    var dailyRecords: [DailyStudyRecord] = []
+    
+    init() {
+        self.id = UUID()
+        self.totalReadingTime = 0
+        self.totalArticlesRead = 0
+        self.totalWordsLookedUp = 0
+        self.currentStreak = 0
+        self.longestStreak = 0
+        self.lastStudyDate = nil
+        self.createdDate = Date()
+        self.level = .beginner
+        self.experience = 0
+        self.experiencePoints = 0
+        self.streakDays = 0
+        self.maxStreakDays = 0
+        self.articlesRead = 0
+        self.achievements = []
+    }
+    
+    // MARK: - 计算属性
     var nextLevelExperience: Int {
         return level.nextLevel?.requiredExperience ?? level.requiredExperience
     }
@@ -52,228 +79,35 @@ final class UserProgress: @unchecked Sendable {
         return dailyRecords.reduce(0) { $0 + $1.reviewsCompleted }
     }
     
-    // 每日学习记录
-    @Relationship(deleteRule: .cascade)
-    var dailyRecords: [DailyStudyRecord] = []
-    
-    init() {
-        self.id = UUID()
-        self.totalReadingTime = 0
-        self.totalArticlesRead = 0
-        self.totalWordsLookedUp = 0
-        self.currentStreak = 0
-        self.longestStreak = 0
-        self.lastStudyDate = nil
-        self.createdDate = Date()
-        self.level = .beginner
-        self.experience = 0
-        self.experiencePoints = 0
-        self.streakDays = 0
-        self.maxStreakDays = 0
-        self.articlesRead = 0
-        self.achievements = []
-    }
-}
-
-// 用户等级
-enum UserLevel: String, CaseIterable, Codable {
-    case beginner = "初学者"
-    case elementary = "入门"
-    case intermediate = "中级"
-    case advanced = "高级"
-    case expert = "专家"
-    
-    var displayName: String {
-        return self.rawValue
+    // 获取今日学习统计
+    var todayStats: DailyStudyRecord? {
+        let today = Calendar.current.startOfDay(for: Date())
+        return dailyRecords.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
     }
     
-    var requiredExperience: Int {
-        switch self {
-        case .beginner: return 0
-        case .elementary: return 100
-        case .intermediate: return 300
-        case .advanced: return 600
-        case .expert: return 1000
-        }
+    // 获取本周学习统计
+    var weeklyStats: (readingTime: TimeInterval, articlesRead: Int, wordsLookedUp: Int) {
+        let calendar = Calendar.current
+        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        
+        let weeklyRecords = dailyRecords.filter { $0.date >= weekAgo }
+        
+        let totalTime = weeklyRecords.reduce(0) { $0 + $1.readingTime }
+        let totalArticles = weeklyRecords.reduce(0) { $0 + $1.articlesRead }
+        let totalWords = weeklyRecords.reduce(0) { $0 + $1.wordsLookedUp }
+        
+        return (totalTime, totalArticles, totalWords)
     }
     
-    var nextLevel: UserLevel? {
-        switch self {
-        case .beginner: return .elementary
-        case .elementary: return .intermediate
-        case .intermediate: return .advanced
-        case .advanced: return .expert
-        case .expert: return nil
-        }
+    // 获取学习天数
+    var studyDays: Int {
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: createdDate, to: Date()).day ?? 0
+        return max(0, days + 1)
     }
     
-    var color: Color {
-        switch self {
-        case .beginner: return .gray
-        case .elementary: return .green
-        case .intermediate: return .blue
-        case .advanced: return .purple
-        case .expert: return .yellow
-        }
-    }
+    // MARK: - 学习进度方法
     
-    var iconName: String {
-        switch self {
-        case .beginner: return "leaf"
-        case .elementary: return "seedling"
-        case .intermediate: return "tree"
-        case .advanced: return "mountain"
-        case .expert: return "crown"
-        }
-    }
-}
-
-// 每日学习记录
-@Model
-final class DailyStudyRecord: @unchecked Sendable {
-    var id: UUID
-    var date: Date
-    var readingTime: TimeInterval // 当日阅读时间
-    var articlesRead: Int // 当日阅读文章数
-    var wordsLookedUp: Int // 当日查词数
-    var newWordsLearned: Int // 当日新学单词数
-    var reviewsCompleted: Int // 当日完成的复习数
-    var experienceGained: Int // 当日获得经验值
-    
-    init(date: Date = Date()) {
-        self.id = UUID()
-        self.date = Calendar.current.startOfDay(for: date)
-        self.readingTime = 0
-        self.articlesRead = 0
-        self.wordsLookedUp = 0
-        self.newWordsLearned = 0
-        self.reviewsCompleted = 0
-        self.experienceGained = 0
-    }
-}
-
-// 成就系统
-struct Achievement: Codable, Identifiable {
-    var id = UUID()
-    let type: AchievementType
-    let unlockedDate: Date
-    let progress: Double // 0.0 - 1.0
-    
-    init(type: AchievementType, progress: Double = 1.0) {
-        self.type = type
-        self.unlockedDate = Date()
-        self.progress = progress
-    }
-    
-    var iconName: String {
-        return type.icon
-    }
-    
-    var isUnlocked: Bool {
-        return progress >= 1.0
-    }
-    
-    var title: String {
-        return type.title
-    }
-    
-    var description: String {
-        return type.description
-    }
-}
-
-enum AchievementType: String, CaseIterable, Codable {
-    // 阅读相关成就
-    case firstArticle = "首次阅读"
-    case read10Articles = "阅读达人"
-    case read50Articles = "阅读专家"
-    case read100Articles = "阅读大师"
-    
-    // 词汇相关成就
-    case firstWord = "初识单词"
-    case lookup100Words = "词汇探索者"
-    case lookup500Words = "词汇收集家"
-    case lookup1000Words = "词汇大师"
-    case master100Words = "词汇掌握者"
-    
-    // 时间相关成就
-    case study1Hour = "专注学习"
-    case study10Hours = "勤奋学者"
-    case study50Hours = "学习达人"
-    case study100Hours = "学习专家"
-    
-    // 连续学习成就
-    case streak3Days = "三日坚持"
-    case streak7Days = "一周坚持"
-    case streak30Days = "月度坚持"
-    case streak100Days = "百日坚持"
-    
-    var title: String {
-        return rawValue
-    }
-    
-    var displayName: String {
-        switch self {
-        case .firstArticle, .read10Articles, .read50Articles, .read100Articles:
-            return "阅读成就"
-        case .firstWord, .lookup100Words, .lookup500Words, .lookup1000Words, .master100Words:
-            return "词汇成就"
-        case .study1Hour, .study10Hours, .study50Hours, .study100Hours:
-            return "学习时长成就"
-        case .streak3Days, .streak7Days, .streak30Days, .streak100Days:
-            return "连续学习成就"
-        }
-    }
-    
-    var description: String {
-        switch self {
-        case .firstArticle: return "完成第一篇文章阅读"
-        case .read10Articles: return "累计阅读10篇文章"
-        case .read50Articles: return "累计阅读50篇文章"
-        case .read100Articles: return "累计阅读100篇文章"
-        case .firstWord: return "查询第一个单词"
-        case .lookup100Words: return "累计查询100个单词"
-        case .lookup500Words: return "累计查询500个单词"
-        case .lookup1000Words: return "累计查询1000个单词"
-        case .master100Words: return "掌握100个单词"
-        case .study1Hour: return "累计学习1小时"
-        case .study10Hours: return "累计学习10小时"
-        case .study50Hours: return "累计学习50小时"
-        case .study100Hours: return "累计学习100小时"
-        case .streak3Days: return "连续学习3天"
-        case .streak7Days: return "连续学习7天"
-        case .streak30Days: return "连续学习30天"
-        case .streak100Days: return "连续学习100天"
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .firstArticle, .read10Articles, .read50Articles, .read100Articles:
-            return "book"
-        case .firstWord, .lookup100Words, .lookup500Words, .lookup1000Words, .master100Words:
-            return "textbook"
-        case .study1Hour, .study10Hours, .study50Hours, .study100Hours:
-            return "clock"
-        case .streak3Days, .streak7Days, .streak30Days, .streak100Days:
-            return "flame"
-        }
-    }
-    
-    var experienceReward: Int {
-        switch self {
-        case .firstArticle, .firstWord: return 10
-        case .read10Articles, .lookup100Words, .study1Hour, .streak3Days: return 20
-        case .read50Articles, .lookup500Words, .study10Hours, .streak7Days: return 50
-        case .read100Articles, .lookup1000Words, .master100Words, .study50Hours, .streak30Days: return 100
-        case .study100Hours, .streak100Days: return 200
-        }
-    }
-}
-
-// UserWordRecord 已移除 - 用户查词记录通过 UserWord 模型管理
-
-extension UserProgress {
     // 添加阅读时间
     func addReadingTime(_ time: TimeInterval) {
         self.totalReadingTime += time
@@ -313,6 +147,8 @@ extension UserProgress {
         }
         addExperience(3) // 每次复习3经验值
     }
+    
+    // MARK: - 私有方法
     
     // 更新今日记录
     private func updateTodayRecord(update: (DailyStudyRecord) -> Void) {
@@ -378,7 +214,7 @@ extension UserProgress {
         }
         
         for achievementType in newAchievements {
-            let achievement = Achievement(type: achievementType)
+            let achievement = AchievementData(type: achievementType)
             achievements.append(achievement)
             addExperience(achievementType.experienceReward)
         }
@@ -406,39 +242,201 @@ extension UserProgress {
         case .streak100Days: return currentStreak >= 100
         }
     }
-    
-    // 获取今日学习统计
-    var todayStats: DailyStudyRecord? {
-        let today = Calendar.current.startOfDay(for: Date())
-        return dailyRecords.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
-    }
-    
-    // 获取本周学习统计
-    var weeklyStats: (readingTime: TimeInterval, articlesRead: Int, wordsLookedUp: Int) {
-        let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        
-        let weeklyRecords = dailyRecords.filter { $0.date >= weekAgo }
-        
-        let totalTime = weeklyRecords.reduce(0) { $0 + $1.readingTime }
-        let totalArticles = weeklyRecords.reduce(0) { $0 + $1.articlesRead }
-        let totalWords = weeklyRecords.reduce(0) { $0 + $1.wordsLookedUp }
-        
-        return (totalTime, totalArticles, totalWords)
-    }
-    
-    // 获取学习天数
-    var studyDays: Int {
-        let calendar = Calendar.current
-        let days = calendar.dateComponents([.day], from: createdDate, to: Date()).day ?? 0
-        return max(0, days + 1)
-    }
-    
-    // 获取平均每日阅读时间
-    var averageDailyReadingTime: TimeInterval {
-        guard studyDays > 0 else { return 0 }
-        return totalReadingTime / Double(studyDays)
-    }
-    
+}
 
+// MARK: - 用户等级
+enum UserLevel: String, CaseIterable, Codable {
+    case beginner = "初学者"
+    case elementary = "入门"
+    case intermediate = "中级"
+    case upperIntermediate = "上中级"
+    case advanced = "高级"
+    case expert = "专家"
+    
+    var displayName: String {
+        return self.rawValue
+    }
+    
+    var requiredExperience: Int {
+        switch self {
+        case .beginner: return 0
+        case .elementary: return 100
+        case .intermediate: return 300
+        case .upperIntermediate: return 500
+        case .advanced: return 600
+        case .expert: return 1000
+        }
+    }
+    
+    var nextLevel: UserLevel? {
+        switch self {
+        case .beginner: return .elementary
+        case .elementary: return .intermediate
+        case .intermediate: return .upperIntermediate
+        case .upperIntermediate: return .advanced
+        case .advanced: return .expert
+        case .expert: return nil
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .beginner: return .gray
+        case .elementary: return .green
+        case .intermediate: return .blue
+        case .upperIntermediate: return .orange
+        case .advanced: return .purple
+        case .expert: return .yellow
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .beginner: return "leaf"
+        case .elementary: return "seedling"
+        case .intermediate: return "tree"
+        case .upperIntermediate: return "tree.fill"
+        case .advanced: return "mountain"
+        case .expert: return "crown"
+        }
+    }
+}
+
+// MARK: - 每日学习记录
+@Model
+final class DailyStudyRecord: @unchecked Sendable {
+    var id: UUID
+    var date: Date
+    var readingTime: TimeInterval // 当日阅读时间
+    var articlesRead: Int // 当日阅读文章数
+    var wordsLookedUp: Int // 当日查词数
+    var newWordsLearned: Int // 当日新学单词数
+    var reviewsCompleted: Int // 当日完成的复习数
+    var experienceGained: Int // 当日获得经验值
+    
+    init(date: Date = Date()) {
+        self.id = UUID()
+        self.date = Calendar.current.startOfDay(for: date)
+        self.readingTime = 0
+        self.articlesRead = 0
+        self.wordsLookedUp = 0
+        self.newWordsLearned = 0
+        self.reviewsCompleted = 0
+        self.experienceGained = 0
+    }
+}
+
+// MARK: - 成就系统
+struct AchievementData: Codable, Identifiable {
+    var id = UUID()
+    let type: AchievementType
+    let unlockedDate: Date
+    let progress: Double // 0.0 - 1.0
+    
+    init(type: AchievementType, progress: Double = 1.0) {
+        self.type = type
+        self.unlockedDate = Date()
+        self.progress = progress
+    }
+    
+    var iconName: String {
+        return type.icon
+    }
+    
+    var isUnlocked: Bool {
+        return progress >= 1.0
+    }
+    
+    var title: String {
+        return type.title
+    }
+    
+    var description: String {
+        return type.description
+    }
+}
+
+// MARK: - Codable Support
+extension UserProgress: Codable {
+    enum CodingKeys: CodingKey {
+        case id, totalReadingTime, totalArticlesRead, totalWordsLookedUp, currentStreak, longestStreak, lastStudyDate, createdDate, level, experience, experiencePoints, streakDays, maxStreakDays, articlesRead, achievements, readingProgress, bookmarkedArticles, completedArticleIds, dailyRecords
+    }
+
+    convenience init(from decoder: Decoder) throws {
+        self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        totalReadingTime = try container.decode(TimeInterval.self, forKey: .totalReadingTime)
+        totalArticlesRead = try container.decode(Int.self, forKey: .totalArticlesRead)
+        totalWordsLookedUp = try container.decode(Int.self, forKey: .totalWordsLookedUp)
+        currentStreak = try container.decode(Int.self, forKey: .currentStreak)
+        longestStreak = try container.decode(Int.self, forKey: .longestStreak)
+        lastStudyDate = try container.decodeIfPresent(Date.self, forKey: .lastStudyDate)
+        createdDate = try container.decode(Date.self, forKey: .createdDate)
+        level = try container.decode(UserLevel.self, forKey: .level)
+        experience = try container.decode(Int.self, forKey: .experience)
+        experiencePoints = try container.decode(Int.self, forKey: .experiencePoints)
+        streakDays = try container.decode(Int.self, forKey: .streakDays)
+        maxStreakDays = try container.decode(Int.self, forKey: .maxStreakDays)
+        articlesRead = try container.decode(Int.self, forKey: .articlesRead)
+        achievements = try container.decode([AchievementData].self, forKey: .achievements)
+        readingProgress = try container.decode([ReadingProgressRecord].self, forKey: .readingProgress)
+        bookmarkedArticles = try container.decode([String].self, forKey: .bookmarkedArticles)
+        completedArticleIds = try container.decode([String].self, forKey: .completedArticleIds)
+        dailyRecords = try container.decode([DailyStudyRecord].self, forKey: .dailyRecords)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(totalReadingTime, forKey: .totalReadingTime)
+        try container.encode(totalArticlesRead, forKey: .totalArticlesRead)
+        try container.encode(totalWordsLookedUp, forKey: .totalWordsLookedUp)
+        try container.encode(currentStreak, forKey: .currentStreak)
+        try container.encode(longestStreak, forKey: .longestStreak)
+        try container.encodeIfPresent(lastStudyDate, forKey: .lastStudyDate)
+        try container.encode(createdDate, forKey: .createdDate)
+        try container.encode(level, forKey: .level)
+        try container.encode(experience, forKey: .experience)
+        try container.encode(experiencePoints, forKey: .experiencePoints)
+        try container.encode(streakDays, forKey: .streakDays)
+        try container.encode(maxStreakDays, forKey: .maxStreakDays)
+        try container.encode(articlesRead, forKey: .articlesRead)
+        try container.encode(achievements, forKey: .achievements)
+        try container.encode(readingProgress, forKey: .readingProgress)
+        try container.encode(bookmarkedArticles, forKey: .bookmarkedArticles)
+        try container.encode(completedArticleIds, forKey: .completedArticleIds)
+        try container.encode(dailyRecords, forKey: .dailyRecords)
+    }
+}
+
+extension DailyStudyRecord: Codable {
+    enum CodingKeys: CodingKey {
+        case id, date, readingTime, articlesRead, wordsLookedUp, newWordsLearned, reviewsCompleted, experienceGained
+    }
+
+    convenience init(from decoder: Decoder) throws {
+        self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        date = try container.decode(Date.self, forKey: .date)
+        readingTime = try container.decode(TimeInterval.self, forKey: .readingTime)
+        articlesRead = try container.decode(Int.self, forKey: .articlesRead)
+        wordsLookedUp = try container.decode(Int.self, forKey: .wordsLookedUp)
+        newWordsLearned = try container.decode(Int.self, forKey: .newWordsLearned)
+        reviewsCompleted = try container.decode(Int.self, forKey: .reviewsCompleted)
+        experienceGained = try container.decode(Int.self, forKey: .experienceGained)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(date, forKey: .date)
+        try container.encode(readingTime, forKey: .readingTime)
+        try container.encode(articlesRead, forKey: .articlesRead)
+        try container.encode(wordsLookedUp, forKey: .wordsLookedUp)
+        try container.encode(newWordsLearned, forKey: .newWordsLearned)
+        try container.encode(reviewsCompleted, forKey: .reviewsCompleted)
+        try container.encode(experienceGained, forKey: .experienceGained)
+    }
 }

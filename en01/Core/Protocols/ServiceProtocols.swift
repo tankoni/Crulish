@@ -39,7 +39,7 @@ protocol ArticleServiceProtocol {
     func getAvailableYears() -> [Int]
     func getAvailableTopics() -> [String]
     func getAvailableExamTypes() -> [String]
-    func getReadingStatistics() async throws -> ReadingStatistics
+    func getReadingStatistics() async throws -> ReadingStatisticsDomain
 }
 
 // MARK: - Dictionary Service Protocol
@@ -115,7 +115,7 @@ protocol UserProgressServiceProtocol {
     func getMonthlyStatistics() async throws -> MonthlyStatistics
     func getOverallStatistics() async throws -> OverallStatistics
     func getVocabularyProgressStatistics() async throws -> VocabularyProgressStats
-    func getVocabularyStatistics() async throws -> VocabularyStatistics
+    func getVocabularyStatistics() async throws -> VocabularyStatisticsDomain
     func getAchievementStatistics() async throws -> AchievementStatistics
     func getReadingTimeChartData(for timeRange: TimeRange) async throws -> [ChartDataPoint]
     func getVocabularyChartData(for timeRange: TimeRange) async throws -> [ChartDataPoint]
@@ -129,7 +129,7 @@ protocol UserProgressServiceProtocol {
     func getConsecutiveDays() -> Int
     
     // 成就系统
-    func getUnlockedAchievements() -> [Achievement]
+    func getUnlockedAchievements() -> [AchievementData]
     func getAvailableAchievements() -> [AchievementType]
     
     // 学习建议
@@ -141,19 +141,19 @@ protocol UserProgressServiceProtocol {
     func resetProgress()
     
     // 设置管理
-    func getUserSettings() async throws -> UserSettings
-    func getReadingSettings() async throws -> ReadingSettings
-    func getVocabularySettings() async throws -> VocabularySettings
-    func getNotificationSettings() async throws -> NotificationSettings
-    func getPrivacySettings() async throws -> PrivacySettings
-    func getAppearanceSettings() async throws -> AppearanceSettings
+    func getUserSettings() async throws -> UserSettingsUI
+    func getReadingSettings() async throws -> ReadingSettingsUI
+    func getVocabularySettings() async throws -> VocabularySettingsUI
+    func getNotificationSettings() async throws -> NotificationSettingsUI
+    func getPrivacySettings() async throws -> PrivacySettingsUI
+    func getAppearanceSettings() async throws -> AppearanceSettingsUI
     
-    func updateUserSettings(_ settings: UserSettings) async throws
-    func updateReadingSettings(_ settings: ReadingSettings) async throws
-    func updateVocabularySettings(_ settings: VocabularySettings) async throws
-    func updateNotificationSettings(_ settings: NotificationSettings) async throws
-    func updatePrivacySettings(_ settings: PrivacySettings) async throws
-    func updateAppearanceSettings(_ settings: AppearanceSettings) async throws
+    func updateUserSettings(_ settings: UserSettingsUI) async throws
+    func updateReadingSettings(_ settings: ReadingSettingsUI) async throws
+    func updateVocabularySettings(_ settings: VocabularySettingsUI) async throws
+    func updateNotificationSettings(_ settings: NotificationSettingsUI) async throws
+    func updatePrivacySettings(_ settings: PrivacySettingsUI) async throws
+    func updateAppearanceSettings(_ settings: AppearanceSettingsUI) async throws
     
     // 数据重置
     func resetAllData() async throws

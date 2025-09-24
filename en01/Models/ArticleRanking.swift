@@ -13,7 +13,7 @@ import SwiftUI
 @Model
 final class ArticleRanking: @unchecked Sendable {
     var id: UUID
-    var userID: String // 用户ID（用于多用户支持）
+    var userId: String // 用户ID（用于多用户支持）
     var articleID: String // 文章ID
     var articleTitle: String // 文章标题
     var rankingScore: Double // 综合排序分数（0-100）
@@ -50,9 +50,9 @@ final class ArticleRanking: @unchecked Sendable {
     var yearPreference: Double // 年份偏好匹配度（0-100）
     var lengthPreference: Double // 长度偏好匹配度（0-100）
     
-    init(userID: String, articleID: String, articleTitle: String) {
+    init(userId: String, articleID: String, articleTitle: String) {
         self.id = UUID()
-        self.userID = userID
+        self.userId = userId
         self.articleID = articleID
         self.articleTitle = articleTitle
         self.rankingScore = 0.0
@@ -62,25 +62,29 @@ final class ArticleRanking: @unchecked Sendable {
         self.lastUpdated = Date()
         self.isRecommended = false
         
+        // 初始化词汇分析结果
         self.totalWords = 0
         self.unknownWords = 0
         self.familiarWords = 0
         self.masteredWords = 0
         self.newWords = 0
         
+        // 初始化难度评估
         self.estimatedDifficulty = .medium
         self.readingTime = 0
         self.vocabularyLevel = .intermediate
         
+        // 初始化学习价值评估
         self.learningValue = 0.0
         self.vocabularyGrowth = 0.0
         self.reviewValue = 0.0
         
-        // 默认权重配置
+        // 初始化排序权重配置
         self.vocabularyWeight = 0.4
         self.difficultyWeight = 0.3
         self.priorityWeight = 0.3
         
+        // 初始化用户偏好匹配
         self.topicMatch = 0.0
         self.yearPreference = 0.0
         self.lengthPreference = 0.0

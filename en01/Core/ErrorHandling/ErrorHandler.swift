@@ -57,14 +57,14 @@ class ErrorHandler: ErrorHandlerProtocol {
     }
     
     func dismissError() {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.currentError = nil
             self.isShowingError = false
         }
     }
     
     func clearAllErrors() {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.currentError = nil
             self.isShowingError = false
             self.errorHistory.removeAll()
@@ -94,7 +94,7 @@ class ErrorHandler: ErrorHandlerProtocol {
         
         // 根据错误严重程度决定是否显示给用户
         if shouldShowToUser(appError) {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.currentError = appError
                 self.isShowingError = true
             }
@@ -175,34 +175,21 @@ class ErrorHandler: ErrorHandlerProtocol {
     }
     
     private func shouldShowToUser(_ error: AppError) -> Bool {
-        switch error {
-        case .networkError, .fileNotFound, .invalidInput, .authenticationFailed, .permissionDenied:
-            return true
-        case .dataCorruption, .serviceUnavailable, .storageError, .parsingError:
-            return true
-        case .initializationFailed, .configurationError:
-            return true
-        case .translationFailed, .translationUnsupportedLanguage,
-             .translationModelNotAvailable, .translationApiKeyMissing,
-             .translationRateLimitExceeded, .translationServiceUnavailable,
-             .translationInvalidConfiguration, .translationInvalidRequest,
-             .translationApiError:
-            return true
-        case .translationInvalidInput, .translationInvalidURL, .translationInvalidResponse,
-             .translationInvalidProvider, .translationProviderNotConfigured:
+        // 统一按严重级别决定是否展示给用户
+        switch error.severity {
+        case .info:
             return false
-        case .unknown, .unexpectedError:
-            return false // 未知错误通常不显示给用户
+        case .warning, .error, .critical:
+            return true
         }
     }
     
     private func shouldReportError(_ error: AppError) -> Bool {
-        switch error {
-        case .dataCorruption, .unknown, .unexpectedError:
+        // 统一按严重级别决定是否上报
+        switch error.severity {
+        case .critical, .error:
             return true
-        case .storageError, .parsingError, .initializationFailed:
-            return true
-        default:
+        case .warning, .info:
             return false
         }
     }
@@ -224,62 +211,19 @@ class ErrorHandler: ErrorHandlerProtocol {
     
     private func logError(_ error: AppError, context: String) {
         let contextInfo = context.isEmpty ? "" : " [Context: \(context)]"
+        let description = error.errorDescription ?? "No description"
+        let message = "\(error.errorKey): \(description)\(contextInfo)"
         
-        switch error {
-        case .networkError(let underlyingError):
-            logger.error("Network error: \(underlyingError.localizedDescription)\(contextInfo)")
-        case .dataCorruption:
-            logger.error("Data corruption detected\(contextInfo)")
-        case .fileNotFound(let fileName):
-            logger.error("File not found: \(fileName)\(contextInfo)")
-        case .invalidInput(let message):
-            logger.warning("Invalid input: \(message)\(contextInfo)")
-        case .serviceUnavailable(let service):
-            logger.error("Service unavailable: \(service)\(contextInfo)")
-        case .authenticationFailed:
-            logger.error("Authentication failed\(contextInfo)")
-        case .permissionDenied:
-            logger.error("Permission denied\(contextInfo)")
-        case .storageError(let underlyingError):
-            logger.error("Storage error: \(underlyingError.localizedDescription)\(contextInfo)")
-        case .parsingError(let underlyingError):
-            logger.error("Parsing error: \(underlyingError.localizedDescription)\(contextInfo)")
-        case .initializationFailed:
-            logger.error("Initialization failed\(contextInfo)")
-        case .configurationError(let message):
-            logger.error("Configuration error: \(message)\(contextInfo)")
-        case .translationFailed(let message):
-            logger.error("Translation failed: \(message)\(contextInfo)")
-        case .translationUnsupportedLanguage(let language):
-            logger.error("Translation unsupported language: \(language)\(contextInfo)")
-        case .translationModelNotAvailable(let model):
-            logger.error("Translation model not available: \(model)\(contextInfo)")
-        case .translationApiKeyMissing:
-            logger.error("Translation API key missing\(contextInfo)")
-        case .translationRateLimitExceeded:
-            logger.error("Translation rate limit exceeded\(contextInfo)")
-        case .translationServiceUnavailable:
-            logger.error("Translation service unavailable\(contextInfo)")
-        case .translationInvalidConfiguration(let message):
-            logger.error("Translation invalid configuration: \(message)\(contextInfo)")
-        case .translationInvalidRequest(let message):
-            logger.error("Translation invalid request: \(message)\(contextInfo)")
-        case .translationApiError(let code, let message):
-            logger.error("Translation API error (\(code)): \(message)\(contextInfo)")
-        case .translationInvalidInput(let message):
-            logger.warning("Translation invalid input: \(message)\(contextInfo)")
-        case .translationInvalidURL(let url):
-            logger.error("Translation invalid URL: \(url)\(contextInfo)")
-        case .translationInvalidResponse(let message):
-            logger.error("Translation invalid response: \(message)\(contextInfo)")
-        case .translationInvalidProvider(let provider):
-            logger.error("Translation invalid provider: \(provider)\(contextInfo)")
-        case .translationProviderNotConfigured(let provider):
-            logger.error("Translation provider not configured: \(provider)\(contextInfo)")
-        case .unexpectedError(let underlyingError):
-            logger.error("Unexpected error: \(underlyingError.localizedDescription)\(contextInfo)")
-        case .unknown(let underlyingError):
-            logger.error("Unknown error: \(underlyingError.localizedDescription)\(contextInfo)")
+        // 统一按严重级别记录日志
+        switch error.severity {
+        case .info:
+            logger.info(message)
+        case .warning:
+            logger.warning(message)
+        case .error:
+            logger.error(message)
+        case .critical:
+            logger.error("CRITICAL - \(message)")
         }
     }
     

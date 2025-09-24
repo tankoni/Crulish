@@ -110,16 +110,14 @@ class MockArticleService: ArticleServiceProtocol {
         return ["考研一", "考研二"]
     }
     
-    func getReadingStatistics() async throws -> ReadingStatistics {
+    func getReadingStatistics() async throws -> ReadingStatisticsDomain {
         let stats = getArticleStats()
-        return ReadingStatistics(
-            completedArticles: stats.completedArticles,
-            inProgressArticles: stats.inProgressArticles,
-            bookmarkedArticles: 2, // Mock value
-            averageReadingTime: stats.totalReadingTime / Double(stats.totalArticles > 0 ? stats.totalArticles : 1),
-            favoriteTopics: Array(stats.topicStats.keys),
-            difficultyDistribution: Dictionary(uniqueKeysWithValues: stats.difficultyStats.map { ($0.key.rawValue, $0.value.total) }),
-            yearDistribution: Dictionary(uniqueKeysWithValues: stats.yearStats.map { (String($0.key), $0.value.total) })
+        return ReadingStatisticsDomain(
+            totalArticlesRead: stats.completedArticles,
+            totalReadingTime: stats.totalReadingTime,
+            averageReadingSpeed: 200.0, // Mock value: 200 words per minute
+            completionRate: Double(stats.completedArticles) / Double(stats.totalArticles > 0 ? stats.totalArticles : 1),
+            favoriteCategories: Array(stats.topicStats.keys)
         )
     }
 }
@@ -412,13 +410,23 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
     
     func getWeeklyComparison() -> WeeklyComparison {
+        let currentWeek = StatisticsWeeklyStats(
+            totalStudyTime: 3600,
+            articlesRead: 5,
+            wordsLearned: 25,
+            averageScore: 85.0
+        )
+        
+        let previousWeek = StatisticsWeeklyStats(
+            totalStudyTime: 2400,
+            articlesRead: 3,
+            wordsLearned: 18,
+            averageScore: 78.0
+        )
+        
         return WeeklyComparison(
-            thisWeekReadingTime: 3600,
-            lastWeekReadingTime: 2400,
-            thisWeekArticles: 5,
-            lastWeekArticles: 3,
-            thisWeekWords: 25,
-            lastWeekWords: 18
+            currentWeek: currentWeek,
+            previousWeek: previousWeek
         )
     }
     
@@ -491,15 +499,13 @@ class MockUserProgressService: UserProgressServiceProtocol {
         )
     }
     
-    func getReadingStatistics() async throws -> ReadingStatistics {
-        return ReadingStatistics(
-            completedArticles: 35,
-            inProgressArticles: 5,
-            bookmarkedArticles: 12,
-            averageReadingTime: 480,
-            favoriteTopics: ["Technology", "Science", "Business"],
-            difficultyDistribution: ["Easy": 10, "Medium": 20, "Hard": 5],
-            yearDistribution: ["2024": 35]
+    func getReadingStatistics() async throws -> ReadingStatisticsDomain {
+        return ReadingStatisticsDomain(
+            totalArticlesRead: 35,
+            totalReadingTime: 480 * 35, // 总阅读时间
+            averageReadingSpeed: 250.0,
+            completionRate: 0.85,
+            favoriteCategories: ["Technology", "Science", "Business"]
         )
     }
     
@@ -527,25 +533,21 @@ class MockUserProgressService: UserProgressServiceProtocol {
     
     func getGoalProgress() -> GoalProgress {
         return GoalProgress(
-            dailyReadingProgress: 0.6,
-            weeklyArticleProgress: 0.8,
-            weeklyWordProgress: 0.7,
-            dailyReadingGoal: 30,
-            weeklyArticleGoal: 5,
-            weeklyWordGoal: 25
+            dailyGoal: GoalItem(title: "每日阅读", current: 18, target: 30),
+            weeklyGoal: GoalItem(title: "每周文章", current: 4, target: 5),
+            monthlyGoal: GoalItem(title: "每月单词", current: 75, target: 100)
         )
     }
     
-    func getVocabularyStatistics() async throws -> VocabularyStatistics {
-        return VocabularyStatistics(
-            totalWords: userProgress.totalWordsLookedUp,
-            unknownWords: 10,
-            learningWords: 15,
-            familiarWords: 20,
+    func getVocabularyStatistics() async throws -> VocabularyStatisticsDomain {
+        return VocabularyStatisticsDomain(
+            totalWordsLearned: userProgress.totalWordsLookedUp,
             masteredWords: 5,
-            wordsNeedingReview: 8,
-            averageLookupCount: 2.5,
-            totalLookups: 125
+            reviewingWords: 15,
+            newWords: 10,
+            averageTestScore: 85.5,
+            strongestCategories: ["Academic", "Business"],
+            weakestCategories: ["Science", "Technology"]
         )
     }
     
@@ -577,7 +579,7 @@ class MockUserProgressService: UserProgressServiceProtocol {
         return userProgress.currentStreak
     }
     
-    func getUnlockedAchievements() -> [Achievement] {
+    func getUnlockedAchievements() -> [AchievementData] {
         return userProgress.achievements
     }
     
@@ -601,51 +603,51 @@ class MockUserProgressService: UserProgressServiceProtocol {
         // Mock implementation
     }
     
-    func getUserSettings() async throws -> UserSettings {
-        return UserSettings()
+    func getUserSettings() async throws -> UserSettingsUI {
+        return UserSettingsUI()
     }
     
-    func getReadingSettings() async throws -> ReadingSettings {
-        return ReadingSettings()
+    func getReadingSettings() async throws -> ReadingSettingsUI {
+        return ReadingSettingsUI()
     }
     
-    func getVocabularySettings() async throws -> VocabularySettings {
-        return VocabularySettings()
+    func getVocabularySettings() async throws -> VocabularySettingsUI {
+        return VocabularySettingsUI()
     }
     
-    func getNotificationSettings() async throws -> NotificationSettings {
-        return NotificationSettings()
+    func getNotificationSettings() async throws -> NotificationSettingsUI {
+        return NotificationSettingsUI()
     }
     
-    func getPrivacySettings() async throws -> PrivacySettings {
-        return PrivacySettings()
+    func getPrivacySettings() async throws -> PrivacySettingsUI {
+        return PrivacySettingsUI()
     }
     
-    func getAppearanceSettings() async throws -> AppearanceSettings {
-        return AppearanceSettings()
+    func getAppearanceSettings() async throws -> AppearanceSettingsUI {
+        return AppearanceSettingsUI()
     }
     
-    func updateUserSettings(_ settings: UserSettings) async throws {
+    func updateUserSettings(_ settings: UserSettingsUI) async throws {
         // Mock implementation
     }
     
-    func updateReadingSettings(_ settings: ReadingSettings) async throws {
+    func updateReadingSettings(_ settings: ReadingSettingsUI) async throws {
         // Mock implementation
     }
     
-    func updateVocabularySettings(_ settings: VocabularySettings) async throws {
+    func updateVocabularySettings(_ settings: VocabularySettingsUI) async throws {
         // Mock implementation
     }
     
-    func updateNotificationSettings(_ settings: NotificationSettings) async throws {
+    func updateNotificationSettings(_ settings: NotificationSettingsUI) async throws {
         // Mock implementation
     }
     
-    func updatePrivacySettings(_ settings: PrivacySettings) async throws {
+    func updatePrivacySettings(_ settings: PrivacySettingsUI) async throws {
         // Mock implementation
     }
     
-    func updateAppearanceSettings(_ settings: AppearanceSettings) async throws {
+    func updateAppearanceSettings(_ settings: AppearanceSettingsUI) async throws {
         // Mock implementation
     }
     

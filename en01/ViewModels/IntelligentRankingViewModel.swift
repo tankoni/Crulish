@@ -17,6 +17,16 @@ class IntelligentRankingViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var selectedSortOption: RankingSortOption = .matchScore
+    @Published var selectedReadingMode: ReadingMode = .yearlyExams
+    
+    // 新增：自适应推荐相关属性
+    @Published var adaptiveRecommendations: [AdaptiveArticleRecommendation] = []
+    @Published var isAdaptiveMode = false
+    @Published var adaptiveWeight: Double = 0.7
+    @Published var showAdaptiveInsights = false
+    @Published var adaptiveWeights: AdaptiveWeights = .default
+    @Published var adaptiveMode: AdaptiveMode = .balanced
+    @Published var currentLearningInsights: LearningInsights?
     
     // MARK: - Dependencies
     private let rankingService: IntelligentRankingService
@@ -24,73 +34,216 @@ class IntelligentRankingViewModel: ObservableObject {
     private let dictionaryService: DictionaryServiceProtocol
     private let userProgressService: UserProgressServiceProtocol
     private let errorHandler: ErrorHandlerProtocol
+    private let soloArticleService: SoloArticleService
+    
+    // 新增：自适应学习服务
+    private var adaptiveLearningService: AdaptiveLearningService?
+    private var adaptiveRecommendationEngine: AdaptiveRecommendationEngine?
     
     private var cancellables = Set<AnyCancellable>()
     private var allRankedResults: [ArticleMatchResult] = []
     
     // 缓存相关
     private var lastRankingTimestamp: Date?
-    private let rankingCacheValidityDuration: TimeInterval = 600 // 10分钟
+    private let rankingCacheValidityDuration: TimeInterval = 86400 // 24小时
+    
+    // 新增：自适应推荐缓存
+    private var lastAdaptiveRecommendationTimestamp: Date?
+    private let adaptiveCacheValidityDuration: TimeInterval = 3600 // 1小时
     
     // MARK: - Initialization
     init(
         articleService: ArticleServiceProtocol,
         dictionaryService: DictionaryServiceProtocol,
         userProgressService: UserProgressServiceProtocol,
-        errorHandler: ErrorHandlerProtocol
+        errorHandler: ErrorHandlerProtocol,
+        soloArticleService: SoloArticleService
     ) {
         self.articleService = articleService
         self.dictionaryService = dictionaryService
         self.userProgressService = userProgressService
         self.errorHandler = errorHandler
+        self.soloArticleService = soloArticleService
         self.rankingService = IntelligentRankingService(
             dictionaryService: dictionaryService
         )
         
         setupNotificationListeners()
+        setupAdaptiveLearning()
+    }
+    
+    // 新增：设置自适应学习服务
+    private func setupAdaptiveLearning() {
+        // 从ServiceContainer获取自适应学习服务
+        self.adaptiveLearningService = ServiceContainer.shared.getAdaptiveLearningService()
+        
+        // 从ServiceContainer获取自适应推荐引擎
+        self.adaptiveRecommendationEngine = ServiceContainer.shared.getAdaptiveRecommendationEngine()
+        
+        // 配置推荐引擎到排序服务
+        if let engine = adaptiveRecommendationEngine {
+            rankingService.setAdaptiveRecommendationEngine(engine)
+        }
     }
     
     // MARK: - Public Methods
     
-    /// 加载排序后的文章
     func loadRankedArticles() async {
-        // 检查缓存是否有效
-        if let lastTimestamp = lastRankingTimestamp,
-           Date().timeIntervalSince(lastTimestamp) < rankingCacheValidityDuration,
-           !allRankedResults.isEmpty {
-            sortArticles(by: selectedSortOption)
-            return
-        }
+        guard !isLoading else { return }
         
         isLoading = true
         errorMessage = nil
         
         do {
-            // 并行加载文章和词汇数据
-            async let articlesTask = loadArticles()
-            async let vocabularyTask = loadUserVocabulary()
+            let articles = try await loadArticles()
+            let userVocabulary = try await loadUserVocabulary()
             
-            let (articles, vocabulary) = try await (articlesTask, vocabularyTask)
+            if isAdaptiveMode {
+                // 使用混合推荐
+                let results = try await rankingService.getHybridRecommendations(
+                    articles: articles,
+                    userVocabulary: userVocabulary,
+                    adaptiveWeight: adaptiveWeight
+                )
+                allRankedResults = results
+                
+                // 同时获取纯自适应推荐用于展示洞察
+                adaptiveRecommendations = try await rankingService.getAdaptiveRecommendations(
+                    articles: articles,
+                    userVocabulary: userVocabulary
+                )
+                lastAdaptiveRecommendationTimestamp = Date()
+            } else {
+                // 使用传统推荐
+                let results = await rankingService.rankArticles(articles, userVocabulary: userVocabulary)
+                allRankedResults = results
+            }
             
-            // 执行智能排序
-            let rankedResults = await rankingService.rankArticles(articles, userVocabulary: vocabulary)
-            
-            // 更新结果
-            allRankedResults = rankedResults
-            lastRankingTimestamp = Date()
             sortArticles(by: selectedSortOption)
+            lastRankingTimestamp = Date()
             
-            errorHandler.logSuccess("智能排序完成，共 \(rankedResults.count) 篇文章")
+            // 记录用户体验
+            userProgressService.addExperience(5, for: .readArticle)
             
         } catch {
-            errorMessage = "加载文章排序失败: \(error.localizedDescription)"
-            errorHandler.handle(error, context: "智能排序失败")
+            errorMessage = "加载文章失败: \(error.localizedDescription)"
+            errorHandler.handle(AppError.unknown(error), context: "IntelligentRankingViewModel.loadRankedArticles")
         }
         
         isLoading = false
     }
     
+    // 新增：切换自适应模式
+    func toggleAdaptiveMode() async {
+        isAdaptiveMode.toggle()
+        await loadRankedArticles()
+    }
+    
+    // 新增：调整自适应权重
+    func updateAdaptiveWeight(_ weight: Double) async {
+        adaptiveWeight = max(0.0, min(1.0, weight))
+        if isAdaptiveMode {
+            await loadRankedArticles()
+        }
+    }
+    
+    // 新增：获取自适应学习洞察
+    func getAdaptiveLearningInsights() async -> LearningInsights? {
+        guard let adaptiveService = adaptiveLearningService else { return nil }
+        
+        do {
+            let analysis = try await adaptiveService.performLearningAnalysis(userId: "default")
+            
+            // 将分析结果转换为LearningInsights
+            let insights = LearningInsights(
+                learningPattern: .balanced,
+                recommendationConfidence: analysis.difficultyPreference.confidenceLevel,
+                adaptabilityScore: analysis.learningEfficiency.overallEfficiency * 10,
+                vocabularyTrend: .stable,
+                readingSpeedTrend: .stable,
+                comprehensionTrend: .stable,
+                vocabularyMasteryRate: Int(analysis.vocabularyLearning.masteryRate * 100),
+                averageReadingSpeed: Int(analysis.readingPatterns.averageReadingSpeed),
+                comprehensionAccuracy: 85,
+                recommendationReasons: analysis.recommendedAdjustments.prefix(3).map { $0.description },
+                learningRecommendations: analysis.learningEfficiency.optimizationSuggestions.prefix(2).map { $0.description }
+            )
+            
+            return insights
+        } catch {
+            errorHandler.handle(AppError.unknown(error), context: "IntelligentRankingViewModel.getAdaptiveLearningInsights")
+            return nil
+        }
+    }
+    
+    // 新增：获取推荐理由
+    func getRecommendationReason(for articleId: UUID) -> String? {
+        guard let recommendation = adaptiveRecommendations.first(where: { $0.article.id == articleId }) else {
+            return nil
+        }
+        // 返回第一个推荐理由的描述，如果没有则返回nil
+        return recommendation.recommendationReasons.first?.description
+    }
+    
+    // 新增：记录文章交互
+    func recordArticleInteraction(_ interaction: ArticleInteraction) async {
+        guard let adaptiveService = adaptiveLearningService else { return }
+        
+        do {
+            try await adaptiveService.recordLearningBehavior(
+                userId: "default",
+                behavior: LearningBehavior(
+                    timestamp: Date(),
+                    behaviorType: LearningBehaviorType.articleRead,
+                    context: ["articleId": interaction.articleId.uuidString],
+                    outcome: interaction.completed ? LearningOutcome.success : LearningOutcome.partial,
+                    duration: interaction.duration
+                )
+            )
+        } catch {
+            errorHandler.handle(AppError.unknown(error), context: "IntelligentRankingViewModel.recordArticleInteraction")
+        }
+    }
+    
+    /// 切换阅读模式
+    func switchReadingMode(to mode: ReadingMode) async {
+        selectedReadingMode = mode
+        await loadRankedArticles()
+    }
+    
+    func getRankingStatistics() -> RankingStatistics {
+        let totalArticles = allRankedResults.count
+        let averageScore = allRankedResults.isEmpty ? 0.0 : 
+            allRankedResults.map { $0.matchScore }.reduce(0, +) / Double(totalArticles)
+        
+        var difficultyDistribution: [IntelligentRankingDifficultyLevel: Int] = [:]
+        var recommendationDistribution: [RecommendationLevel: Int] = [:]
+        
+        for result in allRankedResults {
+            difficultyDistribution[result.difficulty, default: 0] += 1
+            recommendationDistribution[result.recommendation, default: 0] += 1
+        }
+        
+        return RankingStatistics(
+            totalArticles: totalArticles,
+            averageMatchScore: averageScore,
+            difficultyDistribution: difficultyDistribution,
+            recommendationDistribution: recommendationDistribution
+        )
+    }
+    
+    func getStatisticsForCurrentMode() -> (totalArticles: Int, averageMatchScore: Double, difficultyDistribution: [IntelligentRankingDifficultyLevel: Int]) {
+        switch selectedReadingMode {
+        case .yearlyExams:
+            let stats = getRankingStatistics()
+            return (stats.totalArticles, stats.averageMatchScore, stats.difficultyDistribution)
+        case .soloArticles:
+            return getSoloStatistics()
+        }
+    }
+    
     /// 按指定选项排序文章
+    @MainActor
     func sortArticles(by option: RankingSortOption) {
         selectedSortOption = option
         rankedArticles = rankingService.sortResults(allRankedResults, by: option)
@@ -101,26 +254,11 @@ class IntelligentRankingViewModel: ObservableObject {
         clearCache()
         lastRankingTimestamp = nil
         await loadRankedArticles()
+        // 记录用户刷新排序的行为，给予阅读相关经验奖励
+        userProgressService.addExperience(5, for: .readArticle)
     }
     
-    /// 获取排序统计信息
-    func getRankingStatistics() -> RankingStatistics {
-        let totalArticles = rankedArticles.count
-        let averageMatchScore = rankedArticles.isEmpty ? 0 : rankedArticles.map { $0.matchScore }.reduce(0, +) / Double(totalArticles)
-        
-        let difficultyDistribution = Dictionary(grouping: rankedArticles) { $0.difficulty }
-            .mapValues { $0.count }
-        
-        let recommendationDistribution = Dictionary(grouping: rankedArticles) { $0.recommendation }
-            .mapValues { $0.count }
-        
-        return RankingStatistics(
-            totalArticles: totalArticles,
-            averageMatchScore: averageMatchScore,
-            difficultyDistribution: difficultyDistribution,
-            recommendationDistribution: recommendationDistribution
-        )
-    }
+
     
     /// 获取推荐文章（匹配度最高的前N篇）
     func getRecommendedArticles(limit: Int = 5) -> [ArticleMatchResult] {
@@ -139,6 +277,31 @@ class IntelligentRankingViewModel: ObservableObject {
     
     // MARK: - Private Methods
     
+    // MARK: - Solo文章相关方法
+    
+    /// 加载solo文章的匹配度结果
+    private func loadSoloArticles() async {
+        do {
+            let userVocabulary = await dictionaryService.getUserWordRecords()
+            let matchResults = await soloArticleService.getRankedSoloArticles(userVocabulary: userVocabulary)
+            
+            await MainActor.run {
+                self.rankedArticles = matchResults
+                print("✅ 成功加载solo文章匹配结果，共\(matchResults.count)篇")
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "加载solo文章失败: \(error.localizedDescription)"
+                print("❌ 加载solo文章失败: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// 获取solo文章的统计信息
+    func getSoloStatistics() -> (totalArticles: Int, averageMatchScore: Double, difficultyDistribution: [IntelligentRankingDifficultyLevel: Int]) {
+        return soloArticleService.getSoloArticleStatistics(matchResults: rankedArticles)
+    }
+    
     // 移除重复的排序方法，使用 IntelligentRankingService 的排序方法
     
     /// 清除缓存
@@ -148,8 +311,12 @@ class IntelligentRankingViewModel: ObservableObject {
     }
     
     private func loadArticles() async throws -> [Article] {
-        let articles = articleService.getAllArticles()
-        return articles
+        switch selectedReadingMode {
+        case .yearlyExams:
+            return articleService.getAllArticles()
+        case .soloArticles:
+            return await soloArticleService.getAllSoloArticles()
+        }
     }
     
     private func loadUserVocabulary() async throws -> [UserWord] {

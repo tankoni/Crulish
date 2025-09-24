@@ -296,7 +296,7 @@ struct DictionarySelectionView: View {
         
         let sampleSize = testSampleSize == -1 ? nil : testSampleSize
         viewModel.startTest(with: dictionary, sampleSize: sampleSize) { success in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 isStartingTest = false
                 if success {
                     dismiss()

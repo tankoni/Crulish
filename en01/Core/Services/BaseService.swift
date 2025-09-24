@@ -8,9 +8,10 @@
 import Foundation
 import SwiftData
 import os.log
+import Combine
 
 /// 服务基类，提供统一的错误处理、日志记录和性能监控
-open class BaseService {
+open class BaseService: ObservableObject {
     
     // MARK: - 依赖注入
     

@@ -250,7 +250,8 @@ struct WordTestCard: View {
         }
         
         // 延迟重置状态
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3秒延迟
             withAnimation {
                 selectedMastery = nil
                 isAnimating = false
