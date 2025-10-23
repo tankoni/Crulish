@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无痛学习英语 - 学习统计</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- 引入Chart.js用于图表展示 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .stat-card {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        .time-filter {
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .time-filter.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .progress-ring {
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .progress-ring-circle {
+            stroke-dasharray: 283;
+            stroke-dashoffset: 0;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.5s ease;
+        }
+        .mastery-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .mastery-beginner {
+            background-color: #ef4444;
+        }
+        .mastery-familiar {
+            background-color: #f59e0b;
+        }
+        .mastery-mastered {
+            background-color: #10b981;
+        }
+    </style>
+</head>
+<body class="pb-20">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 bg-white shadow-sm z-10">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-800">学习统计</h1>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-share-alt text-xl"></i>
+                    </button>
+                    <button class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-calendar-alt text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="container mx-auto px-4 py-6">
+        <!-- 时间筛选 -->
+        <section class="mb-6">
+            <div class="flex justify-end space-x-2">
+                <div class="time-filter active">周</div>
+                <div class="time-filter">月</div>
+                <div class="time-filter">年</div>
+                <div class="time-filter">全部</div>
+            </div>
+        </section>
+
+        <!-- 核心数据卡片 -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="stat-card bg-white p-5">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-600">阅读总量</h3>
+                        <div class="mt-2 flex items-baseline">
+                            <span class="text-3xl font-bold">42</span>
+                            <span class="ml-2 text-sm text-gray-500">篇文章</span>
+                        </div>
+                        <div class="mt-1 text-sm text-gray-500">总计 126,540 词</div>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i class="fas fa-book text-blue-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-500">本周目标</span>
+                        <span class="font-medium">5/7 篇</span>
+                    </div>
+                    <div class="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-blue-500 rounded-full" style="width: 71%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card bg-white p-5">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-600">词汇量</h3>
+                        <div class="mt-2 flex items-baseline">
+                            <span class="text-3xl font-bold">1,248</span>
+                            <span class="ml-2 text-sm text-gray-500">个单词</span>
+                        </div>
+                        <div class="mt-1 text-sm text-green-500">+32 本周新增</div>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-graduation-cap text-green-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-between">
+                    <div class="text-center">
+                        <div class="text-xs text-gray-500">生疏</div>
+                        <div class="font-medium">312</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xs text-gray-500">熟悉</div>
+                        <div class="font-medium">486</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xs text-gray-500">掌握</div>
+                        <div class="font-medium">450</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card bg-white p-5">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-600">学习时长</h3>
+                        <div class="mt-2 flex items-baseline">
+                            <span class="text-3xl font-bold">68</span>
+                            <span class="ml-2 text-sm text-gray-500">小时</span>
+                        </div>
+                        <div class="mt-1 text-sm text-gray-500">平均每天 42 分钟</div>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-full">
+                        <i class="fas fa-clock text-purple-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-500">连续学习</span>
+                        <span class="font-medium">12 天</span>
+                    </div>
+                    <div class="mt-2 flex space-x-1">
+                        <div class="h-2 flex-grow bg-purple-500 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-purple-500 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-purple-500 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-purple-500 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-purple-500 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-purple-500 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-purple-500 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-gray-200 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-gray-200 rounded-sm"></div>
+                        <div class="h-2 flex-grow bg-gray-200 rounded-sm"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 词汇掌握进度 -->
+        <section class="stat-card bg-white p-5 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">考研词汇掌握进度</h3>
+                <div class="text-sm text-gray-500">总计: 5,500 词</div>
+            </div>
+            <div class="flex flex-col md:flex-row items-center">
+                <div class="w-48 h-48 relative flex items-center justify-center mb-4 md:mb-0">
+                    <svg class="progress-ring" width="160" height="160">
+                        <circle class="progress-ring-circle" stroke="#e5e7eb" stroke-width="8" fill="transparent" r="70" cx="80" cy="80"/>
+                        <circle class="progress-ring-circle" stroke="#3b82f6" stroke-width="8" fill="transparent" r="70" cx="80" cy="80" stroke-dashoffset="170"/>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span class="text-3xl font-bold">40%</span>
+                        <span class="text-sm text-gray-500">已掌握</span>
+                    </div>
+                </div>
+                <div class="flex-grow md:ml-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-mastered"></span>
+                                <span class="font-medium">掌握</span>
+                            </div>
+                            <div class="mt-2">
+                                <span class="text-2xl font-bold">1,248</span>
+                                <span class="text-sm text-gray-500 ml-1">词</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">占总词汇量的 22.7%</div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-familiar"></span>
+                                <span class="font-medium">熟悉</span>
+                            </div>
+                            <div class="mt-2">
+                                <span class="text-2xl font-bold">950</span>
+                                <span class="text-sm text-gray-500 ml-1">词</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">占总词汇量的 17.3%</div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="mastery-indicator mastery-beginner"></span>
+                                <span class="font-medium">生疏</span>
+                            </div>
+                            <div class="mt-2">
+                                <span class="text-2xl font-bold">3,302</span>
+                                <span class="text-sm text-gray-500 ml-1">词</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">占总词汇量的 60.0%</div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex justify-between items-center text-sm mb-1">
+                            <span class="text-gray-500">总体掌握进度</span>
+                            <span>2,198/5,500</span>
+                        </div>
+                        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500" style="width: 40%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 学习趋势图表 -->
+        <section class="stat-card bg-white p-5 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">学习趋势</h3>
+                <div class="flex space-x-2">
+                    <button class="text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-md">阅读量</button>
+                    <button class="text-xs py-1 px-2 bg-gray-100 text-gray-700 rounded-md">词汇量</button>
+                    <button class="text-xs py-1 px-2 bg-gray-100 text-gray-700 rounded-md">学习时长</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </section>
+
+        <!-- 词汇分类统计 -->
+        <section class="stat-card bg-white p-5 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">词汇分类统计</h3>
+                <button class="text-sm text-blue-500">查看详情</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </section>
+
+        <!-- 学习建议 -->
+        <section class="stat-card bg-white p-5">
+            <h3 class="text-lg font-semibold mb-4">学习建议</h3>
+            <div class="space-y-4">
+                <div class="flex items-start">
+                    <div class="bg-blue-100 p-2 rounded-full mr-3">
+                        <i class="fas fa-lightbulb text-blue-500"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-medium">增加阅读频率</h4>
+                        <p class="text-sm text-gray-600 mt-1">您的阅读频率略有下降。建议每天保持至少30分钟的阅读，有助于巩固词汇记忆。</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <div class="bg-green-100 p-2 rounded-full mr-3">
+                        <i class="fas fa-chart-line text-green-500"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-medium">词汇掌握进度良好</h4>
+                        <p class="text-sm text-gray-600 mt-1">您的词汇掌握速度高于平均水平。继续保持当前学习节奏，预计可在3个月内掌握考研核心词汇。</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <div class="bg-yellow-100 p-2 rounded-full mr-3">
+                        <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-medium">需要加强的领域</h4>
+                        <p class="text-sm text-gray-600 mt-1">科技类词汇的掌握度较低，建议多阅读相关主题的文章，如人工智能、数字化转型等领域。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 时间筛选交互
+        document.querySelectorAll('.time-filter').forEach(filter => {
+            filter.addEventListener('click', function() {
+                document.querySelectorAll('.time-filter').forEach(f => {
+                    f.classList.remove('active');
+                });
+                this.classList.add('active');
+            });
+        });
+
+        // 学习趋势图表
+        const trendCtx = document.getElementById('trendChart').getContext('2d');
+        const trendChart = new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+                datasets: [{
+                    label: '阅读量（篇）',
+                    data: [1, 2, 1, 3, 2, 4, 2],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            drawBorder: false
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+
+        // 词汇分类统计图表
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        const categoryChart = new Chart(categoryCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['科技', '经济', '政治', '文化', '环境', '教育', '其他'],
+                datasets: [{
+                    data: [25, 20, 15, 12, 10, 8, 10],
+                    backgroundColor: [
+                        '#3b82f6',
+                        '#10b981',
+                        '#f59e0b',
+                        '#8b5cf6',
+                        '#ef4444',
+                        '#ec4899',
+                        '#6b7280'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    </script>
+</body>
+</html>

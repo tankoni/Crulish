@@ -658,6 +658,8 @@ struct AnalysisItem: View {
     
     let mockDictionaryService = MockDictionaryService()
     
+    let container = try! ModelContainer(for: VocabularyTest.self)
+    
     return TestResultView(
         testResult: mockTest,
         viewModel: VocabularyTestViewModel(
@@ -665,7 +667,7 @@ struct AnalysisItem: View {
             dictionaryService: mockDictionaryService,
             errorHandler: MockErrorHandler(),
             testResultExportService: TestResultExportService(
-                modelContext: try! ModelContainer(for: VocabularyTest.self).mainContext, 
+                modelContext: container.mainContext, 
                 dictionaryService: mockDictionaryService
             )
         )

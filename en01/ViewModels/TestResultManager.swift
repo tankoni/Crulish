@@ -311,7 +311,7 @@ class TestResultManager: ObservableObject {
             }
             
             // 保存测试结果到 VocabularyTest.testResultsData
-            var mutableTest = test
+            let mutableTest = test
             mutableTest.saveTestResults(vocabularyTestResults)
             
             // 保存到服务层
