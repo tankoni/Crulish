@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// 词典选择视图
 struct DictionarySelectionView: View {
@@ -49,7 +50,9 @@ struct DictionarySelectionView: View {
             }
         }
         .onAppear {
-            viewModel.loadAvailableDictionaries()
+            Task {
+                await viewModel.configurationManager.loadAvailableDictionaries()
+            }
         }
         .sheet(isPresented: $showingTestSizeSheet) {
             testSizeSelectionSheet
@@ -79,7 +82,7 @@ struct DictionarySelectionView: View {
     private var dictionaryListSection: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                if viewModel.isLoadingDictionaries {
+                if viewModel.isLoading {
                     loadingView
                 } else if viewModel.availableDictionaries.isEmpty {
                     emptyStateView
@@ -87,10 +90,23 @@ struct DictionarySelectionView: View {
                     ForEach(viewModel.availableDictionaries) { dictionary in
                         DictionaryCard(
                             dictionary: dictionary,
-                            isSelected: selectedDictionary?.id == dictionary.id
-                        ) {
-                            selectedDictionary = dictionary
-                        }
+                            isSelected: selectedDictionary?.id == dictionary.id,
+                            hasIncompleteTest: viewModel.hasIncompleteTest && viewModel.incompleteTest?.dictionaryFileName == dictionary.fileName,
+                            onTap: {
+                                selectedDictionary = dictionary
+                                Task {
+                                    viewModel.selectDictionary(dictionary)
+                                }
+                            },
+                            onContinueTest: {
+                                Task {
+                                    viewModel.continueIncompleteTest()
+                                    await MainActor.run {
+                                        dismiss()
+                                    }
+                                }
+                            }
+                        )
                     }
                 }
             }
@@ -157,7 +173,11 @@ struct DictionarySelectionView: View {
     private var startTestButton: some View {
         VStack(spacing: 12) {
             if let dictionary = selectedDictionary {
-                Button(action: startTest) {
+                Button(action: {
+                    Task {
+                        await startTest()
+                    }
+                }) {
                     HStack {
                         if isStartingTest {
                             ProgressView()
@@ -289,19 +309,29 @@ struct DictionarySelectionView: View {
     
     // MARK: - Actions
     
-    private func startTest() {
+    private func startTest() async {
         guard let dictionary = selectedDictionary else { return }
         
         isStartingTest = true
         
+        // 设置选中的词典和测试大小
+        await viewModel.configurationManager.selectDictionary(dictionary)
         let sampleSize = testSampleSize == -1 ? nil : testSampleSize
-        viewModel.startTest(with: dictionary, sampleSize: sampleSize) { success in
-            Task { @MainActor in
-                isStartingTest = false
-                if success {
-                    dismiss()
-                }
-            }
+        if let size = sampleSize {
+            viewModel.configurationManager.setTestSize(TestSize.custom(size))
+        } else {
+            viewModel.configurationManager.setTestSize(TestSize.all)
+        }
+        
+        // 开始测试
+        await MainActor.run {
+            viewModel.startTest()
+        }
+        
+        // 处理UI更新
+        await MainActor.run {
+            isStartingTest = false
+            dismiss()
         }
     }
 }
@@ -311,7 +341,9 @@ struct DictionarySelectionView: View {
 struct DictionaryCard: View {
     let dictionary: DictionaryInfo
     let isSelected: Bool
+    let hasIncompleteTest: Bool
     let onTap: () -> Void
+    let onContinueTest: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -352,6 +384,35 @@ struct DictionaryCard: View {
                 )
                 
                 Spacer()
+            }
+            
+            // 继续测试按钮（如果有未完成的测试）
+            if hasIncompleteTest {
+                HStack {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                    
+                    Text("有未完成的测试")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    
+                    Spacer()
+                    
+                    Button("继续测试") {
+                        onContinueTest()
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.orange.opacity(0.1))
+                    )
+                    .foregroundColor(.orange)
+                }
+                .padding(.top, 4)
             }
         }
         .padding(16)
@@ -401,11 +462,17 @@ struct InfoItem: View {
 // DifficultyLevel.displayName 已在 CommonTypes.swift 中定义
 
 #Preview {
+    let mockDictionaryService = MockDictionaryService()
+    
     DictionarySelectionView(
         viewModel: VocabularyTestViewModel(
-            vocabularyTestService: MockVocabularyTestService(),
-            dictionaryService: MockDictionaryService(),
-            errorHandler: MockErrorHandler()
+            vocabularyTestService: MockVocabularyTestService(dictionaryService: mockDictionaryService),
+            dictionaryService: mockDictionaryService,
+            errorHandler: MockErrorHandler(),
+            testResultExportService: TestResultExportService(
+                modelContext: ModelContext(try! ModelContainer(for: VocabularyTest.self)),
+                dictionaryService: mockDictionaryService
+            )
         )
     )
 }

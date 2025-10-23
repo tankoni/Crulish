@@ -13,6 +13,9 @@ import Foundation
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var appViewModel: AppViewModel?
+    @State private var showStartupProgress = true
+    @State private var isInitializing = false
+    @State private var hasInitialized = false
     
     // 计算属性：简化TabView的selection绑定
     private var selectedTabBinding: Binding<TabSelection> {
@@ -24,35 +27,73 @@ struct ContentView: View {
             set: { viewModel.selectTab($0) }
         )
     }
+    
+    // 错误弹窗绑定，避免使用常量绑定导致无法关闭
+    private var showingErrorBinding: Binding<Bool> {
+        guard let viewModel = appViewModel else {
+            return .constant(false)
+        }
+        return Binding(
+            get: { viewModel.coordinator.showingError },
+            set: { viewModel.coordinator.showingError = $0 }
+        )
+    }
 
     
     var body: some View {
         VStack {
-            if let appViewModel = appViewModel {
-                TabView(selection: selectedTabBinding) {
-                    homeTab(appViewModel: appViewModel)
-                    readingTab(appViewModel: appViewModel)
-                    vocabularyTab(appViewModel: appViewModel)
-                    intelligentRankingTab(appViewModel: appViewModel)
-                    progressTab(appViewModel: appViewModel)
-                    settingsTab(appViewModel: appViewModel)
+            if showStartupProgress {
+                // 显示启动进度界面
+                StartupProgressView(progressManager: ServiceContainer.shared.startupProgressManager)
+                    .onReceive(ServiceContainer.shared.startupProgressManager.$isCompleted) { isCompleted in
+                        print("[ContentView] 启动进度状态变化: isCompleted=\(isCompleted)")
+                        if isCompleted {
+                            // 启动完成后延迟一点时间再隐藏进度界面，让用户看到完成状态
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    print("[ContentView] 隐藏启动进度界面")
+                                    showStartupProgress = false
+                                }
+                            }
+                        }
+                    }
+            } else if let appViewModel = appViewModel {
+                // 条件注入 wordInteractionCoordinator，避免强制解包导致崩溃
+                let wordCoordinator = appViewModel.coordinator.wordInteractionCoordinator
+                Group {
+                    TabView(selection: selectedTabBinding) {
+                        homeTab(appViewModel: appViewModel)
+                        readingTab(appViewModel: appViewModel)
+                        vocabularyTab(appViewModel: appViewModel)
+                        intelligentRankingTab(appViewModel: appViewModel)
+                        progressTab(appViewModel: appViewModel)
+                        settingsTab(appViewModel: appViewModel)
+                    }
+                    .environment(appViewModel)
+                    .environment(appViewModel.coordinator.getUnifiedErrorHandler())
+                    .environmentObject(appViewModel.coordinator)
+                    .environmentObject(appViewModel.coordinator.getDictionaryService())
+                    .environmentObject(appViewModel.coordinator.getTextProcessor())
+                    .environmentObject(appViewModel.coordinator.getTranslationService())
+                    .transition(.opacity)
+                    .modifier(ConditionalWordCoordinator(coordinator: wordCoordinator))
                 }
-                .environment(appViewModel)
-                .environment(appViewModel.coordinator.getUnifiedErrorHandler())
-                .environmentObject(appViewModel.coordinator)
-                .environmentObject(appViewModel.coordinator.getDictionaryService())
-                .environmentObject(appViewModel.coordinator.getTextProcessor())
-                .environmentObject(appViewModel.coordinator.getTranslationService())
-                .environmentObject(appViewModel.coordinator.wordInteractionCoordinator!)
+                .onAppear {
+                    print("[ContentView] 显示主界面，appViewModel已初始化")
+                }
             } else {
                 VStack {
                     SwiftUI.ProgressView()
                     Text("初始化中...")
                         .foregroundColor(.secondary)
                 }
+                .onAppear {
+                    print("[ContentView] 显示初始化界面，appViewModel为nil")
+                }
             }
         }
         .onAppear {
+            print("[ContentView] onAppear - 开始初始化")
             initializeAppViewModelIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartVocabularyTest"))) { _ in
@@ -67,7 +108,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SelectProgressTab"))) { _ in
             appViewModel?.selectTab(.progress)
         }
-        .alert("错误", isPresented: .constant(appViewModel?.hasError ?? false)) {
+        .alert("错误", isPresented: showingErrorBinding) {
             Button("确定") {
                 // Error dismissal will be handled by coordinator
             }
@@ -130,7 +171,8 @@ struct ContentView: View {
     private func intelligentRankingTab(appViewModel: AppViewModel) -> some View {
         Group {
             if let intelligentRankingViewModel = appViewModel.intelligentRankingViewModel {
-                IntelligentRankingView(viewModel: intelligentRankingViewModel)
+                IntelligentRankingView()
+                    .environmentObject(intelligentRankingViewModel)
             } else {
                 loadingView
             }
@@ -186,11 +228,27 @@ struct ContentView: View {
     
     // MARK: - 初始化方法
     private func initializeAppViewModelIfNeeded() {
-        if appViewModel == nil {
-            let newAppViewModel = AppViewModel()
+        // 防止重复初始化
+        guard !isInitializing && !hasInitialized && appViewModel == nil else {
+            print("[ContentView] appViewModel已存在或正在初始化，跳过初始化")
+            return
+        }
+        
+        print("[ContentView] 开始初始化appViewModel")
+        isInitializing = true
+        
+        Task { @MainActor in
+            // 确保服务容器已配置
             let appSettings = AppSettings()
+            ServiceContainer.shared.configure(with: modelContext, appSettings: appSettings)
+            
+            print("[ContentView] 创建AppViewModel实例")
+            let newAppViewModel = AppViewModel()
             newAppViewModel.setModelContext(modelContext, appSettings: appSettings)
-            appViewModel = newAppViewModel
+            self.appViewModel = newAppViewModel
+            self.isInitializing = false
+            self.hasInitialized = true
+            print("[ContentView] AppViewModel初始化完成")
         }
     }
 }

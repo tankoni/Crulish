@@ -16,6 +16,7 @@ class YoudaoDictionaryParser {
     /// 解析有道词典文件
     /// - Parameter fileURL: 词典文件URL
     /// - Returns: 解析后的词典信息和单词列表
+    @MainActor
     func parseDictionaryFile(_ fileURL: URL) async throws -> (DictionaryInfo, [DictionaryWord]) {
         logger.info("开始解析有道词典文件: \(fileURL.lastPathComponent)")
         

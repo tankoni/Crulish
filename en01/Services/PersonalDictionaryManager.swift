@@ -26,6 +26,7 @@ enum DictionarySourceType: String, CaseIterable {
 }
 
 /// 个人学习词典管理器
+@MainActor
 class PersonalDictionaryManager {
     private let modelContext: ModelContext
     

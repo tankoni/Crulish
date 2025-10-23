@@ -649,7 +649,8 @@ struct HybridReaderView_Previews: PreviewProvider {
                 viewModel: ProgressViewModel(
                     userProgressService: MockUserProgressService(),
                     articleService: MockArticleService(),
-                    errorHandler: MockErrorHandler()
+                    errorHandler: MockErrorHandler(),
+                    statisticsExportService: MockStatisticsExportService() as StatisticsExportServiceProtocol
                 )
             )
         } else {

@@ -396,8 +396,8 @@ class MockDictionaryService: DictionaryServiceProtocol {
     }
 }
 
-// MARK: - Mock UserProgressService
-class MockUserProgressService: UserProgressServiceProtocol {
+// MARK: - Test Mock UserProgressService
+class TestMockUserProgressService: UserProgressServiceProtocol {
     private var userProgress: UserProgress = {
         let progress = UserProgress()
         progress.totalReadingTime = 3600

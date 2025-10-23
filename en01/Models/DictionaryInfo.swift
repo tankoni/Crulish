@@ -9,7 +9,7 @@ import Foundation
 import CryptoKit
 
 // 词典信息结构
-struct DictionaryInfo: Codable, Identifiable {
+struct DictionaryInfo: Codable, Identifiable, Equatable {
     
     let id: UUID
     let name: String // 词典名称
@@ -310,7 +310,7 @@ enum UsageScenario: String, CaseIterable, Codable {
 }
 
 /// 词典统计信息
-struct DictionaryStatistics: Codable {
+struct DictionaryStatistics: Codable, Equatable {
     let usageCount: Int // 使用次数
     let lastUsedDate: Date? // 最后使用日期
     let averageTestScore: Double // 平均测试分数
@@ -369,7 +369,7 @@ struct DictionaryStatistics: Codable {
 }
 
 /// 词典配置
-struct DictionaryConfiguration: Codable {
+struct DictionaryConfiguration: Codable, Equatable {
     let enabledForTesting: Bool // 是否用于测试
     let enabledForReading: Bool // 是否用于阅读
     let enabledForReview: Bool // 是否用于复习
@@ -377,7 +377,7 @@ struct DictionaryConfiguration: Codable {
     let maxWordsPerTest: Int // 每次测试最大单词数
     let preferredDifficulty: ClosedRange<Int>? // 偏好难度范围
     let excludedCategories: [String] // 排除的分类
-    let customSettings: [String: Any] // 自定义设置
+
     
     init(
         enabledForTesting: Bool = true,
@@ -387,7 +387,7 @@ struct DictionaryConfiguration: Codable {
         maxWordsPerTest: Int = 50,
         preferredDifficulty: ClosedRange<Int>? = nil,
         excludedCategories: [String] = [],
-        customSettings: [String: Any] = [:]
+
     ) {
         self.enabledForTesting = enabledForTesting
         self.enabledForReading = enabledForReading
@@ -396,7 +396,7 @@ struct DictionaryConfiguration: Codable {
         self.maxWordsPerTest = maxWordsPerTest
         self.preferredDifficulty = preferredDifficulty
         self.excludedCategories = excludedCategories
-        self.customSettings = customSettings
+
     }
     
     // 由于 Any 类型不能直接 Codable，需要自定义编解码
@@ -424,7 +424,7 @@ struct DictionaryConfiguration: Codable {
         }
         
         excludedCategories = try container.decode([String].self, forKey: .excludedCategories)
-        customSettings = [:] // 简化处理
+
     }
     
     func encode(to encoder: Encoder) throws {

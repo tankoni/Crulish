@@ -238,9 +238,10 @@ class TranslationServiceImpl: TranslationServiceProtocol, ObservableObject {
         // 设置本地翻译引擎
         if config.enableLocalModel {
             localEngine = LocalTranslationEngine()
-            // 设置ModelContext
+            // 设置DatabaseActor
             if let modelContext = modelContext {
-                localEngine?.setModelContext(modelContext)
+                let databaseActor = DatabaseActor(modelContainer: modelContext.container)
+                localEngine?.setDatabaseActor(databaseActor)
             }
             Task {
                 await localEngine?.loadModels()
@@ -353,6 +354,7 @@ class TranslationServiceImpl: TranslationServiceProtocol, ObservableObject {
     
     // MARK: - Data Persistence
     
+    @MainActor
     private func saveTranslationRecord(_ translation: Translation, context: String = "") async {
         guard let modelContext = modelContext else { return }
         
@@ -378,6 +380,7 @@ class TranslationServiceImpl: TranslationServiceProtocol, ObservableObject {
         }
     }
     
+    @MainActor
     private func recordTranslationUsage(_ translation: Translation) async {
         guard let modelContext = modelContext else { return }
         
@@ -400,6 +403,7 @@ class TranslationServiceImpl: TranslationServiceProtocol, ObservableObject {
         }
     }
     
+    @MainActor
     private func recordTranslationStatistics(
         type: TranslationType,
         provider: TranslationProvider,

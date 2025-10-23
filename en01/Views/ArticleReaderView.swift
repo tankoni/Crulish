@@ -23,9 +23,18 @@ struct ArticleReaderView: View {
     @State private var colorScheme: SwiftUI.ColorScheme? = nil
     @State private var readingStartTime = Date()
     @State private var readingTimer: Timer?
-    @State private var displayMode: DisplayMode = .pdf
+    @State private var displayMode: DisplayMode
     @State private var structuredText: StructuredText?
     @State private var isLoadingStructuredText = false
+    @State private var wordDefinition: WordDefinition?
+    @State private var sentenceTranslation = ""
+    @State private var paragraphTranslation = ""
+    
+    init(article: Article) {
+        self.article = article
+        // 根据文章是否有PDF文件来设置默认显示模式
+        self._displayMode = State(initialValue: article.pdfPath != nil ? .pdf : .text)
+    }
     
     let article: Article
     
@@ -111,73 +120,146 @@ struct ArticleReaderView: View {
     }
     
     var body: some View {
-        ReaderNavigationWrapper(
-            title: article.title,
-            standardButtons: [.bookmark, .share],
-            customButtons: [
-                // 翻译模式切换按钮
-                AnyView(
-                    TranslationModeToggle()
-                        .environmentObject(appCoordinator.wordInteractionCoordinator!)
-                ),
-                // 显示模式切换按钮
-                AnyView(
-                    Menu {
-                        ForEach(DisplayMode.allCases, id: \.self) { mode in
-                            Button(action: {
-                                switchDisplayMode(to: mode)
-                            }) {
-                                HStack {
-                                    Image(systemName: mode.iconName)
-                                    Text(mode.displayName)
-                                    if displayMode == mode {
-                                        Spacer()
-                                        Image(systemName: "checkmark")
-                                            .foregroundColor(.blue)
-                                    }
-                                }
+        ZStack {
+            // 主要内容区域
+            VStack(spacing: 0) {
+                // 顶部导航栏 - 更紧凑的设计
+                HStack {
+                    Button(action: {
+                        stopReading()
+                        appCoordinator.readingViewModel?.stopReading()
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(article.title)
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text(article.examType)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            article.isBookmarked.toggle()
+                            try? modelContext.save()
+                        }) {
+                            Image(systemName: article.isBookmarked ? "bookmark.fill" : "bookmark")
+                                .foregroundColor(article.isBookmarked ? .orange : .gray)
+                        }
+                        
+                        Button(action: {
+                            showingSettings = true
+                        }) {
+                            Image(systemName: "textformat.size")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
+                
+                // 阅读内容区域
+                readerContent
+                    .background(Color(.systemBackground))
+                
+                // 底部工具栏 - 简化设计
+                HStack(spacing: 24) {
+                    Button(action: {
+                        if let coordinator = appCoordinator.wordInteractionCoordinator {
+                            coordinator.setInteractionMode(.text)
+                        }
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "textformat.abc")
+                                .font(.title3)
+                            Text("查词")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(.blue)
+                    }
+                    
+                    Button(action: {
+                        showingSentenceTranslation = true
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "text.bubble")
+                                .font(.title3)
+                            Text("句译")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(.green)
+                    }
+                    
+                    Button(action: {
+                        showingParagraphTranslation = true
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "doc.text")
+                                .font(.title3)
+                            Text("段译")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(.purple)
+                    }
+                    
+                    Button(action: {
+                        shareArticle()
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.title3)
+                            Text("分享")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(.gray)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                .background(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: -1)
+            }
+            
+            // 单词定义弹窗
+            if showingWordDefinition, let wordDef = wordDefinition {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showingWordDefinition = false
+                    }
+                
+                VStack {
+                    Spacer()
+                    
+                    ModernWordDefinitionCard(
+                        word: selectedWord,
+                        phonetic: wordDef.meaning, // 使用meaning作为临时显示
+                        definitions: [wordDef.meaning],
+                        examples: wordDef.examples,
+                        onClose: {
+                            showingWordDefinition = false
+                        },
+                        onAddToVocabulary: {
+                            // 添加到生词本的逻辑
+                            Task {
+                                appCoordinator.addWordToVocabulary(word: selectedWord, context: "")
                             }
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: displayMode.iconName)
-                                .font(.system(size: 16))
-                            Text(displayMode.displayName)
-                                .font(.system(size: 14))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(6)
-                    }
-                ),
-                // 设置按钮
-                AnyView(
-                    Button(action: {
-                        showingSettings = true
-                    }) {
-                        Image(systemName: "textformat.size")
-                            .font(.system(size: 16))
-                            .foregroundColor(.primary)
-                    }
-                )
-            ],
-            onBack: {
-                stopReading()
-                appCoordinator.readingViewModel?.stopReading()
-                dismiss()
-            },
-            onBookmark: {
-                article.isBookmarked.toggle()
-                try? modelContext.save()
-            },
-            onShare: {
-                shareArticle()
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showingWordDefinition)
             }
-        ) {
-            readerContent
-                .background(Color(.systemBackground))
         }
         .onAppear {
             startReading()

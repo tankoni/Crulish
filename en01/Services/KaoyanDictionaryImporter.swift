@@ -54,6 +54,7 @@ class KaoyanDictionaryImporter {
     }
     
     /// 检查特定词典是否已导入
+    @MainActor
     private func isDictionaryImported(_ dictionaryId: String) async throws -> Bool {
         let descriptor = FetchDescriptor<KaoyanWord>(
             predicate: #Predicate { $0.bookId == dictionaryId }
@@ -63,6 +64,8 @@ class KaoyanDictionaryImporter {
     }
     
     /// 导入选定的词典
+    /// 导入选定的词典
+    @MainActor
     func importSelectedDictionaries(_ dictionaryIds: [String]) async throws {
         let availableDictionaries = KaoyanDictionaryInfo.availableDictionaries
         let selectedDictionaries = availableDictionaries.filter { dictionaryIds.contains($0.id) }
@@ -85,12 +88,15 @@ class KaoyanDictionaryImporter {
     }
     
     /// 导入所有考研词典文件（保持向后兼容）
+    /// 导入所有词典
+    @MainActor
     func importAllDictionaries() async throws {
         let allDictionaryIds = KaoyanDictionaryInfo.availableDictionaries.map { $0.id }
         try await importSelectedDictionaries(allDictionaryIds)
     }
     
     /// 导入单个词典文件
+    @MainActor
     func importDictionary(fileName: String, dictionaryId: String? = nil) async throws {
         let resourceName = fileName.replacingOccurrences(of: ".json", with: "")
         print("[INFO][KaoyanDictionaryImporter] 查找文件: \(resourceName).json 在 bundle 根目录")
@@ -152,6 +158,7 @@ class KaoyanDictionaryImporter {
     }
     
     /// 查找已存在的单词
+    @MainActor
     private func findExistingWord(wordId: String) async throws -> KaoyanWord? {
         let descriptor = FetchDescriptor<KaoyanWord>(
             predicate: #Predicate { $0.wordId == wordId }
@@ -289,6 +296,7 @@ class KaoyanDictionaryImporter {
     }
     
     /// 检查是否需要导入
+    @MainActor
     func needsImport() async throws -> Bool {
         let descriptor = FetchDescriptor<KaoyanWord>()
         let count = try modelContext.fetchCount(descriptor)
@@ -296,6 +304,7 @@ class KaoyanDictionaryImporter {
     }
     
     /// 清空所有考研词典数据
+    @MainActor
     func clearAllData() throws {
         try modelContext.delete(model: KaoyanWord.self)
         try modelContext.save()

@@ -174,7 +174,7 @@ class ReadingViewModel: ObservableObject {
             await MainActor.run {
                 self.lookupResult = result
                 self.wordLookupCache[word.lowercased()] = result
-                self.userProgressService.addWordLookup()
+                // 经验值奖励由 recordWordLookup 方法统一管理，避免重复奖励
                 self.onWordAdded?(result)
                 self.isLookingUp = false
             }
@@ -381,38 +381,36 @@ class ReadingViewModel: ObservableObject {
     // MARK: - Reading Time Management
     func addReadingTime(_ minutes: Double) {
         totalReadingTime += minutes * 60.0
-        userProgressService.addReadingTime(minutes)
+        Task {
+            userProgressService.addReadingTime(minutes)
+        }
         errorHandler.logSuccess("记录阅读时间: \(String(format: "%.1f", minutes))分钟")
     }
     
     // MARK: - Learning Progress Tracking
     private func updateWordLearningProgress(_ word: UserWord) async {
-        do {
-            // 更新词汇学习优先级
-            word.updateLearningPriority()
-            
-            // 记录学习会话
-            let sessionDuration = Date().timeIntervalSince(word.lastLookupDate)
-            word.recordStudySession(duration: sessionDuration)
-            
-            // 根据查询频率动态调整分类
-            await updateWordCategory(word)
-            
-            // 更新记忆强度
-            await updateMemoryStrength(word)
-            
-            // 发送学习进度更新通知
-            await MainActor.run {
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("WordLearningProgressUpdated"),
-                    object: word
-                )
-            }
-            
-            errorHandler.logSuccess("更新词汇学习进度: \(word.word)")
-        } catch {
-            errorHandler.handle(error, context: "ReadingViewModel.updateWordLearningProgress")
+        // 更新词汇学习优先级
+        word.updateLearningPriority()
+        
+        // 记录学习会话
+        let sessionDuration = Date().timeIntervalSince(word.lastLookupDate)
+        word.recordStudySession(duration: sessionDuration)
+        
+        // 根据查询频率动态调整分类
+        await updateWordCategory(word)
+        
+        // 更新记忆强度
+        await updateMemoryStrength(word)
+        
+        // 发送学习进度更新通知
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("WordLearningProgressUpdated"),
+                object: word
+            )
         }
+        
+        errorHandler.logSuccess("更新词汇学习进度: \(word.word)")
     }
     
     private func updateWordCategory(_ word: UserWord) async {

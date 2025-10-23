@@ -1,0 +1,6 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme en01 -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=latest" build
+
+2025-10-13 18:29:00.341 xcodebuild[3604:25109] Writing error result bundle to /var/folders/2h/8lkms89s1vn8l9ktw1n5nj3h0000gn/T/ResultBundle_2025-13-10_18-29-0000.xcresult
+xcodebuild: error: The directory /Users/tankonitk/Library/Mobile Documents/com~apple~CloudDocs/xcode/Crulish/en01 does not contain an Xcode project, workspace or package.
+

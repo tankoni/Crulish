@@ -57,24 +57,26 @@ struct VocabularyView: View {
                 isDataLoaded = true
             }
         }
-        .onChange(of: selectedTab) {
+        .onChange(of: selectedTab) { _, _ in
             loadVocabularyData()
         }
-        .onChange(of: searchText) {
+        .onChange(of: searchText) { _, _ in
             // 防抖处理，避免频繁过滤
             debounceFilter()
         }
-        .onChange(of: selectedMastery) {
+        .onChange(of: selectedMastery) { _, _ in
             filterWords()
         }
-        .onChange(of: sortOption) {
+        .onChange(of: sortOption) { _, _ in
             sortWords()
         }
         .sheet(isPresented: $isShowingVocabularyTest) {
             VocabularyTestView(
                 vocabularyTestService: appCoordinator.getVocabularyTestService(),
                 dictionaryService: dictionaryService,
-                errorHandler: errorHandler
+                errorHandler: errorHandler,
+                testResultExportService: appCoordinator.getTestResultExportService(),
+                appCoordinator: appCoordinator
             )
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartVocabularyTest"))) { _ in

@@ -56,9 +56,10 @@ class WordInteractionCoordinator: ObservableObject, WordInteractionProtocol, Lea
     let wordDefinitionViewModel: WordDefinitionViewModel
     
     // MARK: - 防重复查询
+    // 防抖相关属性
     private var lastTappedWord: String = ""
     private var lastTapTime: Date = Date.distantPast
-    private let tapDebounceInterval: TimeInterval = 0.5 // 500ms防抖间隔
+    private let tapDebounceInterval: TimeInterval = 0.2 // 减少到200ms防抖间隔，提升响应速度
     
     // MARK: - 缓存管理
     private var lastCacheCleanupTime: Date = Date.distantPast
@@ -118,7 +119,7 @@ class WordInteractionCoordinator: ObservableObject, WordInteractionProtocol, Lea
     
     func updateWordMastery(_ word: String, mastery: MasteryLevel, context: String) {
         // 获取之前的掌握程度
-        let previousMastery = getCurrentWordMastery(word) ?? .unfamiliar
+        let previousMastery = getCurrentWordMastery(word)
         
         // 更新掌握程度到学习跟踪服务
         learningTrackingService?.updateWordMastery(
@@ -158,9 +159,7 @@ class WordInteractionCoordinator: ObservableObject, WordInteractionProtocol, Lea
         )
         
         // 添加到当前会话遇到的单词
-        await MainActor.run {
-            sessionWordsEncountered.insert(word.lowercased())
-        }
+        sessionWordsEncountered.insert(word.lowercased())
     }
     
     func trackWordView(_ word: String, viewDuration: TimeInterval, articleId: UUID) async {
@@ -306,7 +305,7 @@ class WordInteractionCoordinator: ObservableObject, WordInteractionProtocol, Lea
         print("[Learning] 阅读会话结束: 文章ID=\(articleId.uuidString), 阅读时长=\(readingTime)秒, 遇到单词数=\(wordsEncountered)")
         
         // 如果有学习跟踪服务，可以在这里记录阅读会话数据
-        if let service = learningTrackingService {
+        if learningTrackingService != nil {
             // 暂时使用日志记录，等待实现专门的阅读会话记录方法
             print("[Learning] 学习跟踪服务记录阅读会话: 文章=\(articleId.uuidString), 时长=\(readingTime), 单词数=\(wordsEncountered)")
             // TODO: 实现专用阅读会话记录方法

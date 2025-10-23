@@ -30,8 +30,47 @@ final class UserProgress: @unchecked Sendable {
     
     // 新增字段
     var readingProgress: [ReadingProgressRecord] = [] // 阅读进度记录
-    var bookmarkedArticles: [String] = [] // 收藏的文章ID列表
-    var completedArticleIds: [String] = [] // 已完成的文章ID列表
+    private var _bookmarkedArticles: String = "" // 收藏的文章ID列表（JSON字符串）
+    private var _completedArticleIds: String = "" // 已完成的文章ID列表（JSON字符串）
+    
+    // 计算属性用于访问数组
+    var bookmarkedArticles: [String] {
+        get {
+            guard !_bookmarkedArticles.isEmpty,
+                  let data = _bookmarkedArticles.data(using: .utf8),
+                  let array = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return array
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let string = String(data: data, encoding: .utf8) {
+                _bookmarkedArticles = string
+            } else {
+                _bookmarkedArticles = ""
+            }
+        }
+    }
+    
+    var completedArticleIds: [String] {
+        get {
+            guard !_completedArticleIds.isEmpty,
+                  let data = _completedArticleIds.data(using: .utf8),
+                  let array = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return array
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let string = String(data: data, encoding: .utf8) {
+                _completedArticleIds = string
+            } else {
+                _completedArticleIds = ""
+            }
+        }
+    }
     
     // 每日学习记录
     @Relationship(deleteRule: .cascade)
@@ -114,7 +153,7 @@ final class UserProgress: @unchecked Sendable {
         updateTodayRecord { record in
             record.readingTime += time
         }
-        addExperience(Int(time / 60)) // 每分钟1经验值
+        // 移除直接经验值奖励，由Service层统一管理
     }
     
     // 增加文章阅读数
@@ -123,7 +162,7 @@ final class UserProgress: @unchecked Sendable {
         updateTodayRecord { record in
             record.articlesRead += 1
         }
-        addExperience(10) // 每篇文章10经验值
+        // 移除直接经验值奖励，由Service层统一管理
         checkAchievements()
     }
     
@@ -136,7 +175,7 @@ final class UserProgress: @unchecked Sendable {
                 record.newWordsLearned += 1
             }
         }
-        addExperience(isNewWord ? 5 : 2) // 新单词5经验值，重复单词2经验值
+        // 移除直接经验值奖励，由Service层统一管理
         checkAchievements()
     }
     
@@ -145,7 +184,7 @@ final class UserProgress: @unchecked Sendable {
         updateTodayRecord { record in
             record.reviewsCompleted += 1
         }
-        addExperience(3) // 每次复习3经验值
+        // 移除直接经验值奖励，由Service层统一管理
     }
     
     // MARK: - 私有方法
@@ -359,7 +398,7 @@ struct AchievementData: Codable, Identifiable {
 // MARK: - Codable Support
 extension UserProgress: Codable {
     enum CodingKeys: CodingKey {
-        case id, totalReadingTime, totalArticlesRead, totalWordsLookedUp, currentStreak, longestStreak, lastStudyDate, createdDate, level, experience, experiencePoints, streakDays, maxStreakDays, articlesRead, achievements, readingProgress, bookmarkedArticles, completedArticleIds, dailyRecords
+        case id, totalReadingTime, totalArticlesRead, totalWordsLookedUp, currentStreak, longestStreak, lastStudyDate, createdDate, level, experience, experiencePoints, streakDays, maxStreakDays, articlesRead, achievements, readingProgress, _bookmarkedArticles, _completedArticleIds, dailyRecords
     }
 
     convenience init(from decoder: Decoder) throws {
@@ -381,8 +420,8 @@ extension UserProgress: Codable {
         articlesRead = try container.decode(Int.self, forKey: .articlesRead)
         achievements = try container.decode([AchievementData].self, forKey: .achievements)
         readingProgress = try container.decode([ReadingProgressRecord].self, forKey: .readingProgress)
-        bookmarkedArticles = try container.decode([String].self, forKey: .bookmarkedArticles)
-        completedArticleIds = try container.decode([String].self, forKey: .completedArticleIds)
+        _bookmarkedArticles = try container.decodeIfPresent(String.self, forKey: ._bookmarkedArticles) ?? ""
+        _completedArticleIds = try container.decodeIfPresent(String.self, forKey: ._completedArticleIds) ?? ""
         dailyRecords = try container.decode([DailyStudyRecord].self, forKey: .dailyRecords)
     }
 
@@ -404,8 +443,8 @@ extension UserProgress: Codable {
         try container.encode(articlesRead, forKey: .articlesRead)
         try container.encode(achievements, forKey: .achievements)
         try container.encode(readingProgress, forKey: .readingProgress)
-        try container.encode(bookmarkedArticles, forKey: .bookmarkedArticles)
-        try container.encode(completedArticleIds, forKey: .completedArticleIds)
+        try container.encode(_bookmarkedArticles, forKey: ._bookmarkedArticles)
+        try container.encode(_completedArticleIds, forKey: ._completedArticleIds)
         try container.encode(dailyRecords, forKey: .dailyRecords)
     }
 }

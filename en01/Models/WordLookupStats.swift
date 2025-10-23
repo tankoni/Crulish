@@ -29,6 +29,11 @@ struct WordFrequency: Codable, Identifiable {
     let id = UUID()
     let word: String
     let count: Int
+    
+    // 排除id属性的编码解码
+    enum CodingKeys: String, CodingKey {
+        case word, count
+    }
 }
 
 // 每日查询统计
@@ -36,4 +41,9 @@ struct DailyLookupCount: Codable, Identifiable {
     let id = UUID()
     let date: Date
     let count: Int
+    
+    // 排除id属性的编码解码
+    enum CodingKeys: String, CodingKey {
+        case date, count
+    }
 }

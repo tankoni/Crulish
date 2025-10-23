@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import Charts
 
 /// 测试结果展示视图
@@ -17,6 +18,10 @@ struct TestResultView: View {
     @State private var showingShareSheet = false
     @State private var animateProgress = false
     @State private var showingDetailBreakdown = false
+    @State private var showingExportOptions = false
+    @State private var isSaving = false
+    @State private var saveSuccess = false
+    @State private var showingSaveAlert = false
     
     var body: some View {
         NavigationView {
@@ -53,8 +58,15 @@ struct TestResultView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("分享") {
-                        showingShareSheet = true
+                    Menu("更多") {
+                        Button("导出") {
+                            showingExportOptions = true
+                        }
+                        .disabled(viewModel.isExporting)
+                        
+                        Button("分享") {
+                            showingShareSheet = true
+                        }
                     }
                 }
             }
@@ -66,6 +78,25 @@ struct TestResultView: View {
         }
         .sheet(isPresented: $showingShareSheet) {
             shareSheet
+        }
+        .sheet(isPresented: $showingExportOptions) {
+            exportOptionsSheet
+        }
+        .alert("导出错误", isPresented: .constant(viewModel.exportError != nil)) {
+            Button("确定") {
+                viewModel.clearExportError()
+            }
+        } message: {
+            if let error = viewModel.exportError {
+                Text(error)
+            }
+        }
+        .alert(saveSuccess ? "保存成功" : "保存失败", isPresented: $showingSaveAlert) {
+            Button("确定") {
+                showingSaveAlert = false
+            }
+        } message: {
+            Text(saveSuccess ? "测试结果已成功保存到本地" : "保存测试结果时出现错误，请重试")
         }
     }
     
@@ -300,11 +331,25 @@ struct TestResultView: View {
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue)
+                    .fill(isSaving ? Color.gray : Color.blue)
             )
             .foregroundColor(.white)
             .fontWeight(.semibold)
-            
+            .disabled(isSaving)
+            .overlay(
+                Group {
+                    if isSaving {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            Text("保存中...")
+                                .font(.subheadline)
+                        }
+                    }
+                }
+            )
+
             Button("开始新测试") {
                 startNewTest()
             }
@@ -317,6 +362,84 @@ struct TestResultView: View {
             .foregroundColor(.blue)
             .fontWeight(.semibold)
         }
+    }
+    
+    // MARK: - Export Options Sheet
+    private var exportOptionsSheet: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // 导出说明
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundColor(.blue)
+                            .font(.title2)
+                        
+                        Text("导出测试结果")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                    }
+                    
+                    Text("选择导出格式，将测试结果保存到文件并分享")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+                
+                // 导出选项
+                VStack(spacing: 16) {
+                    ExportOptionCard(
+                        title: "Markdown 格式",
+                        description: "适合在文本编辑器中查看和编辑",
+                        icon: "doc.text",
+                        color: .blue,
+                        isLoading: viewModel.isExporting
+                    ) {
+                        exportResults(format: .markdown)
+                    }
+                    
+                    ExportOptionCard(
+                        title: "PDF 格式",
+                        description: "适合打印和正式文档分享",
+                        icon: "doc.richtext",
+                        color: .red,
+                        isLoading: viewModel.isExporting
+                    ) {
+                        exportResults(format: .pdf)
+                    }
+                }
+                .padding(.horizontal)
+                
+                // 导出进度
+                if viewModel.isExporting {
+                    VStack(spacing: 12) {
+                        ProgressView(value: viewModel.exportProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                        
+                        Text("正在导出...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+                }
+                
+                Spacer()
+            }
+            .padding(.vertical)
+            .navigationTitle("导出选项")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("取消") {
+                        showingExportOptions = false
+                    }
+                    .disabled(viewModel.isExporting)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
     
     private var shareSheet: some View {
@@ -413,9 +536,12 @@ struct TestResultView: View {
     // MARK: - Actions
     
     private func saveResult() {
+        isSaving = true
         viewModel.saveTestResult(testResult) { success in
-            if success {
-                // 显示保存成功提示
+            DispatchQueue.main.async {
+                self.isSaving = false
+                self.saveSuccess = success
+                self.showingSaveAlert = true
             }
         }
     }
@@ -440,6 +566,20 @@ struct TestResultView: View {
         💡 \(vocabularyLevelDescription)
         """
     }
+    
+    private func exportResults(format: ExportFormat) {
+        showingExportOptions = false
+        Task {
+            viewModel.isExporting = true
+            defer { viewModel.isExporting = false }
+            do {
+                _ = try await viewModel.exportTestResults(format: format)
+            } catch {
+                viewModel.exportError = error.localizedDescription
+            }
+        }
+    }
+
 }
 
 // MARK: - Supporting Views
@@ -516,12 +656,70 @@ struct AnalysisItem: View {
     mockTest.testDuration = 3600
     mockTest.completeTest()
     
+    let mockDictionaryService = MockDictionaryService()
+    
     return TestResultView(
         testResult: mockTest,
         viewModel: VocabularyTestViewModel(
-            vocabularyTestService: MockVocabularyTestService(),
-            dictionaryService: MockDictionaryService(),
-            errorHandler: MockErrorHandler()
+            vocabularyTestService: MockVocabularyTestService(dictionaryService: mockDictionaryService),
+            dictionaryService: mockDictionaryService,
+            errorHandler: MockErrorHandler(),
+            testResultExportService: TestResultExportService(
+                modelContext: try! ModelContainer(for: VocabularyTest.self).mainContext, 
+                dictionaryService: mockDictionaryService
+            )
         )
     )
+}
+
+// MARK: - Export Option Card
+struct ExportOptionCard: View {
+    let title: String
+    let description: String
+    let icon: String
+    let color: Color
+    let isLoading: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
+                    .frame(width: 30)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Text(description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                
+                Spacer()
+                
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+            )
+        }
+        .disabled(isLoading)
+        .buttonStyle(PlainButtonStyle())
+    }
 }

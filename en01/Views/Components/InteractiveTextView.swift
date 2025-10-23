@@ -154,6 +154,8 @@ struct InteractiveWordView: View {
     let onTap: (String, String, Int) -> Void
     
     @State private var isHighlighted = false
+    @State private var isUnknownWord = false
+    @EnvironmentObject private var wordInteractionCoordinator: WordInteractionCoordinator
     
     var body: some View {
         Button(action: {
@@ -161,10 +163,10 @@ struct InteractiveWordView: View {
         }) {
             Text(cleanWord)
                 .font(.body)
-                .foregroundColor(isHighlighted ? .blue : .primary)
+                .foregroundColor(wordColor)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(isHighlighted ? Color.blue.opacity(0.1) : Color.clear)
+                        .fill(wordBackgroundColor)
                         .padding(.horizontal, -2)
                         .padding(.vertical, -1)
                 )
@@ -179,10 +181,47 @@ struct InteractiveWordView: View {
                 isHighlighted = pressing
             }
         }
+        .onAppear {
+            checkIfUnknownWord()
+        }
     }
     
     private var cleanWord: String {
         return word.trimmingCharacters(in: CharacterSet.punctuationCharacters)
+    }
+    
+    private var wordColor: Color {
+        if isHighlighted {
+            return .blue
+        } else if isUnknownWord {
+            return .red
+        } else {
+            return .primary
+        }
+    }
+    
+    private var wordBackgroundColor: Color {
+        if isHighlighted {
+            return Color.blue.opacity(0.1)
+        } else if isUnknownWord {
+            return Color.red.opacity(0.15)
+        } else {
+            return Color.clear
+        }
+    }
+    
+    private func checkIfUnknownWord() {
+        // 检查单词是否为生词
+        let cleaned = cleanWord.lowercased()
+        guard cleaned.count > 1,
+              cleaned.rangeOfCharacter(from: .letters) != nil,
+              !isStopWord(cleaned) else {
+            return
+        }
+        
+        // 这里可以通过词汇服务检查单词是否为生词
+        // 暂时使用简单的逻辑：长度大于6的单词标记为生词
+        isUnknownWord = cleaned.count > 6
     }
     
     private func handleWordTap() {

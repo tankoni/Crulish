@@ -9,234 +9,636 @@ import SwiftUI
 import SwiftData
 import Combine
 import Foundation
+import OSLog
 
-/// 词汇量测试ViewModel，负责词汇量测试功能
+/// 测试大小模式
+enum TestSizeMode: String, CaseIterable {
+    case all = "全部测试"
+    case grouped = "分组测试"
+    
+    var description: String {
+        return self.rawValue
+    }
+}
+
+/// 重构后的词汇量测试视图模型 - 主要负责协调各个管理器
 @MainActor
 class VocabularyTestViewModel: ObservableObject {
-    // MARK: - Published Properties
-    @Published var availableDictionaries: [DictionaryInfo] = []
-    @Published var selectedDictionary: DictionaryInfo?
+    
+    // MARK: - Manager Dependencies
+    
+    /// 测试状态管理器
+    @Published var testStateManager: TestStateManager
+    
+    /// 测试配置管理器
+    @Published var configurationManager: TestConfigurationManager
+    
+    /// 测试结果管理器
+    @Published var resultManager: TestResultManager
+    
+    // MARK: - Core Published Properties
+    
+    /// 是否正在加载
     @Published var isLoading: Bool = false
-    @Published var isLoadingDictionaries: Bool = false
+    
+    /// 错误消息
     @Published var errorMessage: String?
     
-    // MARK: - Test State
-    @Published var isTestActive: Bool = false
-    @Published var isPaused: Bool = false
-    @Published var currentWord: TestWord?
-    @Published var currentWordIndex: Int = 0
-    @Published var testWords: [TestWord] = []
-    @Published var testProgress: Double = 0.0
-    
-    // MARK: - Test Mode
-    @Published var selectedTestMode: VocabularyTestMode = .englishToChinese
+    /// 当前测试问题
     @Published var currentQuestion: TestQuestion?
+    
+    /// 选中的答案
     @Published var selectedAnswer: TestOption?
+    
+    /// 是否显示结果
     @Published var showResult: Bool = false
     
-    // MARK: - Group Selection
-    @Published var availableGroups: [String] = []
-    @Published var selectedGroups: Set<String> = []
-    @Published var isAllGroupsSelected: Bool = true
+    /// 选中的测试模式
+    @Published var selectedTestMode: VocabularyTestMode = .englishToChinese
     
-    // MARK: - Test Results
-    @Published var masteredCount: Int = 0
-    @Published var familiarCount: Int = 0
-    @Published var unfamiliarCount: Int = 0
-    @Published var totalTestedCount: Int = 0
+    // MARK: - Delegated Properties
     
-    // MARK: - Test History
-    @Published var testHistory: [VocabularyTest] = []
-    @Published var currentTest: VocabularyTest?
-    
-    // 存储测试过程中的单词掌握程度数据
-    private var wordMasteryResults: [String: MasteryLevel] = [:]
-    
-    // MARK: - Services
-    private let vocabularyTestService: VocabularyTestServiceProtocol
-    private let dictionaryService: DictionaryServiceProtocol
-    private let errorHandler: ErrorHandlerProtocol
-    private let distractorGenerator: DistractorGenerator
-    private var cancellables = Set<AnyCancellable>()
-    
-    // MARK: - Cached Data
-    private var allDictionaryWords: [DictionaryWord] = []
-    
-    // MARK: - Constants
-    private let batchSize = 50 // 分批加载大小
-    // 移除单词数量限制，允许测试所有单词
-    // private let maxTestWords = 200 // 最大测试单词数
-    
-    // MARK: - Initialization
-    init(
-        vocabularyTestService: VocabularyTestServiceProtocol,
-        dictionaryService: DictionaryServiceProtocol,
-        errorHandler: ErrorHandlerProtocol
-    ) {
-        self.vocabularyTestService = vocabularyTestService
-        self.dictionaryService = dictionaryService
-        self.errorHandler = errorHandler
-        self.distractorGenerator = DistractorGenerator(dictionaryService: dictionaryService)
-        
-        loadAvailableDictionaries()
-        loadTestHistory()
+    /// 可用词典列表
+    var availableDictionaries: [DictionaryInfo] {
+        configurationManager.availableDictionaries
     }
     
-    // MARK: - Dictionary Management
-    func loadAvailableDictionaries() {
-        isLoadingDictionaries = true
-        errorMessage = nil
-        
-        dictionaryService.getAvailableDictionaries()
+    /// 当前选中的词典
+    var selectedDictionary: DictionaryInfo? {
+        configurationManager.selectedDictionary
+    }
+    
+    /// 可用分组列表
+    var availableGroups: [String] {
+        configurationManager.availableGroups
+    }
+    
+    /// 选中的分组集合
+    var selectedGroups: Set<String> {
+        configurationManager.selectedGroups
+    }
+    
+    /// 测试历史记录
+    var testHistory: [VocabularyTest] {
+        resultManager.testHistory
+    }
+    
+    // MARK: - Additional Delegated Properties
+    
+    /// 是否有测试历史记录
+    var hasTestHistory: Bool {
+        !resultManager.testHistory.isEmpty
+    }
+    
+    /// 测试大小模式
+    var testSizeMode: TestSizeMode {
+        get {
+            switch configurationManager.testSize {
+            case .all:
+                return .all
+            case .small, .medium, .large, .custom(_):
+                return .grouped
+            }
+        }
+        set {
+            switch newValue {
+            case .all:
+                configurationManager.setTestSize(.all)
+            case .grouped:
+                configurationManager.setTestSize(.medium)
+            }
+        }
+    }
+    
+    /// 总分组数
+    var totalGroups: Int {
+        configurationManager.availableGroups.count
+    }
+    
+    /// 是否全选分组
+    var isAllGroupsSelected: Bool {
+        !configurationManager.availableGroups.isEmpty && 
+        configurationManager.selectedGroups.count == configurationManager.availableGroups.count
+    }
+    
+    /// 当前分组索引
+    var currentGroupIndex: Int {
+        testStateManager.currentWordIndex / 50 // 假设每组50个单词
+    }
+    
+    /// 当前单词索引
+    var currentWordIndex: Int {
+        testStateManager.currentWordIndex
+    }
+    
+    /// 测试单词列表
+    var testWords: [TestWord] {
+        testStateManager.testWords
+    }
+    
+    /// 是否可以移动到上一个单词
+    var canMoveToPrevious: Bool {
+        testStateManager.currentWordIndex > 0
+    }
+    
+    /// 是否可以移动到下一个单词
+    var canMoveToNext: Bool {
+        testStateManager.currentWordIndex < testStateManager.testWords.count - 1
+    }
+    
+    // MARK: - 测试进度管理
+    
+    /// 是否存在未完成的测试
+    @Published var hasIncompleteTest: Bool = false
+    
+    /// 未完成的测试记录
+    @Published var incompleteTest: VocabularyTest?
+    
+    /// 检查是否存在未完成的测试
+    private func checkForIncompleteTest(dictionaryFileName: String) {
+        vocabularyTestService.getIncompleteTest(for: dictionaryFileName)
             .receive(on: DispatchQueue.main)
             .sink(
-                receiveCompletion: { [weak self] (completion: Subscribers.Completion<Error>) in
-                    self?.isLoadingDictionaries = false
+                receiveCompletion: { [weak self] completion in
                     if case .failure(let error) = completion {
-                        self?.errorMessage = "加载词典失败"
-                        self?.errorHandler.handle(error, context: "VocabularyTestViewModel.loadAvailableDictionaries")
+                        self?.hasIncompleteTest = false
+                        self?.incompleteTest = nil
+                        self?.logger.error("❌ [VocabularyTestViewModel] 检查未完成测试失败: \(error.localizedDescription)")
                     }
                 },
-                receiveValue: { [weak self] (dictionaries: [DictionaryInfo]) in
-                    self?.availableDictionaries = dictionaries
-                    self?.errorHandler.logSuccess("成功加载 \(dictionaries.count) 个词典")
+                receiveValue: { [weak self] test in
+                    self?.incompleteTest = test
+                    self?.hasIncompleteTest = test != nil
+                    if let test = test {
+                        self?.logger.info("🔍 [VocabularyTestViewModel] 发现未完成测试: \(test.dictionaryFileName), 进度: \(test.currentWordIndex)/\(test.totalWords)")
+                    }
                 }
             )
             .store(in: &cancellables)
     }
     
-    func selectDictionary(_ dictionary: DictionaryInfo) {
-        selectedDictionary = dictionary
-        loadAvailableGroups(for: dictionary)
-        errorHandler.logSuccess("选择词典: \(dictionary.name)")
-    }
-    
-    func selectTestMode(_ mode: VocabularyTestMode) {
-        selectedTestMode = mode
-        errorHandler.logSuccess("选择测试模式: \(mode.displayName)")
-    }
-    
-    // MARK: - Group Management
-    private func loadAvailableGroups(for dictionary: DictionaryInfo) {
-        // 从词典的categories属性中获取可用分组
-        availableGroups = dictionary.categories
-        
-        // 默认选择所有分组
-        selectedGroups = Set(dictionary.categories)
-        isAllGroupsSelected = true
-        
-        errorHandler.logSuccess("加载词典分组: \(dictionary.categories.joined(separator: ", "))")
-    }
-    
-    func toggleGroupSelection(_ group: String) {
-        if selectedGroups.contains(group) {
-            selectedGroups.remove(group)
-        } else {
-            selectedGroups.insert(group)
-        }
-        updateAllGroupsSelection()
-        errorHandler.logSuccess("切换分组选择: \(group)")
-    }
-    
-    func toggleAllGroups() {
-        if isAllGroupsSelected {
-            selectedGroups.removeAll()
-        } else {
-            selectedGroups = Set(availableGroups)
-        }
-        updateAllGroupsSelection()
-        errorHandler.logSuccess("切换全部分组选择: \(isAllGroupsSelected ? "取消全选" : "全选")")
-    }
-    
-    private func updateAllGroupsSelection() {
-        isAllGroupsSelected = selectedGroups.count == availableGroups.count && !availableGroups.isEmpty
-    }
-    
-    // MARK: - Test Management
-    func startTest(with dictionary: DictionaryInfo? = nil, sampleSize: Int? = nil, completion: ((Bool) -> Void)? = nil) {
-        let targetDictionary = dictionary ?? selectedDictionary
-        guard let targetDictionary = targetDictionary else {
-            errorMessage = "请先选择词典"
-            completion?(false)
+    /// 继续未完成的测试
+    func continueIncompleteTest() {
+        guard let test = incompleteTest else {
+            logger.warning("⚠️ [VocabularyTestViewModel] 没有未完成的测试可以继续")
+            errorMessage = "未找到可继续的未完成测试，请重新开始。"
+            testStateManager.showTestContinuationAlert = false
             return
         }
         
-        let testSampleSize = sampleSize ?? targetDictionary.totalWords
-        
-        isLoading = true
-        errorMessage = nil
-        
         Task {
-            do {
-                // 创建新的测试记录
-                let test = VocabularyTest(
-                    dictionaryName: targetDictionary.name,
-                    sampleSize: testSampleSize,
-                    difficultyRange: "1-4"
-                )
-                test.dictionaryFileName = targetDictionary.fileName
-                test.totalWords = targetDictionary.totalWords
-                
-                // 检查是否有已测试的单词，优先从未测试的单词开始
-                let words = try await loadUntestedWords(from: targetDictionary, sampleSize: testSampleSize)
-                
-                // 加载已测试单词的统计信息
-                let testedWordsPublisher = vocabularyTestService.getTestedWords(for: targetDictionary.fileName)
-                let testedWords = try await withCheckedThrowingContinuation { continuation in
-                    testedWordsPublisher
-                        .sink(
-                            receiveCompletion: { completion in
-                                if case .failure(let error) = completion {
-                                    continuation.resume(throwing: error)
-                                }
-                            },
-                            receiveValue: { words in
-                                continuation.resume(returning: words)
+            await continueSelectedTest(test)
+        }
+    }
+    
+    /// 开始新测试（忽略未完成的测试）
+    func startNewTest() {
+        hasIncompleteTest = false
+        incompleteTest = nil
+        testStateManager.showTestContinuationAlert = false
+        
+        // 清理测试结果数据和统计信息
+        resultManager.clearTestResults()
+        
+        // 会话隔离：标记为新测试会话，确保统计数据从零开始
+        logger.info("🔄 [VocabularyTestViewModel] 开始新测试会话，启用会话隔离")
+        
+        startNewTestDirectly()
+    }
+    
+    /// 自动保存测试进度
+    private func saveTestProgress() async {
+        guard let currentTest = testStateManager.currentTest else {
+            logger.warning("⚠️ [VocabularyTestViewModel] 无法保存进度：当前测试为空")
+            return
+        }
+        
+        // 更新测试进度
+        currentTest.currentWordIndex = testStateManager.currentWordIndex
+        
+        // 更新会话统计数据
+        currentTest.sessionMasteredCount = resultManager.masteredCount
+        currentTest.sessionFamiliarCount = resultManager.familiarCount
+        currentTest.sessionUnfamiliarCount = resultManager.unfamiliarCount
+        
+        // 通过服务层保存到数据库
+        do {
+            try await withCheckedThrowingContinuation { continuation in
+                vocabularyTestService.updateTestInDatabase(currentTest)
+                    .sink(
+                        receiveCompletion: { completion in
+                            switch completion {
+                            case .finished:
+                                continuation.resume(returning: ())
+                            case .failure(let error):
+                                continuation.resume(throwing: error)
                             }
-                        )
-                        .store(in: &cancellables)
-                }
-                let masteredWords = testedWords.filter { $0.masteryLevel == MasteryLevel.mastered.rawValue }
-                let familiarWords = testedWords.filter { $0.masteryLevel == MasteryLevel.familiar.rawValue }
-                let unfamiliarWords = testedWords.filter { $0.masteryLevel == MasteryLevel.unfamiliar.rawValue }
-                
-                await MainActor.run {
-                    self.currentTest = test
-                    self.testWords = words
-                    self.currentWordIndex = 0
-                    self.currentWord = words.first
-                    self.generateCurrentQuestion()
-                    self.isTestActive = true
-                    self.isPaused = false
-                    
-                    // 恢复已测试单词的统计信息
-                    self.masteredCount = masteredWords.count
-                    self.familiarCount = familiarWords.count
-                    self.unfamiliarCount = unfamiliarWords.count
-                    self.totalTestedCount = testedWords.count
-                    
-                    self.updateProgress()
-                    self.isLoading = false
-                }
-                
-                completion?(true)
-                let totalWords = words.count + testedWords.count
-                errorHandler.logSuccess("开始词汇量测试，共 \(totalWords) 个单词，其中 \(testedWords.count) 个已测试，\(words.count) 个未测试")
-            } catch {
-                await MainActor.run {
-                    self.errorMessage = "开始测试失败"
-                    self.isLoading = false
-                }
-                completion?(false)
-                errorHandler.handle(error, context: "VocabularyTestViewModel.startTest")
+                        },
+                        receiveValue: { _ in
+                            // 更新成功
+                        }
+                    )
+                    .store(in: &cancellables)
+            }
+            logger.info("✅ [VocabularyTestViewModel] 测试进度已保存到数据库: \(testStateManager.currentWordIndex)/\(currentTest.totalWords), 会话统计: 掌握(\(currentTest.sessionMasteredCount)) 熟悉(\(currentTest.sessionFamiliarCount)) 陌生(\(currentTest.sessionUnfamiliarCount))")
+        } catch {
+            logger.error("❌ [VocabularyTestViewModel] 保存测试进度失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 词汇测试服务
+    private let vocabularyTestService: VocabularyTestServiceProtocol
+    
+    /// 词典服务
+    private let dictionaryService: DictionaryServiceProtocol
+    
+    /// 错误处理器
+    private let errorHandler: ErrorHandlerProtocol
+    
+    /// 学习跟踪服务
+    private let learningTrackingService: LearningTrackingService?
+    
+    /// 干扰项生成器
+    private let distractorGenerator: DistractorGenerator
+    
+    /// 导出服务
+    private var _exportService: TestResultExportService?
+    
+    /// 导出服务（公开访问）
+    var exportService: TestResultExportService? {
+        return _exportService
+    }
+    
+    /// 取消令牌集合
+    private var cancellables = Set<AnyCancellable>()
+    private let logger = Logger(subsystem: "com.en01.viewmodels", category: "VocabularyTestViewModel")
+    
+    /// 当前测试任务
+    private var currentTestTask: Task<Void, Never>?
+    
+    // MARK: - Computed Properties
+    
+    /// 是否可以开始测试
+    var canStartTest: Bool {
+        return configurationManager.canStartTest && !testStateManager.isTestActive
+    }
+    
+    /// 测试进度
+    var testProgress: Double {
+        return testStateManager.testProgress
+    }
+    
+    /// 当前单词
+    var currentWord: TestWord? {
+        return testStateManager.currentWord
+    }
+    
+    /// 是否测试激活
+    var isTestActive: Bool {
+        return testStateManager.isTestActive
+    }
+    
+    /// 是否暂停
+    var isPaused: Bool {
+        return testStateManager.isPaused
+    }
+    
+    /// 进度百分比文本
+    var progressPercentage: String {
+        let progress = testProgress * 100
+        return String(format: "%.1f%%", progress)
+    }
+    
+    /// 掌握的单词数
+    var masteredCount: Int {
+        return resultManager.masteredCount
+    }
+    
+    /// 熟悉的单词数
+    var familiarCount: Int {
+        return resultManager.familiarCount
+    }
+    
+    /// 不熟悉的单词数
+    var unfamiliarCount: Int {
+        return resultManager.unfamiliarCount
+    }
+    
+    // MARK: - Initialization
+
+    init(
+        vocabularyTestService: VocabularyTestServiceProtocol,
+        dictionaryService: DictionaryServiceProtocol,
+        errorHandler: ErrorHandlerProtocol,
+        learningTrackingService: LearningTrackingService? = nil,
+        testResultExportService: TestResultExportService,
+        appCoordinator: AppCoordinator? = nil
+    ) {
+        print("🚀 [VocabularyTestViewModel] 开始初始化")
+        
+        self.vocabularyTestService = vocabularyTestService
+        self.dictionaryService = dictionaryService
+        self.errorHandler = errorHandler
+        self.learningTrackingService = learningTrackingService
+        self.distractorGenerator = DistractorGenerator(dictionaryService: dictionaryService)
+        self._exportService = testResultExportService
+        
+        // 初始化管理器
+        self.testStateManager = TestStateManager()
+        self.configurationManager = TestConfigurationManager(dictionaryService: dictionaryService as! DictionaryService)
+        self.resultManager = TestResultManager(
+            vocabularyTestService: vocabularyTestService as! VocabularyTestService,
+            learningTrackingService: learningTrackingService ?? appCoordinator?.getLearningTrackingService() ?? Self.createDefaultLearningTrackingService(),
+            exportService: testResultExportService,
+            modelContext: (vocabularyTestService as! VocabularyTestService).modelContext
+        )
+        
+        // 设置初始数据
+        setupInitialData()
+        // 桥接子管理器的发布事件到 ViewModel
+        setupBindings()
+        
+        print("✅ [VocabularyTestViewModel] 初始化完成")
+    }
+    
+    // MARK: - Setup Methods
+    
+    /// 设置初始数据
+    private func setupInitialData() {
+        isLoading = true
+        Task {
+            await configurationManager.loadAvailableDictionaries()
+            await resultManager.loadTestHistory()
+            await MainActor.run {
+                self.isLoading = false
+                self.logger.info("🔄 [VocabularyTestViewModel] 初始数据加载完成: 词典 \(self.availableDictionaries.count) 个, 历史 \(self.testHistory.count) 条")
             }
         }
     }
     
-    private func loadUntestedWords(from dictionary: DictionaryInfo, sampleSize: Int) async throws -> [TestWord] {
-        // 获取未测试的单词
-        let untestedWords = try await withCheckedThrowingContinuation { continuation in
-            vocabularyTestService.getUntestedWords(from: dictionary)
+    /// 绑定子管理器的变更到 ViewModel，确保UI及时刷新
+    private func setupBindings() {
+        configurationManager.objectWillChange
+            .sink { [weak self] in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+        
+        testStateManager.objectWillChange
+            .sink { [weak self] in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+        
+        resultManager.objectWillChange
+            .sink { [weak self] in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+    }
+    
+    // MARK: - Test Management
+    
+    /// 开始测试
+    func startTest() {
+        guard canStartTest else {
+            errorMessage = "无法开始测试，请检查配置"
+            return
+        }
+        
+        // 检查是否存在未完成的测试
+        guard let selectedDictionary = configurationManager.selectedDictionary else {
+            errorMessage = "请先选择词典"
+            return
+        }
+        
+        // 先检查未完成的测试
+        checkForIncompleteTest(dictionaryFileName: selectedDictionary.fileName)
+        
+        // 如果有未完成的测试，显示选择对话框
+        if hasIncompleteTest {
+            testStateManager.showTestContinuationAlert = true
+            return
+        }
+        
+        // 没有未完成的测试，直接开始新测试
+        startNewTestDirectly()
+    }
+    
+    /// 直接开始新测试（内部方法）
+    private func startNewTestDirectly() {
+        currentTestTask?.cancel()
+        currentTestTask = Task {
+            await performStartTest()
+        }
+    }
+    
+    /// 执行开始测试
+    private func performStartTest() async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            // 验证配置
+            let validationResult = configurationManager.validateConfiguration()
+            guard validationResult.isValid else {
+                throw TestError.invalidConfiguration(validationResult.errors.joined(separator: ", "))
+            }
+            
+            // 创建测试实例（新测试）
+            let test = try await createVocabularyTest()
+            test.isNewSession = true  // 标记为新会话
+            
+            // 加载测试单词
+            let testWords = try await loadTestWords()
+            
+            // 根据历史记录更新单词掌握状态（会话隔离：新测试跳过历史加载）
+            await updateWordMasteryFromHistoryForNewTest(testWords: testWords, skipHistoryLoading: true)
+            
+            // 重置会话统计（新测试从0开始）
+            resultManager.clearTestResults()
+            
+            // 开始测试
+            testStateManager.startTest(with: testWords, test: test)
+            
+            // 生成第一个问题
+            await generateCurrentQuestion()
+            
+            isLoading = false
+            logger.info("✅ [VocabularyTestViewModel] 新测试开始成功")
+            
+        } catch {
+            isLoading = false
+            errorMessage = "开始测试失败: \(error.localizedDescription)"
+            errorHandler.handle(AppError.unknown(error), context: "VocabularyTestViewModel.startTest")
+            logger.error("❌ [VocabularyTestViewModel] 开始测试失败: \(error)")
+        }
+    }
+    
+    /// 为新测试根据历史记录更新单词掌握状态
+    /// - Parameters:
+    ///   - testWords: 测试单词列表
+    ///   - skipHistoryLoading: 是否跳过历史记录加载（用于会话隔离）
+    private func updateWordMasteryFromHistoryForNewTest(testWords: [TestWord], skipHistoryLoading: Bool = false) async {
+        // 会话隔离：如果跳过历史加载，则不从历史记录更新掌握状态
+        if skipHistoryLoading {
+            logger.info("🔄 [VocabularyTestViewModel] 会话隔离模式：跳过历史记录加载，新测试统计数据从零开始")
+            return
+        }
+        
+        guard let selectedDictionary = configurationManager.selectedDictionary else {
+            logger.warning("⚠️ [VocabularyTestViewModel] 没有选中的词典，跳过历史记录更新")
+            return
+        }
+        
+        do {
+            let testedWords = try await withCheckedThrowingContinuation { continuation in
+                vocabularyTestService.getTestedWords(for: selectedDictionary.fileName)
+                    .sink(
+                        receiveCompletion: { completion in
+                            switch completion {
+                            case .finished:
+                                break
+                            case .failure(let error):
+                                continuation.resume(throwing: error)
+                            }
+                        },
+                        receiveValue: { testedWords in
+                            continuation.resume(returning: testedWords)
+                        }
+                    )
+                    .store(in: &cancellables)
+            }
+            
+            // 更新每个单词的掌握状态
+            for word in testWords {
+                let wordHistory = testedWords.filter { $0.word == word.word }
+                if let latestRecord = wordHistory.max(by: { $0.testedAt < $1.testedAt }) {
+                    // 根据最新的测试记录更新掌握状态
+                    let masteryLevel = latestRecord.masteryLevelEnum
+                    recordWordMastery(word: word, masteryLevel: masteryLevel)
+                    logger.info("📊 [VocabularyTestViewModel] 新测试从历史记录更新单词掌握状态: \(word.word) -> \(masteryLevel)")
+                }
+            }
+            
+        } catch {
+            logger.error("❌ [VocabularyTestViewModel] 新测试更新单词掌握状态失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 创建词汇测试实例
+    private func createVocabularyTest() async throws -> VocabularyTest {
+        guard let dictionary = configurationManager.selectedDictionary else {
+            throw TestError.noDictionarySelected
+        }
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            vocabularyTestService.startVocabularyTest(dictionary: dictionary, sampleSize: configurationManager.testSize.wordCount)
+                .sink(
+                    receiveCompletion: { completion in
+                        if case .failure(let error) = completion {
+                            continuation.resume(throwing: error)
+                        }
+                    },
+                    receiveValue: { test in
+                        continuation.resume(returning: test)
+                    }
+                )
+                .store(in: &cancellables)
+        }
+    }
+    
+    /// 加载测试单词
+    private func loadTestWords() async throws -> [TestWord] {
+        guard let dictionary = configurationManager.selectedDictionary else {
+            throw TestError.noDictionarySelected
+        }
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            vocabularyTestService.loadDictionaryWords(from: dictionary)
+                .sink(
+                    receiveCompletion: { completion in
+                        if case .failure(let error) = completion {
+                            continuation.resume(throwing: error)
+                        }
+                    },
+                    receiveValue: { words in
+                        let testWords = words.map { word in
+                            TestWord(
+                                word: word.word,
+                                pronunciation: word.phonetic,
+                                definitions: word.definitions.map { $0.meaning },
+                                examples: word.definitions.flatMap { $0.examples },
+                                difficulty: word.difficulty,
+                                frequency: word.frequency
+                            )
+                        }
+                        continuation.resume(returning: testWords)
+                    }
+                )
+                .store(in: &cancellables)
+        }
+    }
+    
+    /// 暂停测试
+    func pauseTest() {
+        testStateManager.pauseTest()
+        print("⏸️ [VocabularyTestViewModel] 测试已暂停")
+    }
+    
+    /// 恢复测试
+    func resumeTest() {
+        testStateManager.resumeTest()
+        print("▶️ [VocabularyTestViewModel] 测试已恢复")
+    }
+    
+    /// 停止测试
+    func stopTest() {
+        currentTestTask?.cancel()
+        testStateManager.stopTest()
+        currentQuestion = nil
+        selectedAnswer = nil
+        showResult = false
+        print("🛑 [VocabularyTestViewModel] 测试已停止")
+    }
+    
+    /// 完成测试
+    func finishTest() {
+        guard testStateManager.completeTest() else { return }
+        
+        Task {
+            await saveTestResults()
+        }
+    }
+    
+    // MARK: - Question Management
+    
+    /// 生成当前问题
+    private func generateCurrentQuestion() async {
+        guard let currentWord = testStateManager.currentWord else { return }
+        
+        do {
+            let question = try await generateQuestion(for: currentWord)
+            await MainActor.run {
+                self.currentQuestion = question
+                self.selectedAnswer = nil
+                self.showResult = false
+            }
+        } catch {
+            errorMessage = "生成问题失败: \(error.localizedDescription)"
+            print("❌ [VocabularyTestViewModel] 生成问题失败: \(error)")
+        }
+    }
+    
+    /// 生成问题
+    private func generateQuestion(for word: TestWord) async throws -> TestQuestion {
+        // 获取所有词典单词用于生成干扰项
+        guard let dictionary = configurationManager.selectedDictionary else {
+            throw TestError.noDictionarySelected
+        }
+        
+        let allWords = try await withCheckedThrowingContinuation { continuation in
+            vocabularyTestService.loadDictionaryWords(from: dictionary)
                 .sink(
                     receiveCompletion: { completion in
                         if case .failure(let error) = completion {
@@ -250,582 +652,589 @@ class VocabularyTestViewModel: ObservableObject {
                 .store(in: &cancellables)
         }
         
-        // 缓存所有词典单词供干扰项生成使用
-        let allWords = try await loadDictionaryWords(from: dictionary)
-        await MainActor.run {
-            self.allDictionaryWords = allWords
-        }
+        let correctAnswer = getCorrectAnswer(for: word, mode: selectedTestMode)
         
-        // 如果没有未测试的单词，返回空数组
-        guard !untestedWords.isEmpty else {
-            return []
-        }
-        
-        // 随机打乱未测试单词顺序并取样
-        let testWords = untestedWords.shuffled().prefix(sampleSize).map { word in
-            TestWord(
-                word: word.word,
-                pronunciation: word.phonetic ?? "",
-                definitions: word.definitions.map { $0.meaning },
-                examples: word.definitions.flatMap { $0.examples },
-                difficulty: word.difficulty,
-                frequency: word.frequency
-            )
-        }
-        
-        return Array(testWords)
-    }
-    
-    private func loadTestWords(from dictionary: DictionaryInfo, sampleSize: Int) async throws -> [TestWord] {
-        // 直接使用async/await模式，避免在Publisher中使用continuation导致死锁
-        let allWords = try await loadDictionaryWords(from: dictionary)
-        
-        // 缓存所有词典单词供干扰项生成使用
-        await MainActor.run {
-            self.allDictionaryWords = allWords
-        }
-        
-        // 根据选择的分组过滤单词
-        let filteredWords: [DictionaryWord]
-        if selectedGroups.isEmpty {
-            // 如果没有选择分组，使用所有单词
-            filteredWords = allWords
-        } else {
-            // 根据选择的分组过滤单词
-            filteredWords = allWords.filter { word in
-                // 检查单词是否属于任何选中的分组
-                selectedGroups.contains { groupName in
-                    word.categories?.contains(groupName) ?? false
-                }
-            }
-        }
-        
-        // 随机打乱单词顺序并取样
-        let testWords = filteredWords.shuffled().prefix(sampleSize).map { word in
-            TestWord(
-                word: word.word,
-                pronunciation: word.phonetic ?? "",
-                definitions: word.definitions.map { $0.meaning },
-                examples: word.definitions.flatMap { $0.examples },
-                difficulty: word.difficulty,
-                frequency: word.frequency
-            )
-        }
-        
-        return Array(testWords)
-    }
-    
-    // 辅助方法：简化异步逻辑，避免死锁
-    private func loadDictionaryWords(from dictionary: DictionaryInfo) async throws -> [DictionaryWord] {
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[DictionaryWord], Error>) in
-            var cancellable: AnyCancellable?
-            var isCompleted = false
-            
-            cancellable = dictionaryService.loadDictionary(fileName: dictionary.fileName)
-                .timeout(.seconds(30), scheduler: DispatchQueue.global())
-                .sink(
-                    receiveCompletion: { completion in
-                        guard !isCompleted else { return }
-                        isCompleted = true
-                        
-                        switch completion {
-                        case .finished:
-                            break
-                        case .failure(let error):
-                            continuation.resume(throwing: error)
-                        }
-                        cancellable?.cancel()
-                    },
-                    receiveValue: { allWords in
-                        guard !isCompleted else { return }
-                        isCompleted = true
-                        
-                        continuation.resume(returning: allWords)
-                        cancellable?.cancel()
-                    }
-                )
-        }
-    }
-    
-    func pauseTest() {
-        guard isTestActive else { return }
-        isPaused = true
-        errorHandler.logSuccess("暂停词汇量测试")
-    }
-    
-    func resumeTest() {
-        guard isTestActive && isPaused else { return }
-        isPaused = false
-        errorHandler.logSuccess("恢复词汇量测试")
-    }
-    
-    func stopTest() {
-        guard isTestActive else { return }
-        
-        Task {
-            if let test = currentTest {
-                vocabularyTestService.completeTest(testId: test.id)
-                    .receive(on: DispatchQueue.main)
-                    .sink(
-                        receiveCompletion: { completion in
-                            switch completion {
-                            case .finished:
-                                self.errorHandler.logSuccess("测试完成")
-                            case .failure(let error):
-                                self.errorHandler.handle(error, context: "完成测试")
-                            }
-                        },
-                        receiveValue: { _ in
-                            // 测试完成处理
-                        }
-                    )
-                    .store(in: &cancellables)
-            }
-            
-            await MainActor.run {
-                self.finishTest()
-            }
-            
-            errorHandler.logSuccess("结束词汇量测试")
-        }
-    }
-    
-    private func finishTest() {
-        isTestActive = false
-        isPaused = false
-        loadTestHistory() // 刷新历史记录
-    }
-    
-    // MARK: - Question Generation
-    private func generateCurrentQuestion() {
-        guard let word = currentWord else {
-            currentQuestion = nil
-            return
-        }
-        
-        // 生成智能干扰项
+        // 根据测试模式生成干扰项
         let distractors: [String]
         switch selectedTestMode {
         case .englishToChinese:
-            let correctDefinition = word.definitions.first ?? ""
             distractors = distractorGenerator.generateEnglishToChineseDistractors(
                 targetWord: word,
-                correctDefinition: correctDefinition,
-                allWords: allDictionaryWords,
+                correctDefinition: correctAnswer,
+                allWords: allWords,
                 count: 3
             )
         case .chineseToEnglish:
             distractors = distractorGenerator.generateChineseToEnglishDistractors(
                 targetWord: word,
-                correctWord: word.word,
-                allWords: allDictionaryWords,
+                correctWord: correctAnswer,
+                allWords: allWords,
                 count: 3
             )
         }
         
-        currentQuestion = TestQuestion(word: word, mode: selectedTestMode, distractors: distractors)
-        selectedAnswer = nil
+        let _ = createTestOptions(for: word, with: distractors)
+        
+        return TestQuestion(
+            word: word,
+            mode: selectedTestMode,
+            distractors: distractors
+        )
     }
     
+    /// 创建测试选项
+    private func createTestOptions(for word: TestWord, with distractors: [String]) -> [TestOption] {
+        let correctAnswer = getCorrectAnswer(for: word, mode: selectedTestMode)
+        var allOptions = distractors + [correctAnswer]
+        allOptions.shuffle()
+        
+        return allOptions.enumerated().map { index, text in
+            TestOption(text: text, isCorrect: text == correctAnswer)
+        }
+    }
+    
+    /// 获取正确答案
+    private func getCorrectAnswer(for word: TestWord, mode: VocabularyTestMode) -> String {
+        switch mode {
+        case .englishToChinese:
+            return word.primaryDefinition
+        case .chineseToEnglish:
+            return word.word
+        }
+    }
+    
+    // MARK: - Answer Management
+    
+    /// 选择答案
     func selectAnswer(_ option: TestOption) {
         selectedAnswer = option
-    }
-    
-    func submitAnswer() {
-        guard let _ = currentQuestion,
-              let answer = selectedAnswer else {
-            errorHandler.handle(VocabularyTestError.invalidTestData, context: "提交答案时缺少必要数据")
-            return
-        }
-        
-        // 显示答案结果
         showResult = true
         
-        // 2秒后自动进入下一题
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            guard let self = self else { return }
-            
-            // 根据答案正确性确定掌握程度
-            let isCorrect = answer.isCorrect
-            let masteryLevel: MasteryLevel = isCorrect ? .mastered : .unfamiliar
-            
-            // 隐藏结果并进入下一题
-            self.showResult = false
-            self.selectMasteryLevel(masteryLevel)
+        // 记录测试结果
+        recordTestResult(option)
+        
+        // 延迟移动到下一题
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.moveToNextQuestion()
         }
     }
     
-    // MARK: - Word Testing
-    func selectMasteryLevel(_ level: MasteryLevel) {
-        guard let word = currentWord, let test = currentTest else {
-            errorHandler.handle(VocabularyTestError.invalidTestData, context: "选择掌握程度时缺少必要数据")
+    /// 记录测试结果
+    private func recordTestResult(_ selectedOption: TestOption) {
+        guard let currentWord = testStateManager.currentWord,
+              let _ = currentQuestion else { return }
+        
+        let result = WordTestResult(
+            word: currentWord.word,
+            isKnown: selectedOption.isCorrect
+        )
+        
+        resultManager.addTestResult(result)
+        
+        // 记录到服务层
+        recordWordMastery(word: currentWord, isCorrect: selectedOption.isCorrect)
+        
+        // 自动保存测试进度
+        Task {
+            await saveTestProgress()
+        }
+    }
+    
+    /// 记录单词掌握度
+    private func recordWordMastery(word: TestWord, isCorrect: Bool) {
+        // 获取当前单词的掌握度，如果没有记录则默认为unfamiliar
+        let currentMastery = getCurrentWordMastery(word: word.word)
+        let masteryLevel = calculateNewMastery(currentMastery, correct: isCorrect)
+        
+        // 获取当前测试ID
+        let testId = testStateManager.currentTest?.id
+        
+        // 统一通过 TestResultManager 处理，确保测试ID正确传递
+        resultManager.recordWordMastery(word: word.word, mastery: masteryLevel, responseTime: 0.0, testId: testId)
+        
+        print("✅ [VocabularyTestViewModel] 单词掌握度记录: \(word.word) -> \(masteryLevel)")
+    }
+    
+    /// 获取当前单词的掌握度
+    private func getCurrentWordMastery(word: String) -> MasteryLevel {
+        // 从结果管理器中查找该单词的历史掌握度
+        // 如果没有记录，默认为unfamiliar
+        return .unfamiliar // 简化实现，实际应该查询历史记录
+    }
+    
+    /// 根据答案正确性计算新的掌握度
+    /// 简化逻辑：答对=掌握，答错=陌生
+    private func calculateNewMastery(_ currentMastery: MasteryLevel, correct: Bool) -> MasteryLevel {
+        if correct {
+            return .mastered  // 答对设为掌握
+        } else {
+            return .unfamiliar  // 答错设为陌生
+        }
+    }
+    
+    /// 移动到下一个问题
+    private func moveToNextQuestion() {
+        if testStateManager.moveToNextWord() {
+            Task {
+                await generateCurrentQuestion()
+            }
+        } else {
+            // 测试完成
+            finishTest()
+        }
+    }
+    
+    // MARK: - Result Management
+    
+    /// 保存测试结果
+    private func saveTestResults() async {
+        guard let currentTest = testStateManager.currentTest else { return }
+        
+        do {
+            try await resultManager.saveTestResults(for: currentTest)
+            print("✅ [VocabularyTestViewModel] 测试结果保存成功")
+        } catch {
+            errorMessage = "保存测试结果失败: \(error.localizedDescription)"
+            print("❌ [VocabularyTestViewModel] 保存测试结果失败: \(error)")
+        }
+    }
+    
+    /// 公开的保存测试结果方法
+    func saveTestResult(_ testResult: VocabularyTest, completion: @escaping (Bool) -> Void) {
+        Task {
+            do {
+                try await resultManager.saveTestResults(for: testResult)
+                await MainActor.run {
+                    completion(true)
+                }
+                print("✅ [VocabularyTestViewModel] 测试结果保存成功")
+            } catch {
+                await MainActor.run {
+                    completion(false)
+                    self.errorMessage = "保存测试结果失败: \(error.localizedDescription)"
+                }
+                print("❌ [VocabularyTestViewModel] 保存测试结果失败: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Test History Management
+    
+    /// 选择测试继续
+    func selectTestForContinuation(_ test: VocabularyTest) {
+        // 检查测试是否真的未完成
+        if test.isCompleted {
+            logger.warning("⚠️ [VocabularyTestViewModel] 选择的测试已完成，无法继续: \(test.dictionaryName)")
+            errorMessage = "该测试已完成，无法继续"
             return
         }
         
-        // 防止重复选择
-        guard !isLoading else { return }
+        // 设置选中的测试
+        resultManager.selectTestForContinuation(test)
         
-        // 立即更新UI状态
-        isLoading = true
-        
-        // 立即更新统计和移动到下一个单词，不等待异步操作
-        updateTestResults(for: level)
-        
-        // 阶段性保存已测试单词
+        // 加载测试数据并继续
         Task {
-            do {
-                // 将TestWord转换为DictionaryWord
-                let wordDefinitions = word.definitions.map { definition in
-                    WordDefinition(
-                        partOfSpeech: .noun, // 默认词性，实际应用中可能需要更智能的判断
-                        meaning: definition,
-                        englishMeaning: nil,
-                        examples: word.examples ?? [],
-                        contextKeywords: []
-                    )
+            await continueSelectedTest(test)
+        }
+    }
+    
+    /// 继续选中的测试
+    private func continueSelectedTest(_ test: VocabularyTest) async {
+        do {
+            // 首先设置词典配置
+            if let dictionary = configurationManager.availableDictionaries.first(where: { $0.fileName == test.dictionaryFileName }) {
+                await configurationManager.selectDictionary(dictionary)
+                
+                // 确保使用当前有效的测试记录
+                let currentTest = try await withCheckedThrowingContinuation { continuation in
+                    vocabularyTestService.getCurrentTestForDictionary(test.dictionaryFileName)
+                        .sink(
+                            receiveCompletion: { completion in
+                                switch completion {
+                                case .finished:
+                                    break
+                                case .failure(let error):
+                                    continuation.resume(throwing: error)
+                                }
+                            },
+                            receiveValue: { currentTest in
+                                continuation.resume(returning: currentTest)
+                            }
+                        )
+                        .store(in: &cancellables)
                 }
                 
-                let dictionaryWord = DictionaryWord(
-                    word: word.word,
-                    phonetic: word.pronunciation,
-                    definitions: wordDefinitions,
-                    frequency: word.frequency,
-                    difficulty: word.difficulty,
-                    tags: [],
-                    categories: nil
+                // 使用当前有效的测试记录，如果没有则使用传入的测试记录
+                let testToUse = currentTest ?? test
+                
+                // 重新加载测试单词
+                let testWords = try await loadTestWords()
+                
+                // 重新加载测试状态
+                testStateManager.loadTestState(from: testToUse)
+                
+                // 设置测试单词
+                testStateManager.setTestWords(testWords)
+                
+                // 恢复会话统计数据到ResultManager
+                resultManager.restoreSessionStats(
+                    masteredCount: testToUse.sessionMasteredCount,
+                    familiarCount: testToUse.sessionFamiliarCount,
+                    unfamiliarCount: testToUse.sessionUnfamiliarCount
                 )
                 
-                // 使用VocabularyTestService的saveTestedWord方法
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    vocabularyTestService.saveTestedWord(
-                        dictionaryWord,
-                        mastery: level,
-                        dictionaryName: test.dictionaryName,
-                        dictionaryFileName: test.dictionaryFileName,
-                        testSessionId: test.id
-                    )
+                // 继续测试时不重新加载历史记录，保持当前会话状态
+                logger.info("📊 [VocabularyTestViewModel] 继续测试，恢复会话状态 - 掌握:\(testToUse.sessionMasteredCount), 熟悉:\(testToUse.sessionFamiliarCount), 不熟悉:\(testToUse.sessionUnfamiliarCount)")
+                
+                // 生成当前问题
+                await generateCurrentQuestion()
+                
+                logger.info("✅ [VocabularyTestViewModel] 继续测试: \(testToUse.dictionaryName), 当前进度: \(testStateManager.currentWordIndex)/\(testWords.count)")
+            }
+        } catch {
+            errorMessage = "继续测试失败: \(error.localizedDescription)"
+            errorHandler.handle(AppError.unknown(error))
+        }
+    }
+    
+    /// 根据历史记录更新单词掌握状态
+    private func updateWordMasteryFromHistory(test: VocabularyTest, testWords: [TestWord]) async {
+        // 获取该测试的历史记录
+        do {
+            let testedWords = try await withCheckedThrowingContinuation { continuation in
+                vocabularyTestService.getTestedWords(for: test.dictionaryFileName)
                     .sink(
                         receiveCompletion: { completion in
-                            if case .failure(let error) = completion {
+                            switch completion {
+                            case .finished:
+                                break
+                            case .failure(let error):
                                 continuation.resume(throwing: error)
-                            } else {
-                                continuation.resume(returning: ())
                             }
                         },
-                        receiveValue: { _ in
-                            // 保存成功
+                        receiveValue: { testedWords in
+                            continuation.resume(returning: testedWords)
                         }
                     )
                     .store(in: &cancellables)
-                }
-                
-                await MainActor.run {
-                    self.errorHandler.logSuccess("保存已测试单词: \(word.word)")
-                }
-                
-                // 发送学习进度更新通知
-                if let userWord = try? await self.dictionaryService.lookupWord(word.word) {
-                    await MainActor.run {
-                        NotificationCenter.default.post(
-                            name: NSNotification.Name("WordLearningProgressUpdated"),
-                            object: userWord
-                        )
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.errorHandler.handle(error, context: "保存已测试单词")
-                }
             }
-        }
-        
-        let testEnded = moveToNextWord()
-        
-        // 立即重置loading状态，避免UI卡死
-        isLoading = false
-        
-        // 如果测试结束，直接返回
-        if testEnded {
-            return
-        }
-        
-        // 异步记录单词点击（不阻塞UI，也不影响loading状态）
-        vocabularyTestService.recordWordClick(word: word.word, testId: test.id)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { [weak self] completion in
-                    guard let self = self else { return }
-                    
-                    switch completion {
-                    case .finished:
-                        self.errorHandler.logSuccess("记录单词点击: \(word.word)")
-                    case .failure(let error):
-                        self.errorHandler.handle(error, context: "记录单词点击")
-                    }
-                },
-                receiveValue: { _ in
-                    // 记录成功，无需额外操作
-                }
-            )
-            .store(in: &cancellables)
-    }
-    
-    private func updateTestResults(for level: MasteryLevel) {
-        // 记录当前单词的掌握程度
-        if let word = currentWord {
-            wordMasteryResults[word.word] = level
-        }
-        
-        switch level {
-        case .mastered:
-            masteredCount += 1
-        case .familiar:
-            familiarCount += 1
-        case .unfamiliar:
-            unfamiliarCount += 1
-        }
-        totalTestedCount += 1
-    }
-    
-    private func moveToNextWord() -> Bool {
-        currentWordIndex += 1
-        
-        if currentWordIndex < testWords.count {
-            currentWord = testWords[currentWordIndex]
-            generateCurrentQuestion()
-            updateProgress()
-            return false // 测试未结束
-        } else {
-            // 测试完成，先保存测试结果再停止测试
-            completeTestWithResults()
-            return true // 测试已结束
-        }
-    }
-    
-    private func completeTestWithResults() {
-        guard let test = currentTest else {
-            finishTest()
-            return
-        }
-        
-        // 创建测试结果
-        let testResult = VocabularyTest(
-            id: test.id,
-            dictionaryName: test.dictionaryName,
-            dictionaryFileName: test.dictionaryFileName,
-            totalWords: testWords.count,
-            masteredCount: masteredCount,
-            familiarCount: familiarCount,
-            unfamiliarCount: unfamiliarCount,
-            currentWordIndex: currentWordIndex,
-            isCompleted: true,
-            isPaused: false,
-            createdAt: test.createdAt,
-            completedAt: Date(),
-            estimatedVocabularySize: masteredCount + familiarCount,
-            accuracyPercentage: Double(masteredCount + familiarCount) / Double(testWords.count) * 100
-        )
-        
-        // 同步更新单词掌握程度到词汇表
-        syncTestResultsToVocabulary()
-        
-        // 保存测试结果
-        vocabularyTestService.saveTestResult(testResult)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { [weak self] completion in
-                    guard let self = self else { return }
-                    
-                    switch completion {
-                    case .finished:
-                        self.errorHandler.logSuccess("测试结果保存成功")
-                    case .failure(let error):
-                        self.errorHandler.handle(error, context: "保存测试结果")
-                    }
-                    
-                    // 无论保存成功与否，都完成测试
-                    self.finishTest()
-                },
-                receiveValue: { _ in
-                    // 保存成功
-                }
-            )
-            .store(in: &cancellables)
-    }
-    
-    private func updateProgress() {
-        guard !testWords.isEmpty else { return }
-        testProgress = Double(currentWordIndex) / Double(testWords.count)
-    }
-    
-    private func resetTestResults() {
-        masteredCount = 0
-        familiarCount = 0
-        unfamiliarCount = 0
-        totalTestedCount = 0
-        testProgress = 0.0
-        wordMasteryResults.removeAll()
-    }
-    
-    // MARK: - Data Synchronization
-    private func syncTestResultsToVocabulary() {
-        // 通过DictionaryService更新单词掌握程度
-        Task {
-            for (word, masteryLevel) in wordMasteryResults {
-                if let userWord = try? await dictionaryService.lookupWord(word) {
-                    dictionaryService.updateWordMastery(userWord, level: masteryLevel)
+            
+            // 更新每个单词的掌握状态
+            for word in testWords {
+                let wordHistory = testedWords.filter { $0.word == word.word }
+                if let latestRecord = wordHistory.max(by: { $0.testedAt < $1.testedAt }) {
+                    // 根据最新的测试记录更新掌握状态
+                    let masteryLevel = latestRecord.masteryLevelEnum
+                    recordWordMastery(word: word, masteryLevel: masteryLevel)
+                    logger.info("📊 [VocabularyTestViewModel] 从历史记录更新单词掌握状态: \(word.word) -> \(masteryLevel)")
                 }
             }
             
-            // 通知其他ViewModel刷新数据
-            await MainActor.run {
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("VocabularyTestCompleted"),
-                    object: nil,
-                    userInfo: [
-                        "masteredCount": masteredCount,
-                        "familiarCount": familiarCount,
-                        "unfamiliarCount": unfamiliarCount,
-                        "totalWords": testWords.count
-                    ]
-                )
-            }
-            
-            errorHandler.logSuccess("测试结果已同步到词汇表，共更新 \(wordMasteryResults.count) 个单词")
+        } catch {
+            logger.error("❌ [VocabularyTestViewModel] 更新单词掌握状态失败: \(error.localizedDescription)")
         }
     }
     
-    // MARK: - Test History
+    /// 加载测试历史
     func loadTestHistory() {
-        vocabularyTestService.getTestHistory(limit: 20)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { completion in
-                    if case .failure(let error) = completion {
-                        print("Failed to load test history: \(error)")
-                    }
-                },
-                receiveValue: { [weak self] (tests: [VocabularyTest]) in
-                    self?.testHistory = tests
-                }
-            )
-            .store(in: &cancellables)
+        Task {
+            await resultManager.loadTestHistory()
+        }
     }
     
+    /// 从历史中删除测试
     func deleteTestFromHistory(_ test: VocabularyTest) {
-        vocabularyTestService.deleteTest(testId: test.id)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { completion in
-                    if case .failure(let error) = completion {
-                        print("Failed to delete test: \(error)")
-                    }
-                },
-                receiveValue: { [weak self] _ in
-                    self?.loadTestHistory() // 重新加载历史记录
+        resultManager.deleteTestFromHistory(test)
+    }
+    
+    // MARK: - Dictionary Management (Delegated)
+    
+    /// 选择词典
+    func selectDictionary(_ dictionary: DictionaryInfo) {
+        isLoading = true
+        Task {
+            await configurationManager.selectDictionary(dictionary)
+            
+            // 检查是否存在未完成的测试
+            checkForIncompleteTest(dictionaryFileName: dictionary.fileName)
+            
+            await MainActor.run {
+                self.isLoading = false
+                self.logger.info("✅ [VocabularyTestViewModel] 词典选择完成: \(dictionary.name), 分组 \(self.availableGroups.count) 个")
+            }
+        }
+    }
+    
+    /// 切换分组选择
+    func toggleGroupSelection(_ group: String) {
+        configurationManager.toggleGroupSelection(group)
+    }
+    
+    /// 设置测试模式
+    func setTestMode(_ mode: TestMode) {
+        configurationManager.setTestMode(mode)
+    }
+    
+    /// 设置测试大小
+    func setTestSize(_ size: TestSize) {
+        configurationManager.setTestSize(size)
+    }
+    
+    // MARK: - Export Management (Delegated)
+    
+    /// 设置导出服务
+    func setExportService(_ service: TestResultExportService) {
+        self._exportService = service
+    }
+    
+    /// 导出测试结果
+    func exportTestResults(format: ExportFormat) async throws -> URL {
+        return try await resultManager.exportTestResults(format: format)
+    }
+    
+    /// 导出词汇测试单词
+    func exportVocabularyTestWords(format: ExportFormat) {
+        Task {
+            do {
+                guard let exportService = _exportService else {
+                    print("❌ 导出服务未初始化")
+                    return
                 }
-            )
-            .store(in: &cancellables)
+                
+                let dictionaryName = selectedDictionary?.name ?? "Unknown"
+                let _ = try await exportService.exportTestResults(for: dictionaryName, format: format)
+                print("✅ 导出成功")
+            } catch {
+                print("❌ 导出失败: \(error.localizedDescription)")
+            }
+        }
     }
     
-    func saveTestResult(_ testResult: VocabularyTest, completion: @escaping (Bool) -> Void) {
-        vocabularyTestService.saveTestResult(testResult)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { [weak self] publisherCompletion in
-                    guard let self = self else { return }
-                    switch publisherCompletion {
-                    case .finished:
-                        self.errorHandler.logSuccess("保存测试结果成功")
-                    case .failure(let error):
-                        self.errorHandler.handle(error, context: "保存测试结果")
-                    }
-                },
-                receiveValue: { [weak self] _ in
-                    guard let self = self else { return }
-                    // 更新历史记录
-                    if !self.testHistory.contains(where: { $0.id == testResult.id }) {
-                        self.testHistory.insert(testResult, at: 0)
-                    }
-                    completion(true)
-                }
-            )
-            .store(in: &cancellables)
+    /// 检查是否有可导出的数据
+    func hasExportableData(for dictionaryName: String) -> Bool {
+        return !testHistory.filter { $0.dictionaryName == dictionaryName }.isEmpty
     }
     
-    // MARK: - Progressive Test Management
-    func clearTestProgress(for dictionary: DictionaryInfo) {
-        vocabularyTestService.clearTestedWords(for: dictionary.fileName)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { [weak self] completion in
-                    guard let self = self else { return }
-                    
-                    switch completion {
-                    case .finished:
-                        self.errorHandler.logSuccess("已清除词典 \(dictionary.name) 的测试记录")
-                        
-                        // 如果当前选择的词典被清除，重置统计信息
-                        if self.selectedDictionary?.fileName == dictionary.fileName {
-                            self.masteredCount = 0
-                            self.familiarCount = 0
-                            self.unfamiliarCount = 0
-                            self.totalTestedCount = 0
-                        }
-                    case .failure(let error):
-                        self.errorHandler.handle(error, context: "清除测试记录")
-                    }
-                },
-                receiveValue: { _ in
-                    // 清除成功
-                }
-            )
-            .store(in: &cancellables)
+    /// 导出状态
+    @Published var isExporting: Bool = false
+    @Published var exportProgress: Double = 0.0
+    @Published var exportError: String?
+    
+    /// 清除导出错误
+    func clearExportError() {
+        exportError = nil
     }
     
-    func getTestProgress(for dictionary: DictionaryInfo) {
-        vocabularyTestService.getTestProgress(for: dictionary.fileName)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { [weak self] completion in
-                    if case .failure(let error) = completion {
-                        self?.errorHandler.handle(error, context: "获取测试进度")
-                    }
-                },
-                receiveValue: { [weak self] progress in
-                    // 处理获取到的测试进度
-                    self?.errorHandler.logSuccess("获取测试进度成功: \(progress.testedWords)/\(progress.totalWords)")
-                }
-            )
-            .store(in: &cancellables)
-    }
-    
-    // MARK: - Computed Properties
-    var progressPercentage: String {
-        return String(format: "%.1f%%", testProgress * 100)
-    }
-    
-    var estimatedVocabularySize: Int {
-        guard totalTestedCount > 0 else { return 0 }
-        let masteryRate = Double(masteredCount + familiarCount) / Double(totalTestedCount)
-        let totalWords = selectedDictionary?.totalWords ?? 0
-        return Int(Double(totalWords) * masteryRate)
-    }
-    
-    var canStartTest: Bool {
-        selectedDictionary != nil && !isTestActive && !isLoading && !selectedGroups.isEmpty
-    }
-    
-    var hasTestHistory: Bool {
-        !testHistory.isEmpty
-    }
-    
-    // MARK: - Error Handling
+    /// 清除一般错误
     func clearError() {
         errorMessage = nil
+    }
+    
+    // MARK: - Bridge Methods
+    
+    /// 加载可用词典
+    func loadAvailableDictionaries() {
+        isLoading = true
+        Task {
+            await configurationManager.loadAvailableDictionaries()
+            await MainActor.run {
+                self.isLoading = false
+                self.logger.info("📚 [VocabularyTestViewModel] 可用词典加载完成: \(self.availableDictionaries.count)")
+            }
+        }
+    }
+    
+    /// 取消所有任务
+    func cancelAllTasks() {
+        currentTestTask?.cancel()
+        testStateManager.cancelAllTasks()
+    }
+    
+    /// 选择测试模式
+    func selectTestMode(_ mode: VocabularyTestMode) {
+        selectedTestMode = mode
+        // 将VocabularyTestMode转换为TestMode
+        let testMode: TestMode = mode == .englishToChinese ? .sequential : .random
+        configurationManager.setTestMode(testMode)
+    }
+    
+    /// 切换全选分组
+    func toggleAllGroups() {
+        if isAllGroupsSelected {
+            configurationManager.clearGroupSelection()
+        } else {
+            configurationManager.selectAllGroups()
+        }
+    }
+    
+    /// 选择测试大小模式
+    func selectTestSizeMode(_ mode: TestSizeMode) {
+        testSizeMode = mode
+    }
+    
+    /// 选择测试大小
+    func selectTestSize(_ size: Int) {
+        configurationManager.setTestSize(.custom(size))
+    }
+    
+    /// 提交答案
+    func submitAnswer() {
+        guard let selectedOption = selectedAnswer else { return }
+        testStateManager.submitAnswer(selectedOption)
+        selectedAnswer = nil
+    }
+    
+    /// 移动到上一个单词
+    func moveToPreviousWord() {
+        // 检查是否可以回退
+        guard testStateManager.canMoveToPrevious else {
+            logger.info("⚠️ [VocabularyTestViewModel] 无法回退：已经是第一个单词")
+            return
+        }
+        
+        // 保存当前单词的测试状态
+        testStateManager.saveCurrentWordState()
+        
+        // 移动到上一个单词
+        if testStateManager.moveToPreviousWord() {
+            logger.info("🔄 [VocabularyTestViewModel] 回退到上一个单词，索引: \(testStateManager.currentWordIndex)")
+            
+            // 尝试恢复上一个单词的测试状态
+            if let previousState = testStateManager.restoreWordState(for: testStateManager.currentWordIndex) {
+                // 恢复之前的测试状态
+                currentQuestion = previousState.question
+                selectedAnswer = previousState.selectedAnswer
+                showResult = previousState.showResult
+                
+                logger.info("✅ [VocabularyTestViewModel] 恢复了上一个单词的测试状态")
+            } else {
+                // 如果没有保存的状态，重新生成问题
+                currentQuestion = nil
+                selectedAnswer = nil
+                showResult = false
+                
+                Task {
+                    await generateCurrentQuestion()
+                }
+                
+                logger.info("🔄 [VocabularyTestViewModel] 为上一个单词重新生成问题")
+            }
+        }
+    }
+    
+    /// 手动移动到下一个单词
+    func moveToNextWordManually() {
+        if testStateManager.moveToNextWordManually() {
+            // 移动成功后重新生成问题
+            Task {
+                await generateCurrentQuestion()
+            }
+        }
+    }
+    
+    /// 移动到下一个单词
+    func moveToNextWord() {
+        // 在移动到下一个单词前，将当前单词标记为陌生
+        if let currentWord = testStateManager.currentWord {
+            recordWordMastery(word: currentWord, masteryLevel: .unfamiliar)
+            logger.info("📝 [VocabularyTestViewModel] 通过'下一个'按钮将单词标记为陌生: \(currentWord.word)")
+        }
+        
+        if testStateManager.moveToNextWord() {
+            // 移动成功后重新生成问题
+            Task {
+                await generateCurrentQuestion()
+            }
+        }
+    }
+    
+    /// 选择掌握程度
+    func selectMasteryLevel(_ mastery: MasteryLevel) {
+        guard let currentWord = testStateManager.currentWord else { return }
+        
+        // 记录掌握程度
+        recordWordMastery(word: currentWord, masteryLevel: mastery)
+        
+        // 移动到下一个单词
+        moveToNextQuestion()
+    }
+    
+
+    
+    /// 记录单词掌握程度
+    private func recordWordMastery(word: TestWord, masteryLevel: MasteryLevel) {
+        // 获取当前测试ID
+        let testId = testStateManager.currentTest?.id
+        
+        // 更新结果管理器，传递测试ID
+        resultManager.recordWordMastery(word: word.word, mastery: masteryLevel, responseTime: 0.0, testId: testId)
+        
+        // 如果有学习跟踪服务，记录学习数据
+        if let trackingService = learningTrackingService {
+            Task {
+                trackingService.recordWordMastery(
+                    word: word.word,
+                    mastery: masteryLevel,
+                    responseTime: 0.0
+                )
+                print("✅ [VocabularyTestViewModel] 学习跟踪记录成功")
+            }
+        }
+    }
+
+    // MARK: - Helper Methods
+    
+    /// 创建默认的 LearningTrackingService
+    private static func createDefaultLearningTrackingService() -> LearningTrackingService {
+        // 创建临时的 ModelContainer 和 ModelContext
+        let container = try! ModelContainer(for: UserWord.self, LearningRecord.self)
+        let context = ModelContext(container)
+        
+        // 创建默认的依赖
+        let cacheManager = CacheManager()
+        let errorHandler = ErrorHandler()
+        
+        return LearningTrackingService(
+            modelContext: context,
+            cacheManager: cacheManager,
+            errorHandler: errorHandler
+        )
+    }
+    
+    // MARK: - Cleanup
+    
+    deinit {
+        currentTestTask?.cancel()
+        cancellables.removeAll()
+        print("🔄 [VocabularyTestViewModel] 已清理")
     }
 }
 
 // MARK: - Supporting Types
 
-// DictionaryInfo 已在 Models/DictionaryInfo.swift 中定义
+/// 测试错误
+enum TestError: LocalizedError {
+    case noDictionarySelected
+    case invalidConfiguration(String)
+    case noWordsAvailable
+    case testAlreadyActive
+    
+    var errorDescription: String? {
+        switch self {
+        case .noDictionarySelected:
+            return "请先选择一个词典"
+        case .invalidConfiguration(let message):
+            return "配置无效: \(message)"
+        case .noWordsAvailable:
+            return "没有可用的测试单词"
+        case .testAlreadyActive:
+            return "测试已经在进行中"
+        }
+    }
+}
+
+// MARK: - Notification Extensions
+// 注释掉重复的通知定义，使用 NotificationNames.swift 中的定义
+// extension Notification.Name {
+//     static let statisticsDataUpdated = Notification.Name("statisticsDataUpdated")
+// }

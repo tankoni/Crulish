@@ -18,7 +18,7 @@ protocol WordInteractionProtocol {
     ///   - position: 点击位置
     ///   - context: 单词所在的上下文
     ///   - articleId: 文章ID（可选）
-    func handleWordTap(_ word: String, at position: CGPoint, context: String?, articleId: UUID?)
+    @MainActor func handleWordTap(_ word: String, at position: CGPoint, context: String?, articleId: UUID?)
     
     /// 处理单词长按事件
     /// - Parameters:
@@ -26,7 +26,7 @@ protocol WordInteractionProtocol {
     ///   - position: 长按位置
     ///   - context: 单词所在的上下文
     ///   - articleId: 文章ID（可选）
-    func handleWordLongPress(_ word: String, at position: CGPoint, context: String?, articleId: UUID?)
+    @MainActor func handleWordLongPress(_ word: String, at position: CGPoint, context: String?, articleId: UUID?)
     
     /// 设置单词掌握程度
     /// - Parameters:
@@ -34,14 +34,14 @@ protocol WordInteractionProtocol {
     ///   - mastery: 掌握程度
     ///   - context: 上下文
     ///   - articleId: 文章ID（可选）
-    func setWordMastery(_ word: String, mastery: MasteryLevel, context: String?, articleId: UUID?)
+    @MainActor func setWordMastery(_ word: String, mastery: MasteryLevel, context: String?, articleId: UUID?)
     
     /// 显示单词详细定义
     /// - Parameter word: 要显示定义的单词
-    func showDetailedDefinition(for word: String)
+    @MainActor func showDetailedDefinition(for word: String)
     
     /// 隐藏当前显示的提示
-    func hideTooltip()
+    @MainActor func hideTooltip()
 }
 
 // MARK: - 学习行为跟踪协议

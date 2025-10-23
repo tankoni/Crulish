@@ -25,7 +25,7 @@ class UnifiedCacheManager {
         let compressionThreshold: Int
         
         static let `default` = CacheConfig(
-            maxCacheSize: 2000,
+            maxCacheSize: 1000, // 从2000减少到1000
             defaultTTL: 3600, // 1小时
             cleanupInterval: 300, // 5分钟
             compressionThreshold: 100 // 超过100字符启用压缩

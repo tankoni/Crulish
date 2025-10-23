@@ -19,6 +19,8 @@ enum NavigationButtonType {
 // MARK: - 统一导航栏包装器
 struct ReaderNavigationWrapper<Content: View>: View {
     @State private var isFullScreen = false
+    @State private var showingMenu = false
+    
     let content: Content
     let title: String
     let standardButtons: [NavigationButtonType]
@@ -49,7 +51,87 @@ struct ReaderNavigationWrapper<Content: View>: View {
     }
     
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            // 现代化导航栏
+            HStack {
+                // 返回按钮 - 只显示箭头
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.primary)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+                
+                // 标题 - 居中显示
+                Text(title)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                
+                Spacer()
+                
+                // 三点菜单按钮
+                Button(action: { showingMenu = true }) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.primary)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .confirmationDialog("选项", isPresented: $showingMenu, titleVisibility: .hidden) {
+                    if standardButtons.contains(.bookmark) {
+                        Button(action: { onBookmark?() }) {
+                            Label("书签", systemImage: "bookmark")
+                        }
+                        .disabled(onBookmark == nil)
+                    }
+                    
+                    if standardButtons.contains(.share) {
+                        Button(action: { onShare?() }) {
+                            Label("分享", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(onShare == nil)
+                    }
+                    
+                    if standardButtons.contains(.settings) {
+                        Button(action: { onSettings?() }) {
+                            Label("设置", systemImage: "textformat.size")
+                        }
+                        .disabled(onSettings == nil)
+                    }
+                    
+                    if standardButtons.contains(.fullScreen) {
+                        Button(action: { isFullScreen.toggle() }) {
+                            Label("全屏", systemImage: "square")
+                        }
+                    }
+                    
+                    Button("取消", role: .cancel) { }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .overlay(
+                Rectangle()
+                    .frame(height: 0.5)
+                    .foregroundColor(Color(.separator).opacity(0.3)),
+                alignment: .bottom
+            )
+            
+            // 内容区域
             content
                 .gesture(
                     DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -61,62 +143,6 @@ struct ReaderNavigationWrapper<Content: View>: View {
                             }
                         }
                 )
-                .navigationBarHidden(isFullScreen)
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    // 左侧按钮组 - 始终显示返回按钮
-                    ToolbarItemGroup(placement: .navigationBarLeading) {
-                        backButton
-                    }
-                    
-                    // 右侧按钮组 - 多行显示避免重叠
-                    ToolbarItemGroup(placement: .navigationBarTrailing) {
-                        VStack(spacing: 2) {
-                            // 第一行：主要操作按钮
-                            HStack(spacing: 8) {
-                                if standardButtons.contains(.bookmark) {
-                                    bookmarkButton
-                                }
-                                
-                                if standardButtons.contains(.share) {
-                                    shareButton
-                                }
-                                
-                                if standardButtons.contains(.settings) {
-                                    settingsButton
-                                }
-                            }
-                            
-                            // 第二行：次要操作按钮和自定义按钮
-                            if standardButtons.contains(.fullScreen) || !customButtons.isEmpty {
-                                HStack(spacing: 8) {
-                                    if standardButtons.contains(.fullScreen) {
-                                        fullScreenButton
-                                    }
-                                    
-                                    // 自定义按钮
-                                    ForEach(0..<min(customButtons.count, 3), id: \.self) { index in
-                                        customButtons[index]
-                                    }
-                                    
-                                    // 如果自定义按钮超过3个，显示更多菜单
-                                    if customButtons.count > 3 {
-                                        Menu {
-                                            ForEach(3..<customButtons.count, id: \.self) { index in
-                                                customButtons[index]
-                                            }
-                                        } label: {
-                                            Image(systemName: "ellipsis.circle")
-                                                .font(.system(size: 14))
-                                                .foregroundColor(.primary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
         }
     }
     

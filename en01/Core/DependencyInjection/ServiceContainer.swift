@@ -12,12 +12,15 @@ import SwiftData
 class ServiceContainer {
     static let shared = ServiceContainer()
     
-    // 核心服务
-    private let cacheManager: CacheManagerProtocol
-    private let errorHandler: ErrorHandlerProtocol
+    // MARK: - 核心服务（单例）
+    private var cacheManager: CacheManagerProtocol
+    private var errorHandler: ErrorHandlerProtocol
     private let unifiedErrorHandler: UnifiedErrorHandler
     private let memoryManager: MemoryManager
     private let performanceConfig: PerformanceConfig
+    
+    // 启动进度管理器
+    @MainActor lazy var startupProgressManager = StartupProgressManager()
     
     // 业务服务
     private var articleService: ArticleServiceProtocol?
@@ -28,10 +31,16 @@ class ServiceContainer {
     private var translationService: TranslationServiceProtocol?
     private var vocabularyTestService: VocabularyTestServiceProtocol?
     private var learningTrackingService: LearningTrackingService?
+    private var testResultExportService: TestResultExportService?
+    private var statisticsExportService: StatisticsExportService?
     
     // 自适应学习相关服务
     private var adaptiveLearningService: AdaptiveLearningService?
     private var adaptiveRecommendationEngine: AdaptiveRecommendationEngine?
+    
+    // 组合排序服务
+    private var compositeRankingService: CompositeRankingService?
+    private var intelligentRankingService: IntelligentRankingService?
     
     // MARK: - 模型上下文
     private var modelContext: ModelContext?
@@ -47,39 +56,50 @@ class ServiceContainer {
     
     // MARK: - 服务配置
     
-    /// 配置所有服务
+    /// 配置所有服务 - 分阶段初始化以优化启动性能
     @MainActor func configure(with modelContext: ModelContext, appSettings: AppSettings) {
+        // 防止重复配置
+        if self.modelContext != nil {
+            print("[ServiceContainer] 服务已配置，跳过重复初始化")
+            return
+        }
+        
         self.modelContext = modelContext
         
-        // 首先初始化基础服务
+        // 开始启动进度跟踪
+        startupProgressManager.updateStage(.initializing, message: "正在初始化应用...", detail: "准备核心组件")
+        
+        // 阶段一：初始化核心基础服务（立即需要的）
+        startupProgressManager.updateStage(.loadingCoreServices, message: "正在加载核心服务...", detail: "初始化文本处理器和PDF服务")
+        
         self.textProcessor = TextProcessor()
+        startupProgressManager.updateStageProgress(.loadingCoreServices, progress: 0.3)
         
         self.pdfService = PDFService(
             modelContext: modelContext,
             cacheManager: cacheManager,
             errorHandler: unifiedErrorHandler
         )
+        startupProgressManager.updateStageProgress(.loadingCoreServices, progress: 0.6)
         
-        // 然后初始化依赖其他服务的业务服务
+        // 阶段二：初始化业务服务（UI需要的）
+        startupProgressManager.completeStage(.loadingCoreServices)
+        startupProgressManager.updateStage(.loadingBusinessServices, message: "正在加载业务服务...", detail: "初始化文章和词典服务")
+        
         self.articleService = ArticleService(
             modelContext: modelContext,
             cacheManager: cacheManager,
             errorHandler: unifiedErrorHandler,
             pdfService: pdfService!
         )
+        startupProgressManager.updateStageProgress(.loadingBusinessServices, progress: 0.4)
         
         self.dictionaryService = DictionaryService(
             modelContext: modelContext,
             cacheManager: cacheManager,
             errorHandler: unifiedErrorHandler
         )
-        
-        // 初始化词典数据
-        Task {
-            try? await dictionaryService?.initializeDictionary()
-            // 初始化考研词典数据
-            await dictionaryService?.initializeKaoyanDictionary()
-        }
+        startupProgressManager.updateStageProgress(.loadingBusinessServices, progress: 0.7)
         
         self.userProgressService = UserProgressService(
             modelContext: modelContext,
@@ -87,49 +107,100 @@ class ServiceContainer {
             errorHandler: unifiedErrorHandler
         )
         
-        // 初始化词汇测试服务
-        self.vocabularyTestService = VocabularyTestService(
-            dictionaryService: dictionaryService!,
-            coreDataStack: CoreDataStack.shared
-        )
-        
-        // 初始化翻译服务
+        // 初始化翻译服务（UI必需，同步初始化）
         let translationConfig = createTranslationConfig(from: appSettings)
         self.translationService = TranslationServiceImpl(
             modelContext: modelContext,
             config: translationConfig
         )
         
-        // 初始化学习跟踪服务
+        // 初始化学习跟踪服务（UI必需，同步初始化）
         self.learningTrackingService = LearningTrackingService(
             modelContext: modelContext,
             cacheManager: cacheManager,
             errorHandler: unifiedErrorHandler
         )
+
+        // 初始化词汇测试服务（UI需要，同步初始化）
+        self.vocabularyTestService = VocabularyTestService(
+            dictionaryService: dictionaryService!,
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: unifiedErrorHandler
+        )
+
+        // 初始化测试结果导出服务（UI需要，同步初始化）
+        self.testResultExportService = TestResultExportService(
+            modelContext: modelContext,
+            dictionaryService: dictionaryService! as! DictionaryService
+        )
+
+        // 初始化统计数据导出服务（UI需要，同步初始化）
+        self.statisticsExportService = StatisticsExportService(
+            modelContext: modelContext,
+            vocabularyTestService: vocabularyTestService!,
+            errorHandler: unifiedErrorHandler,
+            dictionaryService: dictionaryService! as! DictionaryService
+        )
         
-        // 初始化自适应学习服务
-        let intelligentRankingService = IntelligentRankingService(dictionaryService: dictionaryService!)
+        startupProgressManager.completeStage(.loadingBusinessServices)
         
+        // 阶段三：延迟初始化重量级数据（后台加载）
+        Task { @MainActor in
+            // 优先初始化基础词典（轻量级）
+            startupProgressManager.updateStage(.loadingDictionary, message: "正在加载基础词典...", detail: "加载常用词汇数据")
+            try? await dictionaryService?.initializeDictionary()
+            startupProgressManager.completeStage(.loadingDictionary)
+            
+            // 延迟初始化考研词典（重量级，在启动完成后进行）
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 延迟2秒，让应用先完成启动
+            startupProgressManager.updateStage(.loadingKaoyanDict, message: "正在加载考研词典...", detail: "加载10940个考研词汇")
+            await dictionaryService?.initializeKaoyanDictionary()
+            startupProgressManager.completeStage(.loadingKaoyanDict)
+        }
+        
+        // 阶段四：初始化非核心服务（同步执行，确保ViewModel获取时已就绪）
+        startupProgressManager.updateStage(.loadingOptionalServices, message: "正在加载扩展服务...", detail: "初始化自适应学习服务")
+
+        // 初始化智能排序服务（同步）
+        self.intelligentRankingService = IntelligentRankingService(dictionaryService: dictionaryService!)
+
+        // 初始化自适应学习服务（同步）
         self.adaptiveLearningService = AdaptiveLearningService(
             modelContext: modelContext,
             learningTrackingService: learningTrackingService!,
             userProgressService: userProgressService! as! UserProgressService,
-            intelligentRankingService: intelligentRankingService
+            intelligentRankingService: intelligentRankingService!
         )
-        
-        // 初始化自适应推荐引擎
+
+        // 初始化自适应推荐引擎（同步）
         if let adaptiveService = self.adaptiveLearningService {
             let learningBehaviorAnalyzer = LearningBehaviorAnalyzer(modelContext: modelContext)
-            
+
             self.adaptiveRecommendationEngine = AdaptiveRecommendationEngine(
                 modelContext: modelContext,
                 adaptiveLearningService: adaptiveService,
-                intelligentRankingService: intelligentRankingService,
+                intelligentRankingService: intelligentRankingService!,
                 learningBehaviorAnalyzer: learningBehaviorAnalyzer
             )
         }
+
+        // 初始化组合排序服务（同步）
+        self.compositeRankingService = CompositeRankingService(
+            intelligentRankingService: intelligentRankingService!,
+            dictionaryService: dictionaryService!,
+            vocabularyTestService: vocabularyTestService,
+            errorHandler: unifiedErrorHandler
+        )
+
+        startupProgressManager.completeStage(.loadingOptionalServices)
+        
         // 设置服务间依赖关系
         setupServiceDependencies()
+        
+        // 只有在所有核心服务都初始化完成后才标记启动完成
+        // 注意：考研词典的加载是异步的，不影响核心功能，所以不阻塞启动完成
+        startupProgressManager.updateStage(.completed, message: "启动完成", detail: "核心服务已就绪")
     }
     
     /// 根据AppSettings创建TranslationConfig
@@ -381,6 +452,22 @@ class ServiceContainer {
         return engine
     }
     
+    /// 获取组合排序服务
+    func getCompositeRankingService() -> CompositeRankingService {
+        guard let service = compositeRankingService else {
+            fatalError("CompositeRankingService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取智能排序服务
+    func getIntelligentRankingService() -> IntelligentRankingService {
+        guard let service = intelligentRankingService else {
+            fatalError("IntelligentRankingService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
     // MARK: - 测试支持
     
     /// 为测试注入 Mock 服务
@@ -414,26 +501,52 @@ class ServiceContainer {
         if let textProcessor = textProcessor {
             self.textProcessor = textProcessor
         }
+        if let cacheManager = cacheManager {
+            self.cacheManager = cacheManager
+        }
+        if let errorHandler = errorHandler {
+            self.errorHandler = errorHandler
+        }
         if let learningTrackingService = learningTrackingService {
             self.learningTrackingService = learningTrackingService
         }
-        // 注意：cacheManager 和 errorHandler 是 let 常量，不能重新赋值
-        // 如果需要在测试中替换它们，需要重新设计架构
+    }
+    
+    /// 获取测试结果导出服务
+    func getTestResultExportService() -> TestResultExportService {
+        guard let service = testResultExportService else {
+            fatalError("TestResultExportService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取统计数据导出服务
+    func getStatisticsExportService() -> StatisticsExportServiceProtocol {
+        guard let service = statisticsExportService else {
+            fatalError("StatisticsExportService not initialized. Call configure(with:) first.")
+        }
+        return service
     }
     
     /// 重置所有服务（主要用于测试）
+    @MainActor
     func reset() {
-        articleService = nil
-        dictionaryService = nil
-        userProgressService = nil
-        pdfService = nil
-        textProcessor = nil
-        translationService = nil
-        learningTrackingService = nil
-        adaptiveLearningService = nil
-        adaptiveRecommendationEngine = nil
+        print("[ServiceContainer] 开始重置服务容器")
+        
+        // 清理服务实例
+        vocabularyTestService?.clearCache()
+        vocabularyTestService = nil
+        
+        // 清理缓存
+        cacheManager.clearAll()
+        
+        // 重置启动进度管理器
+        startupProgressManager.reset()
+        
+        // 重置配置状态
         modelContext = nil
-        // 注意：cacheManager 和 errorHandler 是 let 常量，不会被重置
+        
+        print("[ServiceContainer] 服务容器重置完成")
     }
 }
 

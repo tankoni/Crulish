@@ -70,18 +70,14 @@ struct StructuredTextView: View {
                 .padding()
             }
             .sheet(isPresented: $wordInteractionCoordinator.showDetailedSheet) {
-                DetailedWordDefinitionView(
-                    word: wordInteractionCoordinator.selectedWord,
-                    onDismiss: {
-                        Task {
-                            await MainActor.run {
-                                wordInteractionCoordinator.showDetailedSheet = false
-                            }
+                    DetailedWordDefinitionView(
+                        word: wordInteractionCoordinator.selectedWord,
+                        onDismiss: {
+                            wordInteractionCoordinator.showDetailedSheet = false
                         }
-                    }
-                )
-                .environmentObject(dictionaryService)
-            }
+                    )
+                    .environmentObject(dictionaryService)
+                }
         }
         .sheet(isPresented: $showingSentenceTranslation) {
             StructuredSentenceTranslationSheet(
@@ -106,19 +102,11 @@ struct StructuredTextView: View {
                         definition: "定义加载中...",
                         wordPosition: wordInteractionCoordinator.selectedWordPosition,
                         onViewMore: {
-                            Task {
-                                await MainActor.run {
-                                    wordInteractionCoordinator.showTooltip = false
-                                    wordInteractionCoordinator.showDetailedSheet = true
-                                }
-                            }
+                            wordInteractionCoordinator.showTooltip = false
+                            wordInteractionCoordinator.showDetailedSheet = true
                         },
                         onDismiss: {
-                            Task {
-                                await MainActor.run {
-                                    wordInteractionCoordinator.showTooltip = false
-                                }
-                            }
+                            wordInteractionCoordinator.showTooltip = false
                         }
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -132,7 +120,7 @@ struct StructuredTextView: View {
     private func handleWordTap(_ word: String) {
         // 使用统一的协调器处理单词交互
         Task {
-            await wordInteractionCoordinator.handleWordTap(word, at: CGPoint.zero)
+            wordInteractionCoordinator.handleWordTap(word, at: CGPoint.zero)
         }
     }
     

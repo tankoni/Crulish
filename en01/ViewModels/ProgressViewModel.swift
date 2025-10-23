@@ -39,18 +39,233 @@ class ProgressViewModel: ObservableObject {
     private let userProgressService: UserProgressServiceProtocol
     private let articleService: ArticleServiceProtocol
     private let errorHandler: ErrorHandlerProtocol
+    private let statisticsExportService: StatisticsExportServiceProtocol
+
+    // MARK: - Public Accessors
+    func getStatisticsExportService() -> StatisticsExportServiceProtocol {
+        return statisticsExportService
+    }
     
     // MARK: - Initialization
     init(
         userProgressService: UserProgressServiceProtocol,
         articleService: ArticleServiceProtocol,
-        errorHandler: ErrorHandlerProtocol
+        errorHandler: ErrorHandlerProtocol,
+        statisticsExportService: StatisticsExportServiceProtocol
     ) {
         self.userProgressService = userProgressService
         self.articleService = articleService
         self.errorHandler = errorHandler
+        self.statisticsExportService = statisticsExportService
         
+        setupNotificationObservers()
         loadAllStatistics()
+    }
+    
+    // MARK: - Notification Observers
+    private func setupNotificationObservers() {
+        // 监听统计数据更新通知
+        NotificationCenter.default.addObserver(
+            forName: .statisticsDataUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.handleStatisticsDataUpdate(notification)
+            }
+        }
+        
+        // 监听词汇学习进度更新通知
+        NotificationCenter.default.addObserver(
+            forName: .wordLearningProgressUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.handleVocabularyProgressUpdate(notification)
+            }
+        }
+    }
+    
+    // MARK: - 通知处理防重复机制
+    private var isHandlingStatisticsUpdate = false
+    private var isHandlingProgressUpdate = false
+    private var lastStatisticsUpdateTime: Date?
+    private var lastProgressUpdateTime: Date?
+    private let statisticsUpdateDebounceInterval: TimeInterval = 1.0 // 1秒防抖
+    private let progressUpdateDebounceInterval: TimeInterval = 2.0 // 2秒防抖
+    private var pendingStatisticsUpdateTask: Task<Void, Never>?
+    
+    private func handleStatisticsDataUpdate(_ notification: Notification) {
+        // 防重复处理机制
+        let now = Date()
+        if isHandlingStatisticsUpdate {
+            print("[DEBUG] 统计数据更新通知处理中，跳过重复处理")
+            return
+        }
+        
+        // 防抖机制
+        if let lastTime = lastStatisticsUpdateTime,
+           now.timeIntervalSince(lastTime) < statisticsUpdateDebounceInterval {
+            print("[DEBUG] 统计数据更新通知防抖，跳过处理")
+            return
+        }
+        
+        print("[DEBUG] 收到统计数据更新通知")
+        
+        // 获取通知中的详细信息
+        if let userInfo = notification.userInfo {
+            print("[DEBUG] 通知详情: \(userInfo)")
+        }
+        
+        // 取消之前的待处理任务
+        pendingStatisticsUpdateTask?.cancel()
+        
+        // 设置处理状态
+        isHandlingStatisticsUpdate = true
+        lastStatisticsUpdateTime = now
+        
+        // 创建新的异步任务处理统计更新
+        pendingStatisticsUpdateTask = Task { [weak self] in
+            guard let self = self else { return }
+            
+            // 延迟一小段时间确保数据已经保存到数据库
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2秒
+            
+            if Task.isCancelled { return }
+            
+            await MainActor.run {
+                // 只清除相关的缓存，而不是全部清除
+                self.clearRelevantCache(for: notification)
+                
+                // 异步重新加载统计数据
+                Task {
+                    await self.loadRelevantStatistics(for: notification)
+                    
+                    await MainActor.run {
+                        print("[DEBUG] 统计数据重新加载完成")
+                        self.errorHandler.logSuccess("统计数据已实时更新")
+                        
+                        // 延迟重置处理状态
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            self.isHandlingStatisticsUpdate = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func clearRelevantCache(for notification: Notification) {
+        // 根据通知内容只清除相关缓存，而不是全部清除
+        if let userInfo = notification.userInfo,
+           let source = userInfo["source"] as? String {
+            
+            switch source {
+            case "vocabulary_test":
+                // 只清除词汇相关的缓存
+                statsCache.removeValue(forKey: "vocabulary")
+                statsCache.removeValue(forKey: "today")
+                statsCache.removeValue(forKey: "overall")
+                chartDataCache.removeValue(forKey: "vocabulary")
+                chartDataCache.removeValue(forKey: "progress")
+            case "reading":
+                // 只清除阅读相关的缓存
+                statsCache.removeValue(forKey: "reading")
+                statsCache.removeValue(forKey: "today")
+                statsCache.removeValue(forKey: "overall")
+                chartDataCache.removeValue(forKey: "reading")
+            default:
+                // 默认情况下清除今日和总体统计缓存
+                statsCache.removeValue(forKey: "today")
+                statsCache.removeValue(forKey: "overall")
+            }
+        } else {
+            // 如果没有具体信息，只清除今日和总体统计缓存
+            statsCache.removeValue(forKey: "today")
+            statsCache.removeValue(forKey: "overall")
+        }
+    }
+    
+    private func loadRelevantStatistics(for notification: Notification) async {
+        // 根据通知内容只加载相关统计数据
+        if let userInfo = notification.userInfo,
+           let source = userInfo["source"] as? String {
+            
+            switch source {
+            case "vocabulary_test":
+                await loadTodayStatistics()
+                await loadVocabularyStatistics()
+                await loadOverallStatistics()
+                await loadVocabularyChartData()
+                await loadProgressChartData()
+            case "reading":
+                await loadTodayStatistics()
+                await loadReadingStatistics()
+                await loadOverallStatistics()
+                await loadReadingTimeChartData()
+            default:
+                await loadTodayStatistics()
+                await loadOverallStatistics()
+            }
+        } else {
+            // 默认情况下只加载基本统计
+            await loadTodayStatistics()
+            await loadOverallStatistics()
+        }
+    }
+    
+    private func handleVocabularyProgressUpdate(_ notification: Notification) {
+        // 防重复处理机制
+        let now = Date()
+        if isHandlingProgressUpdate {
+            print("[DEBUG] 词汇进度更新通知处理中，跳过重复处理")
+            return
+        }
+        
+        if let lastTime = lastProgressUpdateTime,
+           now.timeIntervalSince(lastTime) < progressUpdateDebounceInterval {
+            print("[DEBUG] 词汇进度更新通知防抖，跳过处理")
+            return
+        }
+        
+        isHandlingProgressUpdate = true
+        lastProgressUpdateTime = now
+        
+        print("[DEBUG] 收到词汇学习进度更新通知")
+        
+        // 获取通知中的详细信息
+        if let userInfo = notification.userInfo {
+            print("[DEBUG] 词汇进度通知详情: \(userInfo)")
+        }
+        
+        // 清除词汇相关的缓存
+        statsCache.removeValue(forKey: "vocabulary")
+        statsCache.removeValue(forKey: "today")
+        statsCache.removeValue(forKey: "weekly")
+        statsCache.removeValue(forKey: "monthly")
+        statsCache.removeValue(forKey: "overall")
+        
+        // 清除图表数据缓存
+        chartDataCache.removeValue(forKey: "vocabulary")
+        chartDataCache.removeValue(forKey: "progress")
+        
+        Task {
+            await MainActor.run {
+                // 重新加载统计数据
+                self.loadAllStatistics()
+                
+                // 重新加载图表数据
+                Task {
+                    await self.loadChartData()
+                }
+                
+                // 延迟重置标志，确保处理完成
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.isHandlingProgressUpdate = false
+                }
+            }
+        }
     }
     
     // MARK: - Data Loading

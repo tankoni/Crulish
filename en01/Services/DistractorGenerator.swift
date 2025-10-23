@@ -57,19 +57,25 @@ class DistractorGenerator {
             distractors.append(contentsOf: randomDistractors)
         }
         
-        // 4. 如果仍然不足，使用默认干扰项
+        // 4. 如果仍然不足，使用更真实的默认干扰项
         if distractors.count < count {
             let defaultDistractors = [
-                "错误释义选项",
-                "其他含义",
-                "不相关释义",
-                "干扰项选项",
-                "无关含义"
+                "知识，学问；知识，认识；了解；学科",
+                "信息，资料；情报；消息；通知",
+                "经验，体验；经历；阅历；感受",
+                "技能，技巧；能力；本领；专长",
+                "智慧，才智；明智；聪明；智能",
+                "理解，领悟；了解；认识；理解力",
+                "学习，学会；得知；记住；掌握",
+                "教育，培养；训练；指导；教学",
+                "研究，调查；学习；探索；钻研",
+                "发现，发觉；找到；察觉；揭示"
             ]
             
             let remainingCount = count - distractors.count
             let additionalDistractors = defaultDistractors
                 .filter { !distractors.contains($0) }
+                .shuffled()
                 .prefix(remainingCount)
             distractors.append(contentsOf: additionalDistractors)
         }
@@ -125,19 +131,25 @@ class DistractorGenerator {
             distractors.append(contentsOf: randomDistractors)
         }
         
-        // 4. 如果仍然不足，使用默认干扰项
+        // 4. 如果仍然不足，使用更真实的默认干扰项
         if distractors.count < count {
             let defaultDistractors = [
-                "option1",
-                "option2", 
-                "option3",
-                "word1",
-                "word2"
+                "knowledge",
+                "information",
+                "experience",
+                "education",
+                "understanding",
+                "learning",
+                "wisdom",
+                "research",
+                "discovery",
+                "development"
             ]
             
             let remainingCount = count - distractors.count
             let additionalDistractors = defaultDistractors
                 .filter { !distractors.contains($0) && $0 != correctWordLower }
+                .shuffled()
                 .prefix(remainingCount)
             distractors.append(contentsOf: additionalDistractors)
         }

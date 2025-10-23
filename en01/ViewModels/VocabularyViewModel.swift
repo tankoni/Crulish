@@ -90,21 +90,71 @@ class VocabularyViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            self?.handleLearningProgressUpdate(notification)
+            Task { @MainActor in
+                self?.handleLearningProgressUpdate(notification)
+            }
         }
     }
     
+    // MARK: - 通知处理防重复机制
+    private var isHandlingTestCompletion = false
+    private var lastTestCompletionTime: Date?
+    private var lastProcessedTestId: String?
+    private let testCompletionDebounceInterval: TimeInterval = 2.0 // 2秒防抖
+    
     @objc private func handleVocabularyTestCompleted(_ notification: Notification) {
+        // 防重复处理机制
+        let now = Date()
+        if isHandlingTestCompletion {
+            print("[DEBUG] 词汇测试完成通知处理中，跳过重复处理")
+            return
+        }
+        
+        // 检查是否是同一个测试的重复通知
+        if let testId = notification.userInfo?["testId"] as? String,
+           let lastTestId = lastProcessedTestId,
+           testId == lastTestId {
+            print("[DEBUG] 词汇表已处理过测试ID \(testId)，跳过重复处理")
+            return
+        }
+        
+        if let lastTime = lastTestCompletionTime,
+           now.timeIntervalSince(lastTime) < testCompletionDebounceInterval {
+            print("[DEBUG] 词汇测试完成通知防抖，跳过处理")
+            return
+        }
+        
+        isHandlingTestCompletion = true
+        lastTestCompletionTime = now
+        
+        // 记录处理的测试ID
+        if let testId = notification.userInfo?["testId"] as? String {
+            lastProcessedTestId = testId
+        }
+        
+        print("[DEBUG] 收到词汇测试完成通知，重新加载词汇和统计数据")
+        
         Task {
+            await self.reloadVocabularyAndStatistics()
+            
             await MainActor.run {
-                // 清除缓存并重新加载数据
-                self.vocabularyCache = nil
-                self.statsCache = nil
-                self.loadVocabulary()
-                self.loadStatistics()
-                
-                self.errorHandler.logSuccess("词汇测试完成，数据已同步更新")
+                // 延迟重置标志，确保处理完成
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { // 增加延迟时间
+                    self.isHandlingTestCompletion = false
+                }
             }
+        }
+    }
+    
+    private func reloadVocabularyAndStatistics() async {
+        await MainActor.run {
+            // 清除缓存并重新加载数据
+            self.vocabularyCache = nil
+            self.statsCache = nil
+            self.loadVocabulary()
+            self.loadStatistics()
+            
+            self.errorHandler.logSuccess("词汇测试完成，数据已同步更新")
         }
     }
     

@@ -16,7 +16,10 @@ class AppViewModel {
     let coordinator: AppCoordinator
     
     // MARK: - State
-    var selectedTab: TabSelection = .home
+    var selectedTab: TabSelection {
+        get { coordinator.selectedTab }
+        set { coordinator.selectedTab = newValue }
+    }
     
     // MARK: - Error Handling
     var errorMessage: String?
@@ -35,7 +38,7 @@ class AppViewModel {
     // MARK: - Tab Navigation
     
     func selectTab(_ tab: TabSelection) {
-        selectedTab = tab
+        coordinator.selectedTab = tab
     }
     
     // MARK: - Coordinator Access
@@ -100,12 +103,10 @@ class AppViewModel {
     
     func startReading(_ article: Article) {
         coordinator.startReading(article)
-        selectedTab = .reading
     }
     
     func finishReading() {
         coordinator.finishReading()
-        selectedTab = .home
     }
     
     func addWord(_ word: String, context: String) {
@@ -118,12 +119,10 @@ class AppViewModel {
     
     func startVocabularyReview() {
         coordinator.startVocabularyReview()
-        selectedTab = .vocabulary
     }
     
     func startVocabularyTest() {
         coordinator.startVocabularyTest()
-        selectedTab = .vocabulary
     }
     
     func finishVocabularyReview() {

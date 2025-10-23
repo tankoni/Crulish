@@ -165,14 +165,29 @@ extension Article {
         self.readingTime += time
     }
     
-    // 获取预估阅读时间（分钟）
-    var estimatedReadingTime: Int {
-        // 假设平均阅读速度为200词/分钟
-        return max(1, wordCount / 200)
+    // MARK: - Computed Properties
+    
+    var progressPercentage: Double {
+        readingProgress * 100
     }
     
-    // 获取阅读完成百分比字符串
-    var progressPercentage: String {
-        return String(format: "%.0f%%", readingProgress * 100)
+    var isInProgress: Bool {
+        readingProgress > 0 && readingProgress < 1.0
+    }
+    
+    var estimatedReadingTime: TimeInterval {
+        // 假设平均阅读速度为每分钟200词
+        let wordsPerMinute: Double = 200
+        return Double(wordCount) / wordsPerMinute * 60
+    }
+    
+    // MARK: - Methods
+    
+    /// 标记文章为已学习状态
+    func markAsLearned() {
+        self.isCompleted = true
+        self.completedDate = Date()
+        self.readingProgress = 1.0
+        print("✅ 文章已标记为已学习: \(title)")
     }
 }

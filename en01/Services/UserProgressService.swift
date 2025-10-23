@@ -178,20 +178,20 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
     
     // MARK: - 经验值和等级
     
-    func addExperience(_ points: Int, for action: ExperienceAction) {
+    func addExperience(_ points: Int, for activity: ExperienceAction) {
         performSafeOperation("添加经验值") {
             guard let progress = userProgress else {
                 throw ServiceError.notFound("用户进度不存在")
             }
             
-            let actualPoints = calculateExperiencePoints(for: action)
+            let actualPoints = calculateExperiencePoints(for: activity)
             progress.experience += actualPoints
             
             // 检查是否升级
             checkLevelUp()
             
             // 检查成就
-            checkAchievements(for: action, points: actualPoints)
+            checkAchievements(for: activity, points: actualPoints)
             
             safeSave(operation: "保存经验值")
             logger.info("添加经验值: \(actualPoints)，当前总经验: \(progress.experience)")
@@ -283,7 +283,7 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
     
     func recordWordReview(word: String, correct: Bool) async throws {
         await MainActor.run {
-            guard let progress = userProgress else {
+            guard userProgress != nil else {
                 logger.error("用户进度未初始化")
                 return
             }
@@ -302,7 +302,7 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
     
     func recordReviewSession(wordsReviewed: Int, correctAnswers: Int) async throws {
         await MainActor.run {
-            guard let progress = userProgress else {
+            guard userProgress != nil else {
                 logger.error("用户进度未初始化")
                 return
             }
@@ -385,7 +385,7 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
     
     func recordWordLookup(word: String, articleId: String) async throws {
         await MainActor.run {
-            guard let progress = userProgress else {
+            guard userProgress != nil else {
                 logger.error("用户进度未初始化")
                 return
             }
@@ -539,8 +539,8 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
         }
         
         let totalReadingTime = progress.dailyRecords.reduce(0) { $0 + $1.readingTime }
-        let totalArticlesRead = progress.dailyRecords.reduce(0) { $0 + $1.articlesRead }
-        let totalWordsLookedUp = progress.dailyRecords.reduce(0) { $0 + $1.wordsLookedUp }
+        let _ = progress.dailyRecords.reduce(0) { $0 + $1.articlesRead }
+        let _ = progress.dailyRecords.reduce(0) { $0 + $1.wordsLookedUp }
         
         let studyDays = progress.dailyRecords.filter { $0.readingTime > 0 }.count
         let averageSessionTime = studyDays > 0 ? totalReadingTime / Double(studyDays) : 0
@@ -577,7 +577,7 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
     
     func getWeeklyStatistics() async throws -> WeeklyStatistics {
         return await MainActor.run {
-            guard let progress = userProgress else {
+            guard userProgress != nil else {
                 return WeeklyStatistics()
             }
             
@@ -604,7 +604,7 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
     
     func getMonthlyStatistics() async throws -> MonthlyStatistics {
         return await MainActor.run {
-            guard let progress = userProgress else {
+            guard userProgress != nil else {
                 return MonthlyStatistics(
                     totalReadingTime: 0,
                     totalArticlesRead: 0,
@@ -668,35 +668,60 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
         }
     }
     
+    @MainActor
     func getVocabularyProgressStatistics() async throws -> VocabularyProgressStats {
-        return await MainActor.run {
-            guard let progress = userProgress else {
-                return VocabularyProgressStats()
+        // 确保在主线程执行数据库操作
+        let request = FetchDescriptor<TestedWord>()
+        let testedWords = safeFetch(request, operation: "获取词汇测试记录")
+        
+        print("[DEBUG] 查询到的 TestedWord 记录数量: \(testedWords.count)")
+        
+        // 添加更详细的调试信息
+        if !testedWords.isEmpty {
+            print("[DEBUG] 最近的几条记录:")
+            for (index, word) in testedWords.prefix(5).enumerated() {
+                print("[DEBUG] \(index + 1). \(word.word) - \(word.masteryLevel) - \(word.testedAt)")
             }
-            
-            // 基于用户进度数据计算词汇统计
-            let totalWords = progress.totalWordsLookedUp
-            let masteredWords = Int(Double(totalWords) * 0.6) // 假设60%掌握
-            let learningWords = Int(Double(totalWords) * 0.3) // 假设30%学习中
-            let reviewWords = totalWords - masteredWords - learningWords
-            
-            let weeklyRecords = getWeeklyRecords()
-            let monthlyRecords = getMonthlyRecords()
-            
-            let weeklyNewWords = weeklyRecords.reduce(0) { $0 + $1.wordsLookedUp }
-            let monthlyNewWords = monthlyRecords.reduce(0) { $0 + $1.wordsLookedUp }
-            
-            return VocabularyProgressStats(
-                totalWords: totalWords,
-                masteredWords: masteredWords,
-                learningWords: learningWords,
-                reviewWords: reviewWords,
-                masteryRate: totalWords > 0 ? Double(masteredWords) / Double(totalWords) : 0,
-                weeklyNewWords: weeklyNewWords,
-                monthlyNewWords: monthlyNewWords,
-                averageReviewAccuracy: 0.85 // 默认值
-            )
         }
+        
+        if testedWords.isEmpty {
+            logger.info("没有词汇测试记录，返回空统计数据")
+            return VocabularyProgressStats()
+        }
+        
+        // 基于真实测试数据计算统计
+        let totalWords = testedWords.count
+        let masteredWords = testedWords.filter { $0.masteryLevelEnum == .mastered }.count
+        let familiarWords = testedWords.filter { $0.masteryLevelEnum == .familiar }.count
+        let unfamiliarWords = testedWords.filter { $0.masteryLevelEnum == .unfamiliar }.count
+        
+        print("[DEBUG] 统计详情: 总计=\(totalWords), 已掌握=\(masteredWords), 熟悉=\(familiarWords), 不熟悉=\(unfamiliarWords)")
+        
+        // 计算本周和本月新增测试单词
+        let calendar = Calendar.current
+        let now = Date()
+        let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        let monthAgo = calendar.date(byAdding: .month, value: -1, to: now) ?? now
+        
+        let weeklyNewWords = testedWords.filter { $0.testedAt >= weekAgo }.count
+        let monthlyNewWords = testedWords.filter { $0.testedAt >= monthAgo }.count
+        
+        // 计算平均复习准确率（基于掌握和熟悉的比例）
+        let knownWords = masteredWords + familiarWords
+        let averageReviewAccuracy = totalWords > 0 ? Double(knownWords) / Double(totalWords) : 0
+        
+        logger.info("词汇统计加载成功: 总测试词汇=\(totalWords), 已掌握=\(masteredWords), 熟悉=\(familiarWords), 不熟悉=\(unfamiliarWords)")
+        
+        return VocabularyProgressStats(
+            totalWords: totalWords,
+            masteredWords: masteredWords,
+            learningWords: familiarWords, // 熟悉的单词视为学习中
+            reviewWords: unfamiliarWords, // 不熟悉的单词需要复习
+            masteryRate: totalWords > 0 ? Double(masteredWords) / Double(totalWords) : 0,
+            weeklyNewWords: weeklyNewWords,
+            monthlyNewWords: monthlyNewWords,
+            averageReviewAccuracy: averageReviewAccuracy
+        )
     }
     
     func getVocabularyStatistics() async throws -> VocabularyStatisticsDomain {
@@ -872,7 +897,7 @@ class UserProgressService: BaseService, UserProgressServiceProtocol {
     }
     
     func getGoalProgress() -> GoalProgress {
-        guard let progress = userProgress else {
+        guard userProgress != nil else {
             return GoalProgress(
                 dailyGoal: GoalItem(title: "每日阅读", current: 0, target: 30),
                 weeklyGoal: GoalItem(title: "每周文章", current: 0, target: 5),

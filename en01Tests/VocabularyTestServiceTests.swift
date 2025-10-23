@@ -12,16 +12,13 @@ import Combine
 class VocabularyTestServiceTests: XCTestCase {
     var vocabularyTestService: MockVocabularyTestService!
     var mockDictionaryService: MockDictionaryService!
-    var mockCoreDataStack: MockCoreDataStack!
     var cancellables: Set<AnyCancellable>!
     
     override func setUp() {
         super.setUp()
         mockDictionaryService = MockDictionaryService()
-        mockCoreDataStack = MockCoreDataStack()
         vocabularyTestService = MockVocabularyTestService(
-            dictionaryService: mockDictionaryService,
-            coreDataStack: mockCoreDataStack
+            dictionaryService: mockDictionaryService
         )
         cancellables = Set<AnyCancellable>()
     }
@@ -29,7 +26,6 @@ class VocabularyTestServiceTests: XCTestCase {
     override func tearDownWithError() throws {
         vocabularyTestService = nil
         mockDictionaryService = nil
-        mockCoreDataStack = nil
         cancellables = nil
         super.tearDown()
     }
@@ -50,7 +46,7 @@ class VocabularyTestServiceTests: XCTestCase {
         // 准备测试数据
         mockDictionaryService.setupMockWords()
         
-        let dictionaries = try await vocabularyTestService.getAvailableDictionaries()
+        let dictionaries = try await vocabularyTestService.getAvailableDictionaries().async().async()
         guard let dictionary = dictionaries.first else {
             XCTFail("No dictionaries available")
             return

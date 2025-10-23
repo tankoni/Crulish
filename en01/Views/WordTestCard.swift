@@ -11,6 +11,7 @@ import Foundation
 /// 词汇测试单词卡片组件
 struct WordTestCard: View {
     let word: TestWord
+    let testMode: VocabularyTestMode
     let onMasterySelected: (MasteryLevel) -> Void
     
     @State private var showDefinition = false
@@ -42,7 +43,7 @@ struct WordTestCard: View {
                 isAnimating = true
             }
         }
-        .onChange(of: word.word) {
+        .onChange(of: word.word) { _, _ in
             // 重置状态
             showDefinition = false
             showExample = false
@@ -210,14 +211,17 @@ struct WordTestCard: View {
                     selectMastery(.mastered)
                 }
                 
-                MasteryButton(
-                    title: "眼熟",
-                    subtitle: "有印象",
-                    color: .orange,
-                    icon: "eye.fill",
-                    isSelected: selectedMastery == .familiar
-                ) {
-                    selectMastery(.familiar)
+                // 只在中译英模式下显示眼熟选项
+                if testMode == .chineseToEnglish {
+                    MasteryButton(
+                        title: "眼熟",
+                        subtitle: "有印象",
+                        color: .orange,
+                        icon: "eye.fill",
+                        isSelected: selectedMastery == .familiar
+                    ) {
+                        selectMastery(.familiar)
+                    }
                 }
                 
                 MasteryButton(
@@ -327,7 +331,8 @@ struct MasteryButton: View {
                 examples: ["Reading helps expand your vocabulary."],
                 difficulty: .medium,
                 frequency: 3
-            )
+            ),
+            testMode: .chineseToEnglish
         ) { mastery in
             print("Selected mastery: \(mastery)")
         }

@@ -97,15 +97,34 @@ class KaoyanSentence {
 class KaoyanSynonym {
     var pos: String // 词性
     var tran: String // 对应词义
-    var synonymWords: [String] // 同近义词列表
+    private var _synonymWords: String = "[]" // JSON 字符串存储同近义词列表
     
     @Relationship(inverse: \KaoyanWord.synonyms)
     var word: KaoyanWord?
     
+    // 计算属性：将 JSON 字符串转换为 [String] 数组
+    var synonymWords: [String] {
+        get {
+            guard let data = _synonymWords.data(using: .utf8),
+                  let array = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return array
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let jsonString = String(data: data, encoding: .utf8) {
+                _synonymWords = jsonString
+            } else {
+                _synonymWords = "[]"
+            }
+        }
+    }
+    
     init(pos: String, tran: String, synonymWords: [String]) {
         self.pos = pos
         self.tran = tran
-        self.synonymWords = synonymWords
+        self.synonymWords = synonymWords // 使用计算属性的 setter
     }
 }
 

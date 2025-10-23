@@ -45,7 +45,7 @@ enum TabSelection: String, CaseIterable {
         case .vocabulary:
             return "text.book.closed"
         case .intelligentRanking:
-            return "brain.head.profile"
+            return "brain"
         case .progress:
             return "chart.bar"
         case .settings:
@@ -124,6 +124,18 @@ enum TabSelection: String, CaseIterable {
         return serviceContainer.getAdaptiveRecommendationEngine()
     }
     
+    func getTestResultExportService() -> TestResultExportService {
+        return serviceContainer.getTestResultExportService()
+    }
+    
+    func getLearningTrackingService() -> LearningTrackingService {
+        return serviceContainer.getLearningTrackingService()
+    }
+    
+    func getStatisticsExportService() -> StatisticsExportServiceProtocol {
+        return serviceContainer.getStatisticsExportService()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer
@@ -132,6 +144,12 @@ enum TabSelection: String, CaseIterable {
     
     private func initializeViewModels() {
         guard !isConfigured else { return }
+        
+        // 检查服务是否已完全初始化
+        guard serviceContainer.getModelContext() != nil else {
+            print("⚠️ [AppCoordinator] 服务尚未完全初始化，延迟初始化ViewModels")
+            return
+        }
         
         // 使用内存保护的方式初始化 ViewModels
         autoreleasepool {
@@ -168,7 +186,8 @@ enum TabSelection: String, CaseIterable {
         self.progressViewModel = ProgressViewModel(
             userProgressService: serviceContainer.getUserProgressService(),
             articleService: serviceContainer.getArticleService(),
-            errorHandler: serviceContainer.getErrorHandler()
+            errorHandler: serviceContainer.getErrorHandler(),
+            statisticsExportService: serviceContainer.getStatisticsExportService()
         )
         
         self.vocabularyViewModel = VocabularyViewModel(
@@ -186,7 +205,8 @@ enum TabSelection: String, CaseIterable {
                 modelContext: serviceContainer.getModelContext()!,
                 cacheManager: serviceContainer.getCacheManager(),
                 errorHandler: serviceContainer.getErrorHandler()
-            )
+            ),
+            vocabularyTestService: serviceContainer.getVocabularyTestService()
         )
         
         self.readingViewModel = ReadingViewModel(
@@ -492,7 +512,9 @@ enum TabSelection: String, CaseIterable {
         isLoading = loading
     }
     
+    @MainActor
     func setModelContext(_ context: ModelContext, appSettings: AppSettings) {
+        // 同步在主线程配置服务，随后立即初始化所有ViewModels，避免异步调度导致的未初始化访问
         serviceContainer.configure(with: context, appSettings: appSettings)
         initializeViewModels()
     }

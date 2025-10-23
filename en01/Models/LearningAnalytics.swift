@@ -257,9 +257,83 @@ final class LearningSession: @unchecked Sendable {
     var satisfactionRating: Double? // 满意度评分
     
     // 行为数据
-    var clickPatterns: [String] // 点击模式记录
-    var pauseDurations: [TimeInterval] // 暂停时长记录
-    var scrollBehavior: [String] // 滚动行为记录
+    private var _clickPatterns: String = "[]" // JSON 字符串存储点击模式记录
+    private var _pauseDurations: String = "[]" // JSON 字符串存储暂停时长记录
+    private var _scrollBehavior: String = "[]" // JSON 字符串存储滚动行为记录
+    
+    // 计算属性：将 JSON 字符串转换为 [String] 数组
+    var clickPatterns: [String] {
+        get {
+            guard let data = _clickPatterns.data(using: .utf8),
+                  let array = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return array
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let jsonString = String(data: data, encoding: .utf8) {
+                _clickPatterns = jsonString
+            } else {
+                _clickPatterns = "[]"
+            }
+        }
+    }
+    
+    // 计算属性：暂停时长（JSON字符串存储）
+    var pauseDurations: [TimeInterval] {
+        get {
+            guard let data = _pauseDurations.data(using: .utf8),
+                  let array = try? JSONDecoder().decode([TimeInterval].self, from: data) else {
+                return []
+            }
+            return array
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let jsonString = String(data: data, encoding: .utf8) {
+                _pauseDurations = jsonString
+            } else {
+                _pauseDurations = "[]"
+            }
+        }
+    }
+
+    var scrollBehavior: [String] {
+        get {
+            guard let data = _scrollBehavior.data(using: .utf8),
+                  let array = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return array
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let jsonString = String(data: data, encoding: .utf8) {
+                _scrollBehavior = jsonString
+            } else {
+                _scrollBehavior = "[]"
+            }
+        }
+    }
+
+    init(userId: String, startTime: Date = Date(), articleId: String? = nil) {
+        self.id = UUID()
+        self.userId = userId
+        self.startTime = startTime
+        self.endTime = nil
+        self.articleId = articleId
+        self.wordsEncountered = 0
+        self.wordsLookedUp = 0
+        self.timeSpent = 0
+        self.completionRate = 0
+        self.focusScore = 0
+        self.difficultyRating = 0
+        self.satisfactionRating = nil
+        self._clickPatterns = "[]"
+        self._pauseDurations = "[]"
+        self._scrollBehavior = "[]"
+    }
     
     init(userId: String, articleId: String? = nil) {
         self.id = UUID()
@@ -272,9 +346,10 @@ final class LearningSession: @unchecked Sendable {
         self.completionRate = 0
         self.focusScore = 1.0
         self.difficultyRating = 3.0
-        self.clickPatterns = []
         self.pauseDurations = []
-        self.scrollBehavior = []
+        // 使用私有属性初始化
+        self._clickPatterns = "[]"
+        self._scrollBehavior = "[]"
     }
 }
 

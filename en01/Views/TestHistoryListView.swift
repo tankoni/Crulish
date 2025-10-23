@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import Charts
 
 /// 测试历史记录列表视图
@@ -71,6 +72,9 @@ struct TestHistoryListView: View {
         } message: {
             Text("确定要删除这条测试记录吗？此操作无法撤销。")
         }
+        .onAppear {
+            viewModel.loadTestHistory()
+        }
     }
     
     private var timeRangeSelector: some View {
@@ -108,14 +112,14 @@ struct TestHistoryListView: View {
             Chart(filteredTests) { test in
                 LineMark(
                     x: .value("日期", test.createdAt),
-                    y: .value("词汇量", test.estimatedVocabularySize)
+                    y: .value("词汇量", test.estimatedVocabulary)
                 )
                 .foregroundStyle(.blue)
                 .symbol(.circle)
                 
                 AreaMark(
                     x: .value("日期", test.createdAt),
-                    y: .value("词汇量", test.estimatedVocabularySize)
+                    y: .value("词汇量", test.estimatedVocabulary)
                 )
                 .foregroundStyle(
                     LinearGradient(
@@ -171,10 +175,10 @@ struct TestHistoryListView: View {
             } else {
                 List {
                     ForEach(filteredTests) { test in
-                        TestHistoryDetailCard(test: test) {
+                        TestHistoryDetailCard(test: test, onDelete: {
                             testToDelete = test
                             showingDeleteAlert = true
-                        }
+                        }, viewModel: viewModel)
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                     }
@@ -230,19 +234,61 @@ struct TestHistoryListView: View {
     
     private var averageVocabularySize: Int {
         guard !filteredTests.isEmpty else { return 0 }
-        let total = filteredTests.reduce(0) { $0 + $1.estimatedVocabularySize }
+        let total = filteredTests.reduce(0) { $0 + $1.estimatedVocabulary }
         return total / filteredTests.count
     }
-    
+
     private var maxVocabularySize: Int {
-        filteredTests.map { $0.estimatedVocabularySize }.max() ?? 0
+        filteredTests.map { $0.estimatedVocabulary }.max() ?? 0
     }
     
     // MARK: - Actions
     
     private func exportTestData() {
-        // TODO: 实现数据导出功能
-        print("导出测试数据")
+        guard let exportService = viewModel.exportService else {
+            print("❌ 导出服务未初始化")
+            return
+        }
+        
+        guard !filteredTests.isEmpty else {
+            print("❌ 没有测试数据可导出")
+            return
+        }
+        
+        // 使用第一个测试的词典名称作为导出参数
+        let dictionaryName = filteredTests.first?.dictionaryName ?? "Unknown"
+        
+        Task {
+            do {
+                let exportURL = try await exportService.exportTestResults(for: dictionaryName, format: .markdown)
+                
+                // 显示分享界面
+                await MainActor.run {
+                    let activityVC = UIActivityViewController(
+                        activityItems: [exportURL],
+                        applicationActivities: nil
+                    )
+                    
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let window = windowScene.windows.first,
+                       let rootVC = window.rootViewController {
+                        
+                        // 为iPad设置popover
+                        if let popover = activityVC.popoverPresentationController {
+                            popover.sourceView = window
+                            popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                            popover.permittedArrowDirections = []
+                        }
+                        
+                        rootVC.present(activityVC, animated: true)
+                    }
+                }
+                
+                print("✅ 测试数据导出成功")
+            } catch {
+                print("❌ 导出测试数据失败: \(error.localizedDescription)")
+            }
+        }
     }
     
     private func showClearAllAlert() {
@@ -256,7 +302,37 @@ struct TestHistoryListView: View {
 struct TestHistoryDetailCard: View {
     let test: VocabularyTest
     let onDelete: () -> Void
-    
+    @ObservedObject var viewModel: VocabularyTestViewModel
+
+    // 计算实时统计数据（当保存的统计数据为0时使用）
+    private var calculatedStats: (mastered: Int, familiar: Int, unfamiliar: Int) {
+        // 如果已有统计数据且不全为0，直接使用
+        if test.masteredCount > 0 || test.familiarCount > 0 || test.unfamiliarCount > 0 {
+            return (test.masteredCount, test.familiarCount, test.unfamiliarCount)
+        }
+        
+        // 否则从测试结果中实时计算
+        let results = test.getTestResults()
+        var masteredCount = 0
+        var familiarCount = 0
+        var unfamiliarCount = 0
+        
+        for result in results {
+            if result.isKnown {
+                // 根据响应时间判断是掌握还是熟悉
+                if result.responseTime < 2.0 {
+                    masteredCount += 1
+                } else {
+                    familiarCount += 1
+                }
+            } else {
+                unfamiliarCount += 1
+            }
+        }
+        
+        return (masteredCount, familiarCount, unfamiliarCount)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // 头部信息
@@ -278,7 +354,7 @@ struct TestHistoryDetailCard: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Text("\(test.estimatedVocabularySize)")
+                    Text("\(test.estimatedVocabulary)")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.blue)
@@ -289,28 +365,48 @@ struct TestHistoryDetailCard: View {
             HStack(spacing: 12) {
                 ResultBar(
                     title: "掌握",
-                    count: test.masteredCount,
+                    count: calculatedStats.mastered,
                     total: test.totalWords,
                     color: .green
                 )
                 
                 ResultBar(
                     title: "眼熟",
-                    count: test.familiarCount,
+                    count: calculatedStats.familiar,
                     total: test.totalWords,
                     color: .orange
                 )
                 
                 ResultBar(
                     title: "陌生",
-                    count: test.unfamiliarCount,
+                    count: calculatedStats.unfamiliar,
                     total: test.totalWords,
                     color: .red
                 )
             }
             
-            // 详细统计
-            HStack {
+            // 底部操作按钮
+            HStack(spacing: 12) {
+                // 选择测试按钮
+                Button(action: {
+                    viewModel.selectTestForContinuation(test)
+                }) {
+                    HStack {
+                        Image(systemName: "play.circle.fill")
+                        Text("选择测试")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.blue.opacity(0.1))
+                    )
+                }
+                
+                Spacer()
+                
                 Text("测试单词: \(test.totalWords)")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -411,11 +507,17 @@ struct StatSummaryItem: View {
 // TimeRange 已在 CommonTypes.swift 中定义
 
 #Preview {
+    let mockDictionaryService = MockDictionaryService()
+    
     TestHistoryListView(
         viewModel: VocabularyTestViewModel(
-            vocabularyTestService: MockVocabularyTestService(),
-            dictionaryService: MockDictionaryService(),
-            errorHandler: MockErrorHandler()
+            vocabularyTestService: MockVocabularyTestService(dictionaryService: mockDictionaryService),
+            dictionaryService: mockDictionaryService,
+            errorHandler: MockErrorHandler(),
+            testResultExportService: TestResultExportService(
+                modelContext: ModelContext(try! ModelContainer(for: VocabularyTest.self)),
+                dictionaryService: mockDictionaryService
+            )
         )
     )
 }

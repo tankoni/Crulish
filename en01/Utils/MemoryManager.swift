@@ -20,8 +20,8 @@ class MemoryManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - 内存阈值配置
-    private let lowMemoryThreshold: Int64 = 100 * 1024 * 1024 // 100MB
-    private let criticalMemoryThreshold: Int64 = 50 * 1024 * 1024 // 50MB
+    private let lowMemoryThreshold: Int64 = 300 * 1024 * 1024 // 300MB (提高阈值，适应现代设备)
+    private let criticalMemoryThreshold: Int64 = 200 * 1024 * 1024 // 200MB
     
     // MARK: - 内存监控
     private var memoryObservers: [WeakMemoryObserver] = []
@@ -37,7 +37,7 @@ class MemoryManager: ObservableObject {
     
     // MARK: - 内存监控设置
     private func setupMemoryMonitoring() {
-        memoryTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        memoryTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             self?.updateMemoryUsage()
         }
     }

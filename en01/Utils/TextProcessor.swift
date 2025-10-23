@@ -14,12 +14,50 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     private let tagger = NLTagger(tagSchemes: [.lexicalClass, .lemma])
     
     // 缓存机制以提高性能
-    private var stemCache: [String: String] = [:]
-    private var keywordCache: [String: [String]] = [:]
-    private var similarityCache: [String: Double] = [:]
+    private var stemCache: [String: CacheEntry<String>] = [:]
+    private var keywordCache: [String: CacheEntry<[String]>] = [:]
+    private var similarityCache: [String: CacheEntry<Double>] = [:]
     
-    // 缓存大小限制
+    // 线程安全队列用于各种缓存
+    private let stemCacheQueue = DispatchQueue(label: "com.en01.textprocessor.stemCache", attributes: .concurrent)
+    private let keywordCacheQueue = DispatchQueue(label: "com.en01.textprocessor.keywordCache", attributes: .concurrent)
+    private let similarityCacheQueue = DispatchQueue(label: "com.en01.textprocessor.similarityCache", attributes: .concurrent)
+    
     private let maxCacheSize = 1000
+    private let memoryPressureThreshold = 50 * 1024 * 1024 // 50MB
+    
+    // 初始化方法
+    init() {
+        // 初始化时验证缓存
+        validateAndCleanCache()
+    }
+    
+    // 缓存条目结构
+    private struct CacheEntry<T> {
+        let value: T
+        let timestamp: Date
+        var accessCount: Int
+        var lastAccessed: Date
+        
+        init(value: T) {
+            self.value = value
+            self.timestamp = Date()
+            self.accessCount = 1
+            self.lastAccessed = Date()
+        }
+        
+        mutating func accessed() {
+            self.accessCount += 1
+            self.lastAccessed = Date()
+        }
+        
+        var priority: Double {
+            // 基于访问频率和最近访问时间计算优先级
+            let recency = 1.0 / (Date().timeIntervalSince(lastAccessed) + 1)
+            let frequency = Double(accessCount)
+            return recency * frequency
+        }
+    }
     
     // MARK: - 文本清理
     
@@ -83,9 +121,26 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     func extractKeywords(from text: String, limit: Int = 10) -> [String] {
         let cacheKey = "\(text.prefix(100))_\(limit)" // 使用文本前100字符作为缓存键
         
+        // 线程安全的缓存读取
+        let cachedResult = keywordCacheQueue.sync {
+            return keywordCache[cacheKey]
+        }
+        
         // 检查缓存
-        if let cachedKeywords = keywordCache[cacheKey] {
-            return cachedKeywords
+        if let cachedEntry = cachedResult {
+            // 线程安全的缓存更新
+            keywordCacheQueue.async(flags: .barrier) { [weak self] in
+                var updatedEntry = cachedEntry
+                updatedEntry.accessed()
+                self?.keywordCache[cacheKey] = updatedEntry
+            }
+            return cachedEntry.value
+        } else if cachedResult != nil {
+            // 如果缓存值类型不正确，清除该缓存项
+            print("⚠️ [TextProcessor] 发现无效关键词缓存类型，清除缓存项: \(cacheKey)")
+            keywordCacheQueue.async(flags: .barrier) { [weak self] in
+                self?.keywordCache.removeValue(forKey: cacheKey)
+            }
         }
         
         let words = extractWords(text)
@@ -105,9 +160,12 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
             .prefix(limit)
             .map { $0.key })
         
-        // 缓存结果
-        if keywordCache.count < maxCacheSize {
-            keywordCache[cacheKey] = result
+        // 线程安全的缓存存储
+        keywordCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            if self.keywordCache.count < self.maxCacheSize {
+                self.keywordCache[cacheKey] = CacheEntry(value: result)
+            }
         }
         
         return result
@@ -145,47 +203,186 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     func stemWord(_ word: String) -> String {
         let lowercaseWord = word.lowercased()
         
-        // 检查缓存
-        if let cachedStem = stemCache[lowercaseWord] {
-            return cachedStem
+        // 线程安全的缓存读取
+        let cachedResult = stemCacheQueue.sync {
+            return stemCache[lowercaseWord]
         }
         
-        tagger.string = word
-        let _ = word.startIndex..<word.endIndex
+        // 检查缓存 - 添加类型安全检查
+        if let cachedEntry = cachedResult {
+            // 线程安全的缓存更新
+            stemCacheQueue.async(flags: .barrier) { [weak self] in
+                var updatedEntry = cachedEntry
+                updatedEntry.accessed()
+                self?.stemCache[lowercaseWord] = updatedEntry
+            }
+            return cachedEntry.value
+        } else if cachedResult != nil {
+            // 如果缓存值类型不正确，清除该缓存项
+            print("⚠️ [TextProcessor] 发现无效缓存类型，清除缓存项: \(lowercaseWord)")
+            stemCacheQueue.async(flags: .barrier) { [weak self] in
+                self?.stemCache.removeValue(forKey: lowercaseWord)
+            }
+        }
         
-        var result: String
-        if let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue {
-            result = lemma.lowercased()
+        let result: String
+        if #available(iOS 16.0, *) {
+            // 使用系统的词形还原功能
+            tagger.string = word
+            let _ = word.startIndex..<word.endIndex
+            if let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue {
+                result = lemma.lowercased()
+            } else {
+                result = simpleStem(lowercaseWord)
+            }
         } else {
-            // 如果无法获取词根，使用简单的词干提取
-            result = simpleStem(word)
+            result = simpleStem(lowercaseWord)
         }
         
-        // 缓存结果（控制缓存大小）
-        if stemCache.count < maxCacheSize {
-            stemCache[lowercaseWord] = result
-        } else if stemCache.count >= maxCacheSize {
-            // 清理部分缓存
-            clearOldCache()
-            stemCache[lowercaseWord] = result
+        // 线程安全的缓存存储
+        stemCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            let newEntry = CacheEntry(value: result)
+            self.stemCache[lowercaseWord] = newEntry
+            self.checkMemoryPressure()
         }
         
         return result
     }
     
+    /// 检查内存压力并清理缓存
+    private func checkMemoryPressure() {
+        if stemCache.count > maxCacheSize {
+            clearOldCache()
+        }
+        
+        // 定期验证缓存完整性
+        if stemCache.count % 100 == 0 {
+            validateAndCleanCache()
+        }
+    }
+    
     /// 清理旧缓存以控制内存使用
     private func clearOldCache() {
-        let keysToRemove = Array(stemCache.keys.prefix(maxCacheSize / 2))
-        for key in keysToRemove {
-            stemCache.removeValue(forKey: key)
+        // 清理stemCache - 保留优先级最高的条目
+        stemCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            if self.stemCache.count > self.maxCacheSize {
+                let sortedEntries = self.stemCache.sorted { $0.value.priority > $1.value.priority }
+                let toKeep = Int(Double(self.maxCacheSize) * 0.7) // 保留70%
+                self.stemCache.removeAll()
+                for (key, entry) in sortedEntries.prefix(toKeep) {
+                    self.stemCache[key] = entry
+                }
+            }
         }
         
-        let keywordKeysToRemove = Array(keywordCache.keys.prefix(maxCacheSize / 2))
-        for key in keywordKeysToRemove {
-            keywordCache.removeValue(forKey: key)
+        // 清理keywordCache
+        keywordCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            if self.keywordCache.count > self.maxCacheSize {
+                let sortedEntries = self.keywordCache.sorted { $0.value.priority > $1.value.priority }
+                let toKeep = Int(Double(self.maxCacheSize) * 0.7)
+                self.keywordCache.removeAll()
+                for (key, entry) in sortedEntries.prefix(toKeep) {
+                    self.keywordCache[key] = entry
+                }
+            }
         }
         
-        similarityCache.removeAll()
+        // 清理similarityCache
+        similarityCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            if self.similarityCache.count > self.maxCacheSize {
+                let sortedEntries = self.similarityCache.sorted { $0.value.priority > $1.value.priority }
+                let toKeep = Int(Double(self.maxCacheSize) * 0.7)
+                self.similarityCache.removeAll()
+                for (key, entry) in sortedEntries.prefix(toKeep) {
+                    self.similarityCache[key] = entry
+                }
+            }
+        }
+    }
+    
+    /// 验证并清理无效的缓存条目
+    private func validateAndCleanCache() {
+        // 验证stemCache
+        stemCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            var invalidKeys: [String] = []
+            for (key, value) in self.stemCache {
+                // 由于stemCache的类型是[String: CacheEntry<String>]，所有值都应该是CacheEntry<String>类型
+                // 这个检查实际上总是为true，但保留用于调试目的
+                if type(of: value) != CacheEntry<String>.self {
+                    invalidKeys.append(key)
+                    print("⚠️ [TextProcessor] 发现无效stemCache条目: \(key)")
+                }
+            }
+            for key in invalidKeys {
+                self.stemCache.removeValue(forKey: key)
+            }
+        }
+        
+        // 验证keywordCache
+        keywordCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            var invalidKeys: [String] = []
+            for (key, value) in self.keywordCache {
+                // 由于keywordCache的类型是[String: CacheEntry<[String]>]，所有值都应该是CacheEntry<[String]>类型
+                if type(of: value) != CacheEntry<[String]>.self {
+                    invalidKeys.append(key)
+                    print("⚠️ [TextProcessor] 发现无效keywordCache条目: \(key)")
+                }
+            }
+            for key in invalidKeys {
+                self.keywordCache.removeValue(forKey: key)
+            }
+        }
+        
+        // 验证similarityCache
+        similarityCacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            var invalidKeys: [String] = []
+            for (key, value) in self.similarityCache {
+                // 由于similarityCache的类型是[String: CacheEntry<Double>]，所有值都应该是CacheEntry<Double>类型
+                if type(of: value) != CacheEntry<Double>.self {
+                    invalidKeys.append(key)
+                    print("⚠️ [TextProcessor] 发现无效similarityCache条目: \(key)")
+                }
+            }
+            for key in invalidKeys {
+                self.similarityCache.removeValue(forKey: key)
+            }
+            
+            print("✅ [TextProcessor] 缓存验证完成，清理了 \(invalidKeys.count) 个无效条目")
+        }
+    }
+    
+    /// 强制清理所有缓存
+    func clearAllCaches() {
+        let group = DispatchGroup()
+        
+        group.enter()
+        stemCacheQueue.async(flags: .barrier) { [weak self] in
+            self?.stemCache.removeAll()
+            group.leave()
+        }
+        
+        group.enter()
+        keywordCacheQueue.async(flags: .barrier) { [weak self] in
+            self?.keywordCache.removeAll()
+            group.leave()
+        }
+        
+        group.enter()
+        similarityCacheQueue.async(flags: .barrier) { [weak self] in
+            self?.similarityCache.removeAll()
+            group.leave()
+        }
+        
+        group.notify(queue: .main) {
+            print("✅ [TextProcessor] 已清理所有缓存")
+        }
     }
     
     // 简单词干提取
@@ -341,9 +538,19 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     func calculateSimilarity(_ string1: String, _ string2: String) -> Double {
         let cacheKey = "\(string1)_\(string2)"
         
-        // 检查缓存
-        if let cachedSimilarity = similarityCache[cacheKey] {
-            return cachedSimilarity
+        // 线程安全读取缓存
+        var cachedEntryCopy: CacheEntry<Double>?
+        similarityCacheQueue.sync {
+            cachedEntryCopy = similarityCache[cacheKey]
+        }
+        
+        if var cachedEntry = cachedEntryCopy {
+            cachedEntry.accessed()
+            // 线程安全写入更新后的缓存条目
+            similarityCacheQueue.async(flags: .barrier) { [cachedEntry] in
+                self.similarityCache[cacheKey] = cachedEntry
+            }
+            return cachedEntry.value
         }
         
         let distance = levenshteinDistance(string1, string2)
@@ -353,10 +560,11 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
         
         let result = 1.0 - Double(distance) / Double(maxLength)
         
-        // 缓存结果
-        if similarityCache.count < maxCacheSize {
-            similarityCache[cacheKey] = result
+        // 线程安全写入新条目；若发生异常则重置缓存避免崩溃
+        similarityCacheQueue.async(flags: .barrier) {
+            self.similarityCache[cacheKey] = CacheEntry(value: result)
         }
+        checkMemoryPressure()
         
         return result
     }

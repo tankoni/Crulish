@@ -49,6 +49,11 @@ class IconCache: ObservableObject {
     
     /// 预加载单个图标
     private func preloadIcon(_ iconName: String) {
+        // 检查图标名称是否为空
+        guard !iconName.isEmpty else {
+            return
+        }
+        
         queue.async { [weak self] in
             guard let self = self else { return }
             
@@ -75,6 +80,11 @@ class IconCache: ObservableObject {
     
     /// 获取图标，如果未缓存则异步加载
     func getIcon(_ iconName: String) -> UIImage? {
+        // 检查图标名称是否为空
+        guard !iconName.isEmpty else {
+            return UIImage(systemName: "circle")
+        }
+        
         // 首先检查缓存
         if let cachedImage = cache[iconName] {
             return cachedImage
@@ -89,6 +99,11 @@ class IconCache: ObservableObject {
     
     /// 检查图标是否已加载
     func isIconLoaded(_ iconName: String) -> Bool {
+        // 检查图标名称是否为空
+        guard !iconName.isEmpty else {
+            return true // 空名称视为已加载，避免无限循环
+        }
+        
         return loadedIcons.contains(iconName)
     }
     
@@ -155,6 +170,12 @@ struct SafeIconView: View {
     }
     
     private func loadIcon() {
+        // 检查图标名称是否为空
+        guard !iconName.isEmpty else {
+            self.image = UIImage(systemName: "circle")
+            return
+        }
+        
         // 使用内存保护的方式加载图标
         DispatchQueue.global(qos: .userInitiated).async {
             autoreleasepool {

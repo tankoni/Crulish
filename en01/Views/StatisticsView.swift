@@ -7,12 +7,13 @@
 
 import SwiftUI
 import Charts
+import SwiftData
 
 /// 统计数据主视图
 struct StatisticsView: View {
     @ObservedObject var viewModel: ProgressViewModel
     @State private var selectedTab = 0
-    @State private var showingExportSheet = false
+    @State private var showingExportView = false
     
     var body: some View {
         NavigationView {
@@ -45,12 +46,15 @@ struct StatisticsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("导出") {
-                        showingExportSheet = true
+                        showingExportView = true
+                    }
+                    .sheet(isPresented: $showingExportView) {
+                        StatisticsExportView(
+                            viewModel: viewModel,
+                            statisticsExportService: viewModel.getStatisticsExportService()
+                        )
                     }
                 }
-            }
-            .sheet(isPresented: $showingExportSheet) {
-                exportSheet
             }
             .onAppear {
                 viewModel.loadAllStatistics()
@@ -95,7 +99,7 @@ struct StatisticsView: View {
     private var tabItems: [(title: String, icon: String)] {
         [
             ("概览", "chart.bar.fill"),
-            ("词汇", "textbook.fill"),
+            ("词汇", "book.fill"),
             ("阅读", "book.fill"),
             ("成就", "trophy.fill")
         ]
@@ -324,7 +328,7 @@ struct StatisticsView: View {
                 StatCard(
                     title: "总词汇量",
                     value: "\(viewModel.vocabularyStats.totalWords)",
-                    icon: "textbook.fill",
+                    icon: "book.fill",
                     color: .blue
                 )
                 
@@ -691,59 +695,6 @@ struct StatisticsView: View {
         }
     }
     
-    // MARK: - Export Sheet
-    private var exportSheet: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Text("导出学习数据")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Text("选择要导出的数据类型")
-                    .foregroundColor(.secondary)
-                
-                VStack(spacing: 12) {
-                    exportOption("完整统计报告", icon: "doc.text.fill")
-                    exportOption("词汇学习数据", icon: "textbook.fill")
-                    exportOption("阅读记录", icon: "book.fill")
-                    exportOption("成就记录", icon: "trophy.fill")
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("导出数据")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
-                        showingExportSheet = false
-                    }
-                }
-            }
-        }
-    }
-    
-    private func exportOption(_ title: String, icon: String) -> some View {
-        Button(action: {
-            // 实现导出逻辑
-            showingExportSheet = false
-        }) {
-            HStack {
-                Image(systemName: icon)
-                    .foregroundColor(.blue)
-                Text(title)
-                    .foregroundColor(.primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-        }
-    }
-    
     // MARK: - Helper Methods
     private func formatTime(_ timeInterval: TimeInterval) -> String {
         let hours = Int(timeInterval) / 3600
@@ -767,11 +718,18 @@ extension Color {
     let mockUserProgressService = MockUserProgressService()
     let mockArticleService = MockArticleService()
     let mockErrorHandler = UnifiedErrorHandler()
+    let mockStatisticsExportService: StatisticsExportServiceProtocol = StatisticsExportService(
+        modelContext: try! ModelContainer(for: VocabularyTest.self, TestedWord.self).mainContext,
+        vocabularyTestService: MockVocabularyTestService(dictionaryService: MockDictionaryService()),
+        errorHandler: mockErrorHandler,
+        dictionaryService: MockDictionaryService()
+    )
     let mockProgressViewModel = ProgressViewModel(
         userProgressService: mockUserProgressService,
         articleService: mockArticleService,
-        errorHandler: mockErrorHandler
+        errorHandler: mockErrorHandler,
+        statisticsExportService: mockStatisticsExportService
     )
     
-    return StatisticsView(viewModel: mockProgressViewModel)
+    StatisticsView(viewModel: mockProgressViewModel)
 }

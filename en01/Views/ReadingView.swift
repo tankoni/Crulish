@@ -560,7 +560,7 @@ struct DirectArticleListView: View {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
                         ForEach(filteredAndSortedArticles) { article in
                             Button(action: {
-                                viewModel.startReading(article)
+                                appCoordinator.startReading(article)
                             }) {
                                 GridArticleRow(article: article)
                             }
@@ -697,7 +697,8 @@ struct PDFListView: View {
         return appCoordinator.progressViewModel ?? ProgressViewModel(
             userProgressService: appCoordinator.getUserProgressService(),
             articleService: appCoordinator.getArticleService(),
-            errorHandler: appCoordinator.getErrorHandler()
+            errorHandler: appCoordinator.getErrorHandler(),
+            statisticsExportService: appCoordinator.getStatisticsExportService()
         )
     }
     
@@ -951,7 +952,8 @@ struct UnifiedArticleListView: View {
         return appCoordinator.progressViewModel ?? ProgressViewModel(
             userProgressService: appCoordinator.getUserProgressService(),
             articleService: appCoordinator.getArticleService(),
-            errorHandler: appCoordinator.getErrorHandler()
+            errorHandler: appCoordinator.getErrorHandler(),
+            statisticsExportService: appCoordinator.getStatisticsExportService()
         )
     }
     
@@ -1035,7 +1037,7 @@ struct UnifiedArticleListView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
                 ForEach(filteredAndSortedArticles) { article in
                     Button(action: {
-                        viewModel.startReading(article)
+                        appCoordinator.startReading(article)
                     }) {
                         GridArticleRow(article: article)
                     }

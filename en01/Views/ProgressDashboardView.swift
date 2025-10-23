@@ -376,7 +376,7 @@ struct ProgressDashboardView: View {
     
     // MARK: - 辅助方法
     private func refreshDataAsync() async {
-        await viewModel.refreshData()
+        viewModel.refreshData()
         withAnimation(.easeInOut(duration: 0.5)) {
             animateCharts.toggle()
         }

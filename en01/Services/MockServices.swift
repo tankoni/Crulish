@@ -2,53 +2,246 @@
 //  MockServices.swift
 //  en01
 //
-//  Created by Mock Services for SwiftUI Previews
+//  Created by Assistant on 2024-12-19.
 //
 
 import Foundation
-import Combine
 import SwiftData
-import SwiftUI
-import Foundation
+import Combine
 
-// MARK: - Mock Article Service
-class MockArticleService: ArticleServiceProtocol {
-    func getAllArticles() -> [Article] {
-        return [
-            Article(
-                title: "Sample Article",
-                content: "This is a sample article content for testing purposes.",
-                year: 2024,
-                examType: "考研一",
-                difficulty: .medium,
-                topic: "Technology",
-                imageName: "sample1"
+// MARK: - Type Aliases
+typealias Word = DictionaryWord
+
+// MARK: - Mock Error Handler
+
+class MockErrorHandler: ErrorHandlerProtocol {
+    var currentError: AppError?
+    var isShowingError: Bool = false
+    
+    func handle(_ error: Error, context: String) {
+        print("MockErrorHandler: \(error.localizedDescription) in \(context)")
+    }
+    
+    func handle(_ appError: AppError) {
+        currentError = appError
+        isShowingError = true
+        print("MockErrorHandler: \(appError)")
+    }
+    
+    func logSuccess(_ message: String) {
+        print("MockErrorHandler Success: \(message)")
+    }
+    
+    func dismissError() {
+        currentError = nil
+        isShowingError = false
+    }
+    
+    func clearAllErrors() {
+        currentError = nil
+        isShowingError = false
+    }
+}
+
+// MARK: - Mock Statistics Export Service
+
+class MockStatisticsExportService: StatisticsExportServiceProtocol {
+    func getCompletedTestResults() async throws -> [VocabularyTest] {
+        return []
+    }
+    
+    func getTestWordDetails(for test: VocabularyTest) async throws -> [TestedWord] {
+        return []
+    }
+    
+    func generateMarkdownContent(for tests: [VocabularyTest]) async throws -> String {
+        return "# Mock Export Content\n\nNo tests available."
+    }
+    
+    func generateTestDetailReport(for test: VocabularyTest) async throws -> String {
+        return "# Mock Test Report\n\nTest ID: \(test.id)"
+    }
+}
+
+// MARK: - Mock Cache Manager
+
+// MARK: - Mock CacheManager
+class MockCacheManager: CacheManagerProtocol {
+    private var cache: [String: CacheItem] = [:]
+    private let maxCacheSize = 1000 // 限制缓存大小
+    private let queue = DispatchQueue(label: "MockCacheManager", qos: .utility)
+    
+    private struct CacheItem {
+        let value: Any
+        let expirationDate: Date?
+        let createdAt: Date
+        
+        init(value: Any, expiration: TimeInterval?) {
+            self.value = value
+            self.createdAt = Date()
+            if let expiration = expiration {
+                self.expirationDate = Date().addingTimeInterval(expiration)
+            } else {
+                self.expirationDate = nil
+            }
+        }
+        
+        var isExpired: Bool {
+            guard let expirationDate = expirationDate else { return false }
+            return Date() > expirationDate
+        }
+    }
+    
+    func get<T: Codable>(_ key: String, type: T.Type) -> T? {
+        return queue.sync {
+            guard let item = cache[key], !item.isExpired else {
+                cache.removeValue(forKey: key)
+                return nil
+            }
+            return item.value as? T
+        }
+    }
+    
+    func set<T: Codable>(_ key: String, value: T, expiration: TimeInterval?) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // 检查缓存大小限制
+            if self.cache.count >= self.maxCacheSize {
+                self.evictOldestItems()
+            }
+            
+            self.cache[key] = CacheItem(value: value, expiration: expiration)
+        }
+    }
+    
+    func invalidate(_ key: String) {
+        queue.async { [weak self] in
+            self?.cache.removeValue(forKey: key)
+        }
+    }
+    
+    func invalidateAll() {
+        queue.async { [weak self] in
+            self?.cache.removeAll()
+        }
+    }
+    
+    func clearAll() {
+        queue.async { [weak self] in
+            self?.cache.removeAll()
+        }
+    }
+    
+    func clearExpiredItems() {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            let expiredKeys = self.cache.compactMap { key, item in
+                item.isExpired ? key : nil
+            }
+            for key in expiredKeys {
+                self.cache.removeValue(forKey: key)
+            }
+        }
+    }
+    
+    func getCacheSize() -> Int {
+        return queue.sync {
+            return cache.count
+        }
+    }
+    
+    func getCacheInfo() -> CacheInfo {
+        return queue.sync {
+            let totalItems = cache.count
+            return CacheInfo(
+                itemCount: totalItems,
+                totalSize: totalItems * 100,
+                hitRate: 0.85,
+                missRate: 0.15
             )
-        ]
+        }
+    }
+    
+    func remove(_ key: String) {
+        queue.async { [weak self] in
+            self?.cache.removeValue(forKey: key)
+        }
+    }
+    
+    func removeByPrefix(_ prefix: String) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            let keysToRemove = self.cache.keys.filter { $0.hasPrefix(prefix) }
+            for key in keysToRemove {
+                self.cache.removeValue(forKey: key)
+            }
+        }
+    }
+    
+    // MARK: - Private Methods
+    private func evictOldestItems() {
+        // 移除最旧的 20% 缓存项
+        let itemsToRemove = Int(Double(cache.count) * 0.2)
+        let sortedItems = cache.sorted { $0.value.createdAt < $1.value.createdAt }
+        
+        for i in 0..<min(itemsToRemove, sortedItems.count) {
+            cache.removeValue(forKey: sortedItems[i].key)
+        }
+    }
+}
+
+// MARK: - Mock ArticleService
+class MockArticleService: ArticleServiceProtocol {
+    private var articles: [Article] = [
+        Article(
+            title: "Test Article 1",
+            content: "This is test content for article 1",
+            year: 2023,
+            examType: "考研英语一",
+            difficulty: .medium,
+            topic: "Technology",
+            imageName: "test1"
+        ),
+        Article(
+            title: "Sample Article 2",
+            content: "This is test content for article 2",
+            year: 2023,
+            examType: "考研英语二",
+            difficulty: .hard,
+            topic: "Science",
+            imageName: "test2"
+        )
+    ]
+    
+    // MARK: - ArticleServiceProtocol Methods
+    
+    func getAllArticles() -> [Article] {
+        return articles
     }
     
     func getArticlesByYear(_ year: Int) -> [Article] {
-        return []
+        return articles.filter { $0.year == year }
     }
     
     func getArticlesByDifficulty(_ difficulty: ArticleDifficulty) -> [Article] {
-        return []
+        return articles.filter { $0.difficulty == difficulty }
     }
     
     func getArticlesByExamType(_ examType: String) -> [Article] {
-        return []
+        return articles.filter { $0.examType == examType }
     }
     
     func getRecentArticles(limit: Int) -> [Article] {
-        return []
+        return Array(articles.suffix(limit))
     }
     
     func getRecommendedArticles(limit: Int) -> [Article] {
-        return []
+        return Array(articles.prefix(limit))
     }
     
     func searchArticles(_ query: String) -> [Article] {
-        return []
+        return articles.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
     
     func updateArticle(_ article: Article) {
@@ -68,8 +261,7 @@ class MockArticleService: ArticleServiceProtocol {
     }
     
     func clearAllArticles() {
-        // Mock implementation
-        print("[MOCK] 清除所有文章数据")
+        articles.removeAll()
     }
     
     func importArticlesFromJSON() async throws {
@@ -86,70 +278,115 @@ class MockArticleService: ArticleServiceProtocol {
     
     func getArticleStats() -> ArticleStats {
         return ArticleStats(
-            totalArticles: 10,
-            completedArticles: 5,
-            inProgressArticles: 3,
-            unreadArticles: 2,
-            totalReadingTime: 1500.0,
-            averageProgress: 0.5,
-            yearStats: [2024: (total: 5, completed: 2)],
-            difficultyStats: [.medium: (total: 5, completed: 2)],
-            topicStats: ["Technology": (total: 5, completed: 2)]
+            totalArticles: articles.count,
+            completedArticles: 0,
+            inProgressArticles: 0,
+            unreadArticles: articles.count,
+            totalReadingTime: 0,
+            averageProgress: 0,
+            yearStats: [:],
+            difficultyStats: [:],
+            topicStats: [:]
         )
     }
     
     func getAvailableYears() -> [Int] {
-        return [2024, 2023, 2022]
+        return Array(Set(articles.map { $0.year })).sorted()
     }
     
     func getAvailableTopics() -> [String] {
-        return ["Technology", "Science", "Culture"]
+        return Array(Set(articles.map { $0.topic })).sorted()
     }
     
     func getAvailableExamTypes() -> [String] {
-        return ["考研一", "考研二"]
+        return Array(Set(articles.map { $0.examType })).sorted()
     }
     
     func getReadingStatistics() async throws -> ReadingStatisticsDomain {
-        let stats = getArticleStats()
         return ReadingStatisticsDomain(
-            totalArticlesRead: stats.completedArticles,
-            totalReadingTime: stats.totalReadingTime,
-            averageReadingSpeed: 200.0, // Mock value: 200 words per minute
-            completionRate: Double(stats.completedArticles) / Double(stats.totalArticles > 0 ? stats.totalArticles : 1),
-            favoriteCategories: Array(stats.topicStats.keys)
+            totalArticlesRead: articles.count,
+            totalReadingTime: 0,
+            averageReadingSpeed: 200.0,
+            completionRate: 0.0,
+            favoriteCategories: getAvailableTopics()
         )
     }
 }
 
-// MARK: - Mock Dictionary Service
-class MockDictionaryService: DictionaryServiceProtocol {
+// MARK: - Mock DictionaryService
+class MockDictionaryService: DictionaryServiceProtocol, @unchecked Sendable {
+    private var mockWords: [DictionaryWord] = []
+    private var vocabulary: [UserWord] = []
+    private let maxVocabularySize = 10000 // 限制词汇表大小
+    private let queue = DispatchQueue(label: "MockDictionaryService", qos: .utility)
+    
+    deinit {
+        clearAllData()
+    }
+    
+    func setupMockWords(count: Int = 1000) {
+        queue.async { [weak self] in
+            self?.mockWords = self?.createMockWords(count: min(count, 5000)) ?? [] // 限制最大数量
+        }
+    }
+    
+    func createMockWords(count: Int) -> [DictionaryWord] {
+        var words: [DictionaryWord] = []
+        words.reserveCapacity(count) // 预分配内存
+        
+        for i in 0..<count {
+            let difficulty = WordDifficulty.allCases[i % WordDifficulty.allCases.count]
+            let partOfSpeech = PartOfSpeech.allCases[i % PartOfSpeech.allCases.count]
+            
+            let definition = WordDefinition(
+                partOfSpeech: partOfSpeech,
+                meaning: "中文释义\(i)",
+                englishMeaning: "English definition \(i)",
+                examples: ["Example sentence \(i)"],
+                contextKeywords: ["keyword\(i)"]
+            )
+            
+            let word = DictionaryWord(
+                word: "word\(i)",
+                phonetic: "/wɜːrd\(i)/",
+                definitions: [definition],
+                frequency: i % 100,
+                difficulty: difficulty,
+                tags: ["tag\(i % 10)"]
+            )
+            
+            words.append(word)
+        }
+        
+        return words
+    }
+    
+    func getAllWords() -> [DictionaryWord] {
+        return queue.sync {
+            return mockWords
+        }
+    }
+    
+    func getRandomWords(count: Int) -> [DictionaryWord] {
+        return queue.sync {
+            return Array(mockWords.shuffled().prefix(min(count, mockWords.count)))
+        }
+    }
+    
     // MARK: - Dictionary Management
     func getAvailableDictionaries() -> AnyPublisher<[DictionaryInfo], Error> {
         let mockDictionaries = [
             DictionaryInfo(
-                name: "考研核心词汇",
+                name: "kaoyan_core",
                 displayName: "考研核心词汇",
                 fileName: "KaoYan_1.json",
-                filePath: "/path/to/KaoYan_1.json",
+                filePath: "/mock/path/KaoYan_1.json",
                 version: "1.0",
                 description: "考研必备核心词汇，包含高频词汇和重点词汇",
                 language: "en",
                 totalWords: 3000,
-                difficultyLevels: [1, 2, 3],
-                categories: ["考研", "学术"]
-            ),
-            DictionaryInfo(
-                name: "托福核心词汇",
-                displayName: "托福核心词汇",
-                fileName: "TOEFL_Core.json",
-                filePath: "/path/to/TOEFL_Core.json",
-                version: "1.0",
-                description: "托福考试核心词汇集合",
-                language: "en",
-                totalWords: 2500,
-                difficultyLevels: [2, 3, 4],
-                categories: ["TOEFL", "学术"]
+                difficultyLevels: [1, 2, 3, 4],
+                categories: ["考研", "核心词汇"]
             )
         ]
         
@@ -163,16 +400,18 @@ class MockDictionaryService: DictionaryServiceProtocol {
             DictionaryWord(
                 word: "test",
                 phonetic: "/test/",
-                definitions: [WordDefinition(partOfSpeech: .noun, meaning: "测试；考试", examples: ["This is a test."])],
+                definitions: [
+                    WordDefinition(
+                        partOfSpeech: .noun,
+                        meaning: "测试；考试",
+                        englishMeaning: "a procedure intended to establish the quality, performance, or reliability of something",
+                        examples: ["This is a test."],
+                        contextKeywords: ["exam", "evaluation"]
+                    )
+                ],
+                frequency: 1000,
                 difficulty: .medium,
-                categories: ["基础词汇"]
-            ),
-            DictionaryWord(
-                word: "example",
-                phonetic: "/ɪɡˈzæmpəl/",
-                definitions: [WordDefinition(partOfSpeech: .noun, meaning: "例子；实例", examples: ["For example, this is a sample."])],
-                difficulty: .basic,
-                categories: ["常用词汇"]
+                tags: ["academic", "common"]
             )
         ]
         
@@ -182,21 +421,22 @@ class MockDictionaryService: DictionaryServiceProtocol {
     }
     
     func lookupWord(_ word: String) async throws -> UserWord {
-        return UserWord(
+        return vocabulary.first { $0.word == word } ?? UserWord(
             word: word,
-            context: "Sample context",
-            sentence: "This is a sample sentence.",
-            selectedDefinition: WordDefinition(partOfSpeech: PartOfSpeech.noun, meaning: "A sample definition")
+            context: "Mock context for \(word)",
+            sentence: "Mock sentence for \(word)",
+            selectedDefinition: WordDefinition(partOfSpeech: .noun, meaning: "Mock definition for \(word)")
         )
     }
     
     func lookupWord(_ word: String, context: String) -> DictionaryWord? {
         return DictionaryWord(
             word: word,
-            phonetic: "/ˈsæmpəl/",
-            definitions: [WordDefinition(partOfSpeech: .noun, meaning: "A sample definition")],
+            phonetic: "/mock/",
+            definitions: [WordDefinition(partOfSpeech: .noun, meaning: "Mock definition")],
+            frequency: 100,
             difficulty: .medium,
-            categories: ["示例词汇"]
+            tags: ["mock"]
         )
     }
     
@@ -205,35 +445,95 @@ class MockDictionaryService: DictionaryServiceProtocol {
     }
     
     func addUnknownWord(_ word: UserWord) async throws {
-        // Mock implementation
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self = self else {
+                    continuation.resume()
+                    return
+                }
+                
+                // 检查词汇表大小限制
+                if self.vocabulary.count >= self.maxVocabularySize {
+                    self.evictOldestVocabulary()
+                }
+                
+                self.vocabulary.append(word)
+                continuation.resume()
+            }
+        }
+    }
+    
+    func getUserVocabulary() async throws -> [UserWord] {
+        return await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                continuation.resume(returning: self?.vocabulary ?? [])
+            }
+        }
     }
     
     func addWord(_ word: UserWord) async throws {
+        try await addUnknownWord(word)
+    }
+    
+    func getUserWordRecords() -> [UserWord] {
+        return queue.sync {
+            return vocabulary
+        }
+    }
+    
+    func getWordsByMastery(_ mastery: MasteryLevel) -> [UserWord] {
+        return queue.sync {
+            return vocabulary.filter { $0.masteryLevel == mastery }
+        }
+    }
+    
+    func getWordsForReview() -> [UserWord] {
+        return queue.sync {
+            return vocabulary.filter { $0.isMarkedForReview }
+        }
+    }
+    
+    func initializeDictionary() async throws {
+        // Mock implementation
+    }
+    
+    func initializeKaoyanDictionary() async {
+        // Mock implementation
+    }
+    
+    func getKaoyanWordDetails(_ word: String) -> KaoyanWordDetails? {
+        return nil
+    }
+    
+    func updateWord(_ word: UserWord) async throws {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self = self else {
+                    continuation.resume()
+                    return
+                }
+                
+                if let index = self.vocabulary.firstIndex(where: { $0.word == word.word }) {
+                    self.vocabulary[index] = word
+                }
+                continuation.resume()
+            }
+        }
+    }
+    
+    func recordWordLookup(_ word: String) async throws {
         // Mock implementation
     }
     
     func recordWordLookup(word: String, context: String, sentence: String, article: Article) -> UserWord {
-        let definition = WordDefinition(partOfSpeech: .noun, meaning: "A sample definition")
         let userWord = UserWord(
             word: word,
             context: context,
             sentence: sentence,
-            selectedDefinition: definition
+            selectedDefinition: WordDefinition(partOfSpeech: .noun, meaning: "Mock definition for \(word)")
         )
-        userWord.articleID = article.id.uuidString
+        vocabulary.append(userWord)
         return userWord
-    }
-    
-    func getUserWordRecords() -> [UserWord] {
-        return []
-    }
-    
-    func getWordsByMastery(_ mastery: MasteryLevel) -> [UserWord] {
-        return []
-    }
-    
-    func getWordsForReview() -> [UserWord] {
-        return []
     }
     
     func updateWordMastery(_ record: UserWord, level: MasteryLevel) {
@@ -261,110 +561,90 @@ class MockDictionaryService: DictionaryServiceProtocol {
     }
     
     func clearAllRecords() {
-        // Mock implementation
+        queue.async { [weak self] in
+            self?.vocabulary.removeAll()
+        }
     }
     
     func getVocabularyStats() -> VocabularyStats {
-        return VocabularyStats(
-            totalWords: 100,
-            unfamiliarWords: 30,
-            familiarWords: 50,
-            masteredWords: 20,
-            todayLookups: 5,
-            weeklyLookups: 25,
-            averageLookupPerDay: 3.5,
-            mostLookedUpWords: []
-        )
+        return queue.sync { [weak self] in
+            guard let self = self else {
+                return VocabularyStats(
+                    totalWords: 0,
+                    unfamiliarWords: 0,
+                    familiarWords: 0,
+                    masteredWords: 0,
+                    todayLookups: 0,
+                    weeklyLookups: 0,
+                    averageLookupPerDay: 0,
+                    mostLookedUpWords: []
+                )
+            }
+            
+            let userRecords = self.vocabulary
+            
+            let totalWords = userRecords.count
+            let unfamiliarWords = userRecords.filter { $0.masteryLevel == .unfamiliar }.count
+            let familiarWords = userRecords.filter { $0.masteryLevel == .familiar }.count
+            let masteredWords = userRecords.filter { $0.masteryLevel == .mastered }.count
+            
+            // 今日查词数
+            let today = Calendar.current.startOfDay(for: Date())
+            let todayLookups = userRecords.filter {
+                Calendar.current.isDate($0.lastLookupDate, inSameDayAs: today)
+            }.count
+            
+            // 本周查词数
+            let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+            let weeklyLookups = userRecords.filter { $0.lastLookupDate >= weekAgo }.count
+            
+            // 平均每日查词数
+            let studyDays = userRecords.isEmpty ? 1 : max(1, Calendar.current.dateComponents([.day], from: userRecords.last?.firstLookupDate ?? Date(), to: Date()).day!)
+            let averageLookupPerDay = Double(totalWords) / Double(studyDays)
+            
+            // 最常查询的单词
+            let mostLookedUpWords = userRecords.sorted { $0.lookupCount > $1.lookupCount }.prefix(10)
+            
+            return VocabularyStats(
+                totalWords: totalWords,
+                unfamiliarWords: unfamiliarWords,
+                familiarWords: familiarWords,
+                masteredWords: masteredWords,
+                todayLookups: todayLookups,
+                weeklyLookups: weeklyLookups,
+                averageLookupPerDay: averageLookupPerDay,
+                mostLookedUpWords: Array(mostLookedUpWords)
+            )
+        }
     }
     
-    func initializeDictionary() async throws {
-        // Mock implementation
+    // MARK: - Private Methods
+    private func clearAllData() {
+        mockWords.removeAll()
+        vocabulary.removeAll()
     }
     
-    func initializeKaoyanDictionary() async {
-        // Mock implementation
-    }
-    
-    func getKaoyanWordDetails(_ word: String) -> KaoyanWordDetails? {
-        // 返回模拟的考研单词详情
-        return KaoyanWordDetails(
-            word: word,
-            wordRank: 1000,
-            bookId: "mock_book",
-            usPhone: "test",
-            ukPhone: "test",
-            translations: [
-                KaoyanWordTranslation(
-                    pos: "n.",
-                    tranCn: "测试；考试",
-                    tranOther: nil
-                ),
-                KaoyanWordTranslation(
-                    pos: "v.",
-                    tranCn: "测试；检验",
-                    tranOther: nil
-                )
-            ],
-            sentences: [
-                KaoyanWordSentence(
-                    sContent: "This is a test sentence.",
-                    sCn: "这是一个测试句子。"
-                )
-            ],
-            synonyms: [
-                KaoyanWordSynonym(
-                    pos: "n.",
-                    tran: "exam, examination",
-                    synonymWords: ["exam", "examination"]
-                )
-            ],
-            phrases: [
-                KaoyanWordPhrase(
-                    pContent: "test case",
-                    pCn: "测试用例"
-                )
-            ],
-            relatedWords: [
-                KaoyanWordRelated(
-                    pos: "v.",
-                    hwd: "testing",
-                    tran: "测试"
-                )
-            ]
-        )
+    private func evictOldestVocabulary() {
+        // 移除最旧的 20% 词汇
+        let itemsToRemove = Int(Double(vocabulary.count) * 0.2)
+        vocabulary.removeFirst(min(itemsToRemove, vocabulary.count))
     }
 }
 
-// MARK: - Mock User Progress Service
+// MARK: - Mock UserProgressService
 class MockUserProgressService: UserProgressServiceProtocol {
-    private var userProgress: UserProgress = {
-        let progress = UserProgress()
-        progress.totalReadingTime = 3600
-        progress.articlesRead = 5
-        progress.totalWordsLookedUp = 50
-        progress.currentStreak = 7
-        progress.longestStreak = 15
-        progress.lastStudyDate = Date()
-        progress.level = .intermediate
-        progress.experience = 750
-        progress.achievements = []
-        return progress
-    }()
+    private var userProgress = UserProgress()
     
-    func getUserProgress() -> UserProgress? {
+    func getUserProgress() async throws -> UserProgress {
         return userProgress
     }
     
-    func addReadingTime(_ time: Double) {
-        userProgress.totalReadingTime += time
+    func updateUserProgress(_ progress: UserProgress) async throws {
+        self.userProgress = progress
     }
     
-    func addWordLookup() {
+    func incrementWordsLearned() {
         userProgress.totalWordsLookedUp += 1
-    }
-    
-    func addExperience(_ points: Int, for activity: ExperienceAction) {
-        userProgress.experience += points
     }
     
     func incrementArticleRead() {
@@ -393,18 +673,6 @@ class MockUserProgressService: UserProgressServiceProtocol {
         userProgress.totalWordsLookedUp += wordsLookedUp
     }
     
-    func updateReadingProgress(articleId: String, progress: Double, readingTime: TimeInterval) async throws {
-        userProgress.totalReadingTime += readingTime
-    }
-    
-    func recordWordLookup(word: String, articleId: String) async throws {
-        userProgress.totalWordsLookedUp += 1
-    }
-    
-    func getTodayRecord() -> DailyStudyRecord? {
-        return nil
-    }
-    
     func getReadingTrend(days: Int) -> [DailyStudyRecord] {
         return []
     }
@@ -416,18 +684,13 @@ class MockUserProgressService: UserProgressServiceProtocol {
             wordsLearned: 25,
             averageScore: 85.0
         )
-        
         let previousWeek = StatisticsWeeklyStats(
-            totalStudyTime: 2400,
-            articlesRead: 3,
-            wordsLearned: 18,
-            averageScore: 78.0
+            totalStudyTime: 2800,
+            articlesRead: 4,
+            wordsLearned: 20,
+            averageScore: 80.0
         )
-        
-        return WeeklyComparison(
-            currentWeek: currentWeek,
-            previousWeek: previousWeek
-        )
+        return WeeklyComparison(currentWeek: currentWeek, previousWeek: previousWeek)
     }
     
     func getStudyStatistics() -> StudyStatistics {
@@ -436,6 +699,40 @@ class MockUserProgressService: UserProgressServiceProtocol {
     
     func addBookmark(articleId: String) async throws {
         // Mock implementation
+    }
+    
+    func updateReadingSettings(_ settings: ReadingSettingsUI) async throws {
+        // Mock implementation
+    }
+    
+    func updateVocabularySettings(_ settings: VocabularySettingsUI) async throws {
+        // Mock implementation
+    }
+    
+    func updateNotificationSettings(_ settings: NotificationSettingsUI) async throws {
+        // Mock implementation
+    }
+    
+    func addReadingTime(_ time: Double) {
+        // Mock implementation
+    }
+    
+    func addWordLookup() {
+        // Mock implementation
+    }
+    
+    func addExperience(_ points: Int, for activity: ExperienceAction) {
+        // Mock implementation
+    }
+    
+    func getUserProgress() -> UserProgress? {
+        return userProgress
+    }
+    
+    func getTodayRecord() -> DailyStudyRecord? {
+        return DailyStudyRecord(
+            date: Date()
+        )
     }
     
     func removeBookmark(articleId: String) async throws {
@@ -450,24 +747,32 @@ class MockUserProgressService: UserProgressServiceProtocol {
         return false
     }
     
+    func updateReadingProgress(articleId: String, progress: Double, readingTime: TimeInterval) async throws {
+        // Mock implementation
+    }
+    
+    func recordWordLookup(word: String, articleId: String) async throws {
+        // Mock implementation
+    }
+    
     func getTodayStatistics() async throws -> TodayStatistics {
         return TodayStatistics(
-            readingTime: 1800,
+            readingTime: 30,
             articlesRead: 2,
-            wordsLookedUp: 15,
-            reviewsCompleted: 10,
+            wordsLookedUp: 10,
+            reviewsCompleted: 5,
             dailyReadingGoalProgress: 0.6,
-            consecutiveDays: userProgress.currentStreak
+            consecutiveDays: 5
         )
     }
     
     func getWeeklyStatistics() async throws -> WeeklyStatistics {
         return WeeklyStatistics(
-            totalReadingTime: 3600 * 8, // 8小时
-            totalArticlesRead: 12,
-            totalWordsLookedUp: 85,
-            totalReviewsCompleted: 45,
-            dailyAverageReadingTime: 1200,
+            totalReadingTime: 210,
+            totalArticlesRead: 14,
+            totalWordsLookedUp: 70,
+            totalReviewsCompleted: 35,
+            dailyAverageReadingTime: 30,
             studyDaysThisWeek: 5,
             weeklyGoalProgress: 0.8
         )
@@ -475,50 +780,52 @@ class MockUserProgressService: UserProgressServiceProtocol {
     
     func getMonthlyStatistics() async throws -> MonthlyStatistics {
         return MonthlyStatistics(
-            totalReadingTime: 3600 * 35, // 35小时
-            totalArticlesRead: 48,
-            totalWordsLookedUp: 320,
-            totalReviewsCompleted: 180,
-            dailyAverageReadingTime: 1200,
-            studyDaysThisMonth: 22,
+            totalReadingTime: 900,
+            totalArticlesRead: 60,
+            totalWordsLookedUp: 300,
+            totalReviewsCompleted: 150,
+            dailyAverageReadingTime: 30,
+            studyDaysThisMonth: 20,
             monthlyGoalProgress: 0.75,
-            bestWeekReadingTime: 3600 * 10
+            bestWeekReadingTime: 240
         )
     }
     
     func getOverallStatistics() async throws -> OverallStatistics {
         return OverallStatistics(
-            totalReadingTime: 3600 * 25, // 25小时
-            totalArticlesRead: 45,
-            totalWordsLookedUp: 320,
-            totalReviewsCompleted: 180,
+            totalReadingTime: 3600,
+            totalArticlesRead: 240,
+            totalWordsLookedUp: 1200,
+            totalReviewsCompleted: 600,
             longestStreak: 15,
             currentStreak: 7,
-            totalStudyDays: 30,
-            averageReadingSpeed: 250.0
-        )
-    }
-    
-    func getReadingStatistics() async throws -> ReadingStatisticsDomain {
-        return ReadingStatisticsDomain(
-            totalArticlesRead: 35,
-            totalReadingTime: 480 * 35, // 总阅读时间
-            averageReadingSpeed: 250.0,
-            completionRate: 0.85,
-            favoriteCategories: ["Technology", "Science", "Business"]
+            totalStudyDays: 45,
+            averageReadingSpeed: 200
         )
     }
     
     func getVocabularyProgressStatistics() async throws -> VocabularyProgressStats {
         return VocabularyProgressStats(
-            totalWords: 1250,
-            masteredWords: 850,
+            totalWords: 1200,
+            masteredWords: 800,
             learningWords: 300,
             reviewWords: 100,
-            masteryRate: 0.68,
-            weeklyNewWords: 25,
-            monthlyNewWords: 95,
-            averageReviewAccuracy: 0.85
+            masteryRate: 0.85,
+            weeklyNewWords: 50,
+            monthlyNewWords: 200,
+            averageReviewAccuracy: 0.90
+        )
+    }
+    
+    func getVocabularyStatistics() async throws -> VocabularyStatisticsDomain {
+        return VocabularyStatisticsDomain(
+            totalWordsLearned: 1200,
+            masteredWords: 800,
+            reviewingWords: 300,
+            newWords: 100,
+            averageTestScore: 85.0,
+            strongestCategories: ["阅读理解", "词汇"],
+            weakestCategories: ["语法", "写作"]
         )
     }
     
@@ -527,27 +834,9 @@ class MockUserProgressService: UserProgressServiceProtocol {
             totalAchievements: 15,
             unlockedAchievements: 8,
             recentAchievements: [],
-            nextMilestones: []
-        )
-    }
-    
-    func getGoalProgress() -> GoalProgress {
-        return GoalProgress(
-            dailyGoal: GoalItem(title: "每日阅读", current: 18, target: 30),
-            weeklyGoal: GoalItem(title: "每周文章", current: 4, target: 5),
-            monthlyGoal: GoalItem(title: "每月单词", current: 75, target: 100)
-        )
-    }
-    
-    func getVocabularyStatistics() async throws -> VocabularyStatisticsDomain {
-        return VocabularyStatisticsDomain(
-            totalWordsLearned: userProgress.totalWordsLookedUp,
-            masteredWords: 5,
-            reviewingWords: 15,
-            newWords: 10,
-            averageTestScore: 85.5,
-            strongestCategories: ["Academic", "Business"],
-            weakestCategories: ["Science", "Technology"]
+            nextMilestones: ["Read 100 articles", "Master 500 words"],
+            longestStreak: 7,
+            recentBadges: []
         )
     }
     
@@ -564,27 +853,35 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
     
     func getCurrentLevel() -> UserLevel {
-        return userProgress.level
+        return .intermediate
     }
     
     func getLevelProgress() -> Double {
-        return 0.65
+        return 0.5
     }
     
     func getExperienceToNextLevel() -> Int {
-        return 250
+        return 500
+    }
+    
+    func getGoalProgress() -> GoalProgress {
+        return GoalProgress(
+            dailyGoal: GoalItem(title: "每日阅读", current: 20, target: 30),
+            weeklyGoal: GoalItem(title: "每周文章", current: 3, target: 5),
+            monthlyGoal: GoalItem(title: "每月单词", current: 60, target: 100)
+        )
     }
     
     func getConsecutiveDays() -> Int {
-        return userProgress.currentStreak
+        return 5
     }
     
     func getUnlockedAchievements() -> [AchievementData] {
-        return userProgress.achievements
+        return []
     }
     
     func getAvailableAchievements() -> [AchievementType] {
-        return [.firstArticle, .streak7Days, .streak30Days]
+        return []
     }
     
     func getStudyRecommendations() -> [StudyRecommendation] {
@@ -600,11 +897,19 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
     
     func resetProgress() {
-        // Mock implementation
+        userProgress = UserProgress()
     }
     
     func getUserSettings() async throws -> UserSettingsUI {
-        return UserSettingsUI()
+        var settings = UserSettingsUI()
+        settings.username = "Test User"
+        settings.email = "test@example.com"
+        settings.profileImageURL = nil
+        settings.preferredLanguage = "zh-CN"
+        settings.timezone = "Asia/Shanghai"
+        settings.dateJoined = Date()
+        settings.lastActiveDate = Date()
+        return settings
     }
     
     func getReadingSettings() async throws -> ReadingSettingsUI {
@@ -616,30 +921,43 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
     
     func getNotificationSettings() async throws -> NotificationSettingsUI {
-        return NotificationSettingsUI()
+        var settings = NotificationSettingsUI()
+        settings.enableDailyReminder = true
+        settings.dailyReminderTime = Date()
+        settings.enableReviewReminder = true
+        settings.reviewReminderInterval = 4
+        settings.enableAchievementNotifications = true
+        settings.enableProgressNotifications = true
+        settings.enableWeeklyReport = true
+        settings.weeklyReportDay = 1
+        settings.notificationSound = "default"
+        settings.enableVibration = true
+        return settings
     }
     
     func getPrivacySettings() async throws -> PrivacySettingsUI {
-        return PrivacySettingsUI()
+        var settings = PrivacySettingsUI()
+        settings.enableAnalytics = true
+        settings.enableCrashReporting = true
+        settings.shareUsageData = false
+        settings.enableCloudSync = true
+        settings.autoBackup = true
+        settings.dataRetentionPeriod = 365
+        settings.enableLocationServices = false
+        return settings
     }
     
     func getAppearanceSettings() async throws -> AppearanceSettingsUI {
-        return AppearanceSettingsUI()
+        return AppearanceSettingsUI(
+            colorScheme: .system,
+            accentColor: "#007AFF",
+            enableDynamicType: true,
+            enableReduceMotion: false,
+            enableHighContrast: false
+        )
     }
     
     func updateUserSettings(_ settings: UserSettingsUI) async throws {
-        // Mock implementation
-    }
-    
-    func updateReadingSettings(_ settings: ReadingSettingsUI) async throws {
-        // Mock implementation
-    }
-    
-    func updateVocabularySettings(_ settings: VocabularySettingsUI) async throws {
-        // Mock implementation
-    }
-    
-    func updateNotificationSettings(_ settings: NotificationSettingsUI) async throws {
         // Mock implementation
     }
     
@@ -653,280 +971,426 @@ class MockUserProgressService: UserProgressServiceProtocol {
     
     func resetAllData() async throws {
         // Mock implementation
+        userProgress = UserProgress()
     }
 }
 
-// MARK: - Mock Text Processor
-class MockTextProcessor: TextProcessorProtocol {
-    // 文本清理
-    func cleanWord(_ word: String) -> String {
-        return word.trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: .punctuationCharacters)
-            .lowercased()
+// MARK: - Mock VocabularyTestService
+class MockVocabularyTestService: VocabularyTestServiceProtocol {
+    private let dictionaryService: MockDictionaryService
+    private var currentTest: VocabularyTest?
+    private var testHistory: [VocabularyTest] = []
+    private var activeTests: [UUID: VocabularyTest] = [:]
+    private var testWords: [UUID: [DictionaryWord]] = [:]
+    private var testResponses: [UUID: [WordTestResponse]] = [:]
+    
+    init(dictionaryService: MockDictionaryService) {
+        self.dictionaryService = dictionaryService
     }
     
-    func cleanText(_ text: String) -> String {
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    // MARK: - VocabularyTestServiceProtocol Implementation
+    
+    func getAvailableDictionaries() -> AnyPublisher<[DictionaryInfo], Error> {
+        return dictionaryService.getAvailableDictionaries()
     }
     
-    // 文本分词
-    func tokenize(_ text: String) -> [String] {
-        return text.components(separatedBy: .whitespacesAndNewlines)
+    func loadDictionaryWords(from dictionary: DictionaryInfo) -> AnyPublisher<[DictionaryWord], Error> {
+        return dictionaryService.loadDictionary(fileName: dictionary.fileName)
     }
     
-    func tokenizeText(_ text: String) -> [String] {
-        return tokenize(text)
-    }
-    
-    func extractWords(_ text: String) -> [String] {
-        return text.components(separatedBy: .whitespacesAndNewlines)
-            .map { cleanWord($0) }
-            .filter { !$0.isEmpty }
-    }
-    
-    // 关键词提取
-    func extractKeywords(from text: String, limit: Int) -> [String] {
-        let words = extractWords(text)
-        return Array(words.prefix(limit))
-    }
-    
-    // 词形还原
-    func stemWord(_ word: String) -> String {
-        return cleanWord(word)
-    }
-    
-    // 相似度计算
-    func calculateSimilarity(_ string1: String, _ string2: String) -> Double {
-        return 0.5
-    }
-    
-    // 句子分析
-    func splitIntoSentences(_ text: String) -> [String] {
-        return text.components(separatedBy: ".")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-    
-    func getWordContext(_ word: String, in text: String, contextLength: Int) -> String {
-        return text
-    }
-    
-    func getSentenceContaining(_ word: String, in text: String) -> String? {
-        let sentences = splitIntoSentences(text)
-        return sentences.first { $0.contains(word) }
-    }
-    
-    func extractSentence(containing word: String, from text: String) -> String? {
-        return getSentenceContaining(word, in: text)
-    }
-    
-    // 词性标注
-    func getPartOfSpeech(_ word: String) -> PartOfSpeech? {
-        return .noun
-    }
-    
-    // 文本统计
-    func calculateReadingDifficulty(_ text: String) -> Double {
-        return 0.5
-    }
-    
-    func calculateVocabularyDensity(_ text: String) -> Double {
-        return 0.5
-    }
-    
-    func getTextStatistics(_ text: String) -> TextStatistics {
-        let words = extractWords(text)
-        let sentences = splitIntoSentences(text)
-        let characters = text.count
-        let charactersNoSpaces = text.replacingOccurrences(of: " ", with: "").count
-        let paragraphs = text.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    func startVocabularyTest(dictionary: DictionaryInfo, sampleSize: Int) -> AnyPublisher<VocabularyTest, Error> {
+        let test = VocabularyTest(
+            id: UUID(),
+            dictionaryId: dictionary.id,
+            dictionaryName: dictionary.displayName,
+            dictionaryFileName: dictionary.fileName,
+            totalWords: sampleSize,
+            masteredCount: 0,
+            familiarCount: 0,
+            unfamiliarCount: 0,
+            currentWordIndex: 0,
+            isCompleted: false,
+            isPaused: false,
+            createdAt: Date(),
+            completedAt: nil,
+            estimatedVocabularySize: 0,
+            accuracyPercentage: 0.0
+        )
         
-        return TextStatistics(
-            characterCount: characters,
-            characterCountNoSpaces: charactersNoSpaces,
-            wordCount: words.count,
-            sentenceCount: sentences.count,
-            paragraphCount: paragraphs.count,
-            averageWordsPerSentence: sentences.isEmpty ? 0.0 : Double(words.count) / Double(sentences.count),
-            averageCharactersPerWord: words.isEmpty ? 0.0 : Double(charactersNoSpaces) / Double(words.count),
-            readingDifficulty: 0.5,
-            vocabularyDensity: 0.5,
-            estimatedReadingTime: Double(words.count) / 200.0
+        currentTest = test
+        activeTests[test.id] = test
+        testHistory.append(test)
+        
+        return Just(test)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func recordWordMastery(testId: UUID, word: String, masteryLevel: MasteryLevel, responseTime: TimeInterval) -> AnyPublisher<Void, Error> {
+        let response = WordTestResponse(
+            word: word,
+            masteryLevel: masteryLevel,
+            responseTime: responseTime,
+            isCorrect: masteryLevel != .unfamiliar
         )
-    }
-}
-
-// MARK: - Mock Error Handler
-class MockErrorHandler: ErrorHandlerProtocol {
-    var currentError: AppError?
-    var isShowingError: Bool = false
-    
-    func handle(_ error: Error, context: String) {
-        // 简化的错误处理，直接打印错误信息
-        print("❌ 错误 [\(context)]: \(error.localizedDescription)")
-    }
-    
-    func handle(_ appError: AppError) {
-        currentError = appError
-        isShowingError = true
-        print("Mock Error: \(appError.localizedDescription)")
-    }
-
-    func logSuccess(_ message: String) {
-        print("Mock Success: \(message)")
-    }
-
-    func handle(_ appError: AppError, context: String) {
-        print("Mock Error: \(appError.localizedDescription) in \(context)")
-    }
-    
-    func dismissError() {
-        currentError = nil
-        isShowingError = false
-    }
-    
-    func clearAllErrors() {
-        currentError = nil
-        isShowingError = false
-    }
-    
-    func getErrorStatistics() -> ErrorStatistics {
-        return ErrorStatistics()
-    }
-    
-    func getRecentErrors(limit: Int) -> [ErrorRecord] {
-        return []
-    }
-    
-    func clearErrorHistory() {
-        // Mock implementation
-    }
-    
-    func exportErrorLog() -> String {
-        return "Mock error log"
-    }
-    
-    func shouldRetry(error: Error, attemptCount: Int) -> Bool {
-        return false
-    }
-    
-    func recordRecovery(from error: Error, context: String) {
-        // Mock implementation
-    }
-}
-
-// MARK: - Mock Translation Service
-class MockTranslationService: TranslationServiceProtocol {
-    func translateWord(_ word: String, context: String) async throws -> Translation? {
-        return Translation(
-            originalText: word,
-            translatedText: "翻译: \(word)",
-            sourceLanguage: "en",
-            targetLanguage: "zh",
-            confidence: 0.95,
-            provider: TranslationProvider.local,
-            contextualMeaning: "在上下文中的含义",
-            grammarAnalysis: nil as GrammarAnalysis?
-        )
-    }
-    
-    func translateSentence(_ sentence: String) async throws -> Translation? {
-        return Translation(
-            originalText: sentence,
-            translatedText: "句子翻译: \(sentence)",
-            sourceLanguage: "en",
-            targetLanguage: "zh",
-            confidence: 0.90,
-            provider: TranslationProvider.local,
-            contextualMeaning: nil as String?,
-            grammarAnalysis: nil as GrammarAnalysis?
-        )
-    }
-    
-    func translateParagraph(_ paragraph: String) async throws -> Translation? {
-        return Translation(
-            originalText: paragraph,
-            translatedText: "段落翻译: \(paragraph)",
-            sourceLanguage: "en",
-            targetLanguage: "zh",
-            confidence: 0.85,
-            provider: TranslationProvider.local,
-            contextualMeaning: nil as String?,
-            grammarAnalysis: nil as GrammarAnalysis?
-        )
-    }
-    
-    func setTranslationProvider(_ provider: TranslationProvider) {
-        // Mock implementation - no actual provider change
-    }
-    
-    func getAvailableProviders() -> [TranslationProvider] {
-        return [.local, .openai, .google]
-    }
-    
-    func isLocalModelAvailable() -> Bool {
-        return true
-    }
-    
-    func clearTranslationCache() {
-        // Mock implementation - no actual cache to clear
-    }
-    
-    func getCacheStatistics() -> TranslationCacheStats {
-        return TranslationCacheStats(
-            totalEntries: 100,
-            hitRate: 0.85,
-            missRate: 0.15,
-            cacheSize: 1024,
-            lastCleanup: Date()
-        )
-    }
-}
-
-// MARK: - Mock Cache Manager
-class MockCacheManager: CacheManagerProtocol {
-    private var cache: [String: Any] = [:]
-    
-    func get<T: Codable>(_ key: String, type: T.Type) -> T? {
-        return cache[key] as? T
-    }
-
-    func set<T: Codable>(_ key: String, value: T, expiration: TimeInterval?) {
-        cache[key] = value
-    }
-    
-    func invalidate(_ key: String) {
-        cache.removeValue(forKey: key)
-    }
-    
-    func invalidateAll() {
-        cache.removeAll()
-    }
-    
-    func clearAll() {
-        cache.removeAll()
-    }
-    
-    func clearExpiredItems() {
-        // Mock implementation - no expiration logic
-    }
-    
-    func getCacheSize() -> Int {
-        return cache.count
-    }
-    
-    func getCacheInfo() -> CacheInfo {
-        return CacheInfo(itemCount: cache.count, totalSize: 0, hitRate: 0.8, missRate: 0.2)
-    }
-    
-    func remove(_ key: String) {
-        cache.removeValue(forKey: key)
-    }
-    
-    func removeByPrefix(_ prefix: String) {
-        let keysToRemove = cache.keys.filter { $0.hasPrefix(prefix) }
-        for key in keysToRemove {
-            cache.removeValue(forKey: key)
+        
+        if testResponses[testId] == nil {
+            testResponses[testId] = []
         }
+        testResponses[testId]?.append(response)
+        
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func recordWordClick(word: String, testId: UUID) -> AnyPublisher<Void, Error> {
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func completeTest(testId: UUID) -> AnyPublisher<VocabularyTest, Error> {
+        guard let test = activeTests[testId] else {
+            return Fail(error: VocabularyTestError.testNotFound)
+                .eraseToAnyPublisher()
+        }
+        
+        let completedTest = VocabularyTest(
+            id: test.id,
+            dictionaryId: test.dictionaryId,
+            dictionaryName: test.dictionaryName,
+            dictionaryFileName: test.dictionaryFileName,
+            totalWords: test.totalWords,
+            masteredCount: test.masteredCount,
+            familiarCount: test.familiarCount,
+            unfamiliarCount: test.unfamiliarCount,
+            currentWordIndex: test.currentWordIndex,
+            isCompleted: true,
+            isPaused: false,
+            createdAt: test.createdAt,
+            completedAt: Date(),
+            estimatedVocabularySize: test.estimatedVocabularySize,
+            accuracyPercentage: test.accuracyPercentage
+        )
+        
+        activeTests[testId] = completedTest
+        testHistory.append(completedTest)
+        
+        return Just(completedTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func pauseTest(testId: UUID) -> AnyPublisher<Void, Error> {
+        guard let test = activeTests[testId] else {
+            return Fail(error: VocabularyTestError.testNotFound)
+                .eraseToAnyPublisher()
+        }
+        
+        let pausedTest = VocabularyTest(
+            id: test.id,
+            dictionaryId: test.dictionaryId,
+            dictionaryName: test.dictionaryName,
+            dictionaryFileName: test.dictionaryFileName,
+            totalWords: test.totalWords,
+            masteredCount: test.masteredCount,
+            familiarCount: test.familiarCount,
+            unfamiliarCount: test.unfamiliarCount,
+            currentWordIndex: test.currentWordIndex,
+            isCompleted: false,
+            isPaused: true,
+            createdAt: test.createdAt,
+            completedAt: nil,
+            estimatedVocabularySize: test.estimatedVocabularySize,
+            accuracyPercentage: test.accuracyPercentage
+        )
+        
+        activeTests[testId] = pausedTest
+        
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func resumeTest(testId: UUID) -> AnyPublisher<VocabularyTest, Error> {
+        guard let test = activeTests[testId] else {
+            return Fail(error: VocabularyTestError.testNotFound)
+                .eraseToAnyPublisher()
+        }
+        
+        let resumedTest = VocabularyTest(
+            id: test.id,
+            dictionaryId: test.dictionaryId,
+            dictionaryName: test.dictionaryName,
+            dictionaryFileName: test.dictionaryFileName,
+            totalWords: test.totalWords,
+            masteredCount: test.masteredCount,
+            familiarCount: test.familiarCount,
+            unfamiliarCount: test.unfamiliarCount,
+            currentWordIndex: test.currentWordIndex,
+            isCompleted: false,
+            isPaused: false,
+            createdAt: test.createdAt,
+            completedAt: nil,
+            estimatedVocabularySize: test.estimatedVocabularySize,
+            accuracyPercentage: test.accuracyPercentage
+        )
+        
+        activeTests[testId] = resumedTest
+        
+        return Just(resumedTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func saveTestResult(testId: UUID, word: String, isCorrect: Bool, responseTime: TimeInterval) -> AnyPublisher<Void, Error> {
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func saveTestResult(_ test: VocabularyTest) -> AnyPublisher<Void, Error> {
+        testHistory.append(test)
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getTestHistory(limit: Int) -> AnyPublisher<[VocabularyTest], Error> {
+        let limitedHistory = Array(testHistory.prefix(limit))
+        return Just(limitedHistory)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getTestHistory(for dictionaryId: UUID) -> AnyPublisher<[VocabularyTest], Error> {
+        let filteredHistory = testHistory.filter { $0.dictionaryId == dictionaryId }
+        return Just(filteredHistory)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getLatestTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error> {
+        let latestTest = testHistory.filter { $0.dictionaryId == dictionaryId }.last
+        return Just(latestTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func deleteTestRecord(_ test: VocabularyTest) -> AnyPublisher<Void, Error> {
+        testHistory.removeAll { $0.id == test.id }
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func deleteTest(testId: UUID) -> AnyPublisher<Void, Error> {
+        activeTests.removeValue(forKey: testId)
+        testWords.removeValue(forKey: testId)
+        testResponses.removeValue(forKey: testId)
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getCurrentTestForDictionary(_ dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error> {
+        let currentTest = activeTests.values.first { test in
+            test.dictionaryFileName == dictionaryFileName && !test.isCompleted
+        }
+        return Just(currentTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getWordMastery(word: String, dictionaryFileName: String) -> AnyPublisher<MasteryLevel?, Error> {
+        return Just(.unfamiliar)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func updateWordMastery(word: String, dictionaryFileName: String, mastery: MasteryLevel) -> AnyPublisher<Void, Error> {
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getWordsByMastery(dictionaryFileName: String, mastery: MasteryLevel) -> AnyPublisher<[DictionaryWord], Error> {
+        return Just([])
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getWordStatistics(dictionaryFileName: String) -> AnyPublisher<WordStatistics, Error> {
+        let statistics = WordStatistics(
+            totalWords: 100,
+            masteredWords: 40,
+            familiarWords: 35,
+            unfamiliarWords: 25,
+            averageResponseTime: 2.5,
+            testAccuracy: 0.75
+        )
+        return Just(statistics)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    @MainActor
+    func saveTestedWord(_ word: DictionaryWord, mastery: MasteryLevel, dictionaryName: String, dictionaryFileName: String, testSessionId: UUID?) -> AnyPublisher<Void, Error> {
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    @MainActor
+    func getTestedWords(for dictionaryFileName: String) -> AnyPublisher<[TestedWord], Error> {
+        return Just([])
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    @MainActor
+    func getUntestedWords(from dictionary: DictionaryInfo) -> AnyPublisher<[DictionaryWord], Error> {
+        return dictionaryService.loadDictionary(fileName: dictionary.fileName)
+    }
+    
+    @MainActor
+    func clearTestedWords(for dictionaryFileName: String) -> AnyPublisher<Void, Error> {
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    @MainActor
+    func getTestProgress(for dictionaryFileName: String) -> AnyPublisher<TestProgress, Error> {
+        let progress = TestProgress(
+            dictionaryFileName: dictionaryFileName,
+            dictionaryName: "Mock Dictionary",
+            totalWords: 100,
+            testedWords: 50,
+            untestedWords: 50,
+            masteredWords: 20,
+            familiarWords: 20,
+            unfamiliarWords: 10,
+            currentIndex: 50
+        )
+        return Just(progress)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getIncompleteTest(for dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error> {
+        let incompleteTest = activeTests.values.first { test in
+            test.dictionaryFileName == dictionaryFileName && !test.isCompleted
+        }
+        
+        return Just(incompleteTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getLatestTest() -> AnyPublisher<VocabularyTest?, Error> {
+        return Just(testHistory.last)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getTestStatistics() -> AnyPublisher<TestStatistics, Error> {
+        let statistics = TestStatistics(
+            totalTests: testHistory.count,
+            averageScore: 75.0,
+            bestScore: 95,
+            improvementRate: 0.15
+        )
+        
+        return Just(statistics)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getTestStatistics(testType: VocabularyTestMode) async throws -> TestStatistics {
+        return TestStatistics(
+            totalTests: testHistory.count,
+            averageScore: 75.0,
+            bestScore: 95,
+            improvementRate: 0.15
+        )
+    }
+    
+    func calculateImprovementRate() -> AnyPublisher<Double, Error> {
+        return Just(0.1)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getCurrentWord() -> AnyPublisher<DictionaryWord?, Error> {
+        return Just(nil)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getRemainingTime() -> AnyPublisher<TimeInterval, Error> {
+        return Just(1800.0)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func isTestTimedOut() -> AnyPublisher<Bool, Error> {
+        return Just(false)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getDictionaryTestResults(for dictionaryFileName: String) -> AnyPublisher<DictionaryTestResults, Error> {
+        let results = DictionaryTestResults(
+            dictionaryFileName: dictionaryFileName,
+            totalTestedWords: 100,
+            masteredWords: 40,
+            familiarWords: 35,
+            unfamiliarWords: 25,
+            masteryRate: 0.75,
+            lastTestDate: Date()
+        )
+        return Just(results)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    @MainActor
+    func batchUpdateWordMastery(words: [String], mastery: MasteryLevel, dictionaryName: String, dictionaryFileName: String) -> AnyPublisher<Void, Error> {
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    @MainActor
+    func getArticleWordMasteryDistribution(words: [String], dictionaryFileName: String) -> AnyPublisher<WordMasteryDistribution, Error> {
+        let distribution = WordMasteryDistribution(
+            totalWords: words.count,
+            masteredWords: words.count / 4,
+            familiarWords: words.count / 4,
+            unfamiliarWords: words.count / 4,
+            unknownWords: words.count / 4
+        )
+        return Just(distribution)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    // MARK: - Cache Management
+    func clearCache() {
+        // Mock implementation - no actual cache to clear
+        print("MockVocabularyTestService: clearCache() called")
+    }
+    
+ func clearCacheForDictionary(_ dictionaryFileName: String) {
+        // Mock implementation
+        print("MockVocabularyTestService: clearCacheForDictionary(\(dictionaryFileName)) called")
+    }
+    
+    func updateTestInDatabase(_ test: VocabularyTest) -> AnyPublisher<Void, Error> {
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
     }
 }

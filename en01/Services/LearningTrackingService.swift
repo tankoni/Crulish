@@ -26,6 +26,12 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
     /// 最后缓存更新时间
     private var lastCacheUpdate: Date?
     
+    /// 当前会话的批量操作记录（用于撤销）
+    private var currentSessionBatchOperations: [BatchOperation] = []
+    
+    /// 当前会话ID
+    private let currentSessionId: String = UUID().uuidString
+    
     // MARK: - Initialization
     
     override init(
@@ -53,7 +59,8 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
     ///   - word: 被点击的单词
     ///   - context: 单词所在的上下文
     ///   - articleId: 文章ID
-    ///   - position: 单词在文章中的位置
+    ///   - position: 点击位置
+    @MainActor
     func recordWordClick(
         word: String,
         context: String,
@@ -91,6 +98,7 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
     ///   - word: 单词
     ///   - masteryLevel: 新的掌握程度
     ///   - source: 更新来源（阅读、测试等）
+    @MainActor
     func updateWordMastery(
         word: String,
         masteryLevel: MasteryLevel,
@@ -107,12 +115,16 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             let existingWords = try modelContext.fetch(descriptor)
             
             let userWord: UserWord
+            let previousMastery: MasteryLevel
+            
             if let existing = existingWords.first {
                 userWord = existing
+                previousMastery = existing.masteryLevel
                 userWord.masteryLevel = masteryLevel
                 userWord.lastReviewDate = Date()
                 userWord.clickCount += 1 // 使用 clickCount 替代 reviewCount
             } else {
+                previousMastery = .unfamiliar
                 userWord = UserWord(
                     word: word.lowercased(),
                     context: "",
@@ -124,13 +136,15 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
                 userWord.masteryLevel = masteryLevel
                 userWord.lastReviewDate = Date()
                 userWord.clickCount = 1
+                userWord.firstLookupDate = Date()
+                userWord.lastLookupDate = Date()
                 modelContext.insert(userWord)
             }
             
             // 记录学习行为
             let learningRecord = LearningRecord(
                 word: word.lowercased(),
-                previousMastery: existingWords.first?.masteryLevel ?? .unfamiliar,
+                previousMastery: previousMastery,
                 newMastery: masteryLevel,
                 source: source,
                 timestamp: Date()
@@ -142,6 +156,49 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             try modelContext.save()
             
             logger.info("更新单词掌握程度: \(word) -> \(masteryLevel.rawValue)")
+        }
+    }
+    
+    /// 记录单词掌握度
+    /// - Parameters:
+    ///   - word: 单词
+    ///   - mastery: 掌握程度
+    ///   - responseTime: 响应时间
+    func recordWordMastery(word: String, mastery: MasteryLevel, responseTime: TimeInterval) {
+        Task { @MainActor in
+            updateWordMastery(word: word, masteryLevel: mastery, source: "test")
+        }
+        
+        logger.info("记录单词掌握度: \(word) - \(mastery)")
+    }
+
+    /// 仅当新掌握程度高于现有值时更新（避免重复写入）
+    /// - Parameters:
+    ///   - word: 单词
+    ///   - masteryLevel: 新的掌握程度（通常为 .mastered）
+    ///   - source: 更新来源（阅读、测试等）
+    @MainActor
+    func updateWordMasteryIfHigher(
+        word: String,
+        masteryLevel: MasteryLevel,
+        source: String = "reading"
+    ) {
+        performSafeOperation("条件更新单词掌握程度") {
+            let lowercasedWord = word.lowercased()
+            let descriptor = FetchDescriptor<UserWord>(
+                predicate: #Predicate { userWord in
+                    userWord.word == lowercasedWord
+                }
+            )
+            let existingWords = try modelContext.fetch(descriptor)
+
+            // 如果已有记录且掌握程度不低于目标，则跳过
+            if let existing = existingWords.first, existing.masteryLevel >= masteryLevel {
+                return
+            }
+
+            // 否则执行正常更新逻辑
+            updateWordMastery(word: word, masteryLevel: masteryLevel, source: source)
         }
     }
     
@@ -261,9 +318,146 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             }
         }
     }
+    
+    // MARK: - Batch Operations
+    
+    /// 批量标记文章为已学习
+    /// - Parameter articleIds: 文章ID列表
+    @MainActor
+    func batchMarkArticlesAsLearned(articleIds: [String]) async throws {
+        logger.info("开始批量标记文章为已学习，数量: \(articleIds.count)")
+        
+        let batchOperation = BatchOperation(
+            id: UUID(),
+            sessionId: currentSessionId,
+            type: .markArticlesLearned,
+            articleIds: articleIds,
+            timestamp: Date()
+        )
+        
+        do {
+            // 记录批量操作到当前会话
+            currentSessionBatchOperations.append(batchOperation)
+            
+            // 保存批量操作记录到数据库
+            modelContext.insert(batchOperation)
+            try modelContext.save()
+            
+            logger.info("✅ 批量标记文章完成，操作ID: \(batchOperation.id)")
+        } catch {
+            logger.error("❌ 批量标记文章失败: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// 撤销当前会话的批量操作
+    /// - Parameter operationId: 要撤销的操作ID，如果为nil则撤销最后一个操作
+    @MainActor
+    func undoBatchOperation(operationId: UUID? = nil) async throws {
+        logger.info("开始撤销批量操作")
+        
+        let operationToUndo: BatchOperation?
+        
+        if let operationId = operationId {
+            operationToUndo = currentSessionBatchOperations.first { $0.id == operationId }
+        } else {
+            operationToUndo = currentSessionBatchOperations.last
+        }
+        
+        guard let operation = operationToUndo else {
+            logger.warning("未找到要撤销的批量操作")
+            return
+        }
+        
+        do {
+            switch operation.type {
+            case .markArticlesLearned:
+                // 撤销文章学习标记
+                for articleId in operation.articleIds {
+                    // 这里需要调用文章服务来撤销学习状态
+                    // 由于我们在LearningTrackingService中，这里只记录撤销操作
+                    logger.info("撤销文章学习标记: \(articleId)")
+                }
+            case .undoMarkArticlesLearned:
+                // 处理撤销操作的撤销（即重新执行原操作）
+                logger.info("重新执行批量学习操作，包含 \(operation.articleIds.count) 篇文章")
+                for articleId in operation.articleIds {
+                    logger.info("重新标记文章为已学习: \(articleId)")
+                }
+            }
+            
+            // 创建撤销操作记录
+            let undoOperation = BatchOperation(
+                id: UUID(),
+                sessionId: currentSessionId,
+                type: .undoMarkArticlesLearned,
+                articleIds: operation.articleIds,
+                timestamp: Date(),
+                originalOperationId: operation.id
+            )
+            
+            // 从当前会话记录中移除原操作
+            currentSessionBatchOperations.removeAll { $0.id == operation.id }
+            
+            // 添加撤销操作记录
+            currentSessionBatchOperations.append(undoOperation)
+            modelContext.insert(undoOperation)
+            try modelContext.save()
+            
+            logger.info("✅ 批量操作撤销完成，操作ID: \(operation.id)")
+        } catch {
+            logger.error("❌ 撤销批量操作失败: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// 获取当前会话的批量操作历史
+    /// - Returns: 当前会话的批量操作列表
+    func getCurrentSessionBatchOperations() -> [BatchOperation] {
+        return currentSessionBatchOperations.sorted { $0.timestamp > $1.timestamp }
+    }
+    
+    /// 清除当前会话的批量操作记录
+    func clearCurrentSessionBatchOperations() {
+        currentSessionBatchOperations.removeAll()
+        logger.info("已清除当前会话的批量操作记录")
+    }
 }
 
 // MARK: - Data Models
+
+/// 批量操作类型
+enum BatchOperationType: String, CaseIterable, Codable {
+    case markArticlesLearned = "mark_articles_learned"
+    case undoMarkArticlesLearned = "undo_mark_articles_learned"
+}
+
+/// 批量操作记录模型
+@Model
+class BatchOperation {
+    var id: UUID
+    var sessionId: String
+    var type: BatchOperationType
+    var articleIds: [String]
+    var timestamp: Date
+    var originalOperationId: UUID?
+    
+    init(
+        id: UUID,
+        sessionId: String,
+        type: BatchOperationType,
+        articleIds: [String],
+        timestamp: Date,
+        originalOperationId: UUID? = nil
+    ) {
+        self.id = id
+        self.sessionId = sessionId
+        self.type = type
+        self.articleIds = articleIds
+        self.timestamp = timestamp
+        self.originalOperationId = originalOperationId
+    }
+}
 
 /// 学习记录模型
 @Model

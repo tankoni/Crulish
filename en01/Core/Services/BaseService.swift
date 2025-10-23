@@ -63,7 +63,7 @@ open class BaseService: ObservableObject {
         errorHandler.handle(appError)
     }
     
-    /// 安全执行操作，自动处理错误
+    /// 安全执行操作，带有性能监控和错误处理
     /// - Parameters:
     ///   - operation: 操作名称
     ///   - context: 上下文信息
@@ -82,8 +82,10 @@ open class BaseService: ObservableObject {
             // 记录性能指标
             performanceMonitor.recordOperation(operation, duration: duration)
             
-            // 记录成功日志
-            logger.info("[\(operation)] 操作成功完成，耗时: \(String(format: "%.3f", duration))秒")
+            // 只在操作耗时较长或出现错误时记录日志，避免频繁输出
+            if duration > 0.1 { // 只记录耗时超过100ms的操作
+                logger.info("[\(operation)] 操作成功完成，耗时: \(String(format: "%.3f", duration))秒")
+            }
             
             return result
         } catch {

@@ -9,22 +9,12 @@ import Foundation
 import Combine
 @testable import en01
 
-// MARK: - Mock Core Data Stack
-
-class MockCoreDataStack {
-    // Mock implementation without inheriting from CoreDataStack
-    init() {
-        // Mock initialization
-    }
-}
-
 // MockDictionaryService is imported from MockServices.swift
 
 // MARK: - Mock Vocabulary Test Service
 
 class MockVocabularyTestService: VocabularyTestServiceProtocol {
     private let dictionaryService: MockDictionaryService
-    private let coreDataStack: MockCoreDataStack
     
     // 默认配置
     let defaultSampleSize: Int = 100
@@ -45,9 +35,8 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
         return currentTest != nil
     }
     
-    init(dictionaryService: MockDictionaryService, coreDataStack: MockCoreDataStack) {
+    init(dictionaryService: MockDictionaryService) {
         self.dictionaryService = dictionaryService
-        self.coreDataStack = coreDataStack
     }
     
     // MARK: - VocabularyTestServiceProtocol Implementation
@@ -86,6 +75,7 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
             let words = self.dictionaryService.getRandomWords(count: sampleSize)
             let test = VocabularyTest(
                 id: UUID(),
+                dictionaryId: dictionary.id, // 使用词典的ID
                 dictionaryName: dictionary.name,
                 dictionaryFileName: dictionary.fileName,
                 totalWords: words.count,
@@ -180,6 +170,7 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
     func getTestHistory(limit: Int) -> AnyPublisher<[VocabularyTest], Error> {
         let test1 = VocabularyTest(
             id: UUID(),
+            dictionaryId: UUID(), // 为测试数据生成词典ID
             dictionaryName: "Test Dictionary 1",
             dictionaryFileName: "test1.json",
             totalWords: 100,
@@ -197,6 +188,7 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
         
         let test2 = VocabularyTest(
             id: UUID(),
+            dictionaryId: UUID(), // 为测试数据生成词典ID
             dictionaryName: "Test Dictionary 2",
             dictionaryFileName: "test2.json",
             totalWords: 50,

@@ -31,8 +31,8 @@ typealias LocalAppError = AppError
 class LocalTranslationEngine {
     private let logger = Logger(subsystem: "com.en01.translation", category: "LocalEngine")
     
-    // SwiftData 模型上下文
-    private var modelContext: ModelContext?
+    // 数据库操作 Actor
+    private var databaseActor: DatabaseActor?
     
     // Core ML 模型
     private var translationModel: MLModel?
@@ -56,10 +56,10 @@ class LocalTranslationEngine {
         logger.info("LocalTranslationEngine initialized")
     }
     
-    /// 设置SwiftData模型上下文
-    func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
-        logger.info("ModelContext设置成功")
+    /// 设置数据库 Actor
+    func setDatabaseActor(_ actor: DatabaseActor) {
+        self.databaseActor = actor
+        logger.info("DatabaseActor设置成功")
     }
     
     // MARK: - Model Management
@@ -127,85 +127,23 @@ class LocalTranslationEngine {
     }
     
     // MARK: - 从考研词典加载词汇
-    private func loadKaoyanVocabulary() -> [String: String] {
-        var kaoyanDict: [String: String] = [:]
-        
-        guard let modelContext = modelContext else {
-            logger.warning("ModelContext未设置，无法加载考研词汇")
-            return kaoyanDict
+    private func loadKaoyanVocabulary() async -> [String: String] {
+        guard let databaseActor = databaseActor else {
+            logger.warning("DatabaseActor未设置，无法加载考研词汇")
+            return [:]
         }
         
-        do {
-            let descriptor = FetchDescriptor<KaoyanWord>()
-            let kaoyanWords = try modelContext.fetch(descriptor)
-            
-            for word in kaoyanWords {
-                // 使用第一个翻译作为主要翻译
-                if let firstTranslation = word.translations.first {
-                    let chineseTranslation = firstTranslation.tranCn
-                    if !chineseTranslation.isEmpty {
-                        kaoyanDict[word.headWord.lowercased()] = chineseTranslation
-                    }
-                }
-            }
-            
-            logger.info("✅ 成功加载考研词汇: \(kaoyanDict.count)个")
-        } catch {
-            logger.error("❌ 加载考研词汇失败: \(error.localizedDescription)")
-        }
-        
-        return kaoyanDict
+        return await databaseActor.loadKaoyanVocabulary()
     }
     
     // MARK: - 从用户词典加载词汇
-    private func loadUserVocabulary() -> [String: String] {
-        var userDict: [String: String] = [:]
-        
-        guard let modelContext = modelContext else {
-            logger.warning("ModelContext未设置，无法加载用户词汇")
-            return userDict
+    private func loadUserVocabulary() async -> [String: String] {
+        guard let databaseActor = databaseActor else {
+            logger.warning("DatabaseActor未设置，无法加载用户词汇")
+            return [:]
         }
         
-        do {
-            // 加载DictionaryWord
-            let dictionaryDescriptor = FetchDescriptor<DictionaryWord>()
-            let dictionaryWords = try modelContext.fetch(dictionaryDescriptor)
-            
-            for word in dictionaryWords {
-                if let firstDefinition = word.definitions.first {
-                    let chineseDefinition = firstDefinition.meaning
-                    if !chineseDefinition.isEmpty {
-                        userDict[word.word.lowercased()] = chineseDefinition
-                    }
-                }
-            }
-            
-            // 加载UserWord
-            let userDescriptor = FetchDescriptor<UserWord>()
-            let userWords = try modelContext.fetch(userDescriptor)
-            
-            for word in userWords {
-                if let selectedDefinition = word.selectedDefinition {
-                    let meaning = selectedDefinition.meaning
-                    if !meaning.isEmpty {
-                        userDict[word.word.lowercased()] = meaning
-                    }
-                }
-            }
-            
-            // 从UserDefaults加载用户自定义词汇
-            if let savedWords = UserDefaults.standard.dictionary(forKey: "UserCustomWords") as? [String: String] {
-                for (english, chinese) in savedWords {
-                    userDict[english.lowercased()] = chinese
-                }
-            }
-            
-            logger.info("✅ 成功加载用户词汇: \(userDict.count)个")
-        } catch {
-            logger.error("❌ 加载用户词汇失败: \(error.localizedDescription)")
-        }
-        
-        return userDict
+        return await databaseActor.loadUserVocabulary()
     }
     
     // MARK: - Translation Methods
@@ -474,25 +412,72 @@ class LocalTranslationEngine {
     
     // MARK: - Fallback Translation
     
+    /// 基于规则的翻译（后备方案）
     private func fallbackTranslation(
         _ text: String,
         context: String,
         type: TranslationType
     ) async -> Translation? {
-        // 基于规则的后备翻译
-        logger.info("Using fallback translation for: \(text)")
+        logger.info("使用基于规则的翻译后备方案")
         
-        // 简单的词典查找或规则翻译
-        let translatedText = await performRuleBasedTranslation(text)
+        // 加载词典数据
+        let kaoyanDict = await loadKaoyanVocabulary()
+        let userDict = await loadUserVocabulary()
         
+        // 合并词典，用户词典优先
+        var combinedDict = kaoyanDict
+        for (key, value) in userDict {
+            combinedDict[key] = value
+        }
+        
+        // 从UserDefaults加载用户自定义词汇
+        if let customDict = UserDefaults.standard.dictionary(forKey: "CustomVocabulary") as? [String: String] {
+            for (key, value) in customDict {
+                combinedDict[key.lowercased()] = value
+            }
+        }
+        
+        // 简单的单词查找翻译
+        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        
+        if let translation = combinedDict[cleanText] {
+            return LocalTranslation(
+                originalText: text,
+                translatedText: translation,
+                sourceLanguage: "en",
+                targetLanguage: "zh",
+                confidence: 0.8,
+                provider: LocalTranslationProvider.local,
+                contextualMeaning: extractContextualMeaning(text, context: context),
+                grammarAnalysis: basicGrammarAnalysis(text)
+            )
+        }
+        
+        // 如果找不到直接匹配，尝试词根匹配
+        for (word, translation) in combinedDict {
+            if cleanText.contains(word) || word.contains(cleanText) {
+                return LocalTranslation(
+                    originalText: text,
+                    translatedText: "[\(translation)]",
+                    sourceLanguage: "en",
+                    targetLanguage: "zh",
+                    confidence: 0.6,
+                    provider: LocalTranslationProvider.local,
+                    contextualMeaning: extractContextualMeaning(text, context: context),
+                    grammarAnalysis: basicGrammarAnalysis(text)
+                )
+            }
+        }
+        
+        // 最后的后备方案
         return LocalTranslation(
             originalText: text,
-            translatedText: translatedText,
+            translatedText: "[未找到该单词的释义]",
             sourceLanguage: "en",
             targetLanguage: "zh",
-            confidence: 0.6, // 较低的置信度
+            confidence: 0.1,
             provider: LocalTranslationProvider.local,
-            contextualMeaning: "基础翻译",
+            contextualMeaning: nil,
             grammarAnalysis: basicGrammarAnalysis(text)
         )
     }
@@ -506,11 +491,11 @@ class LocalTranslationEngine {
         expandedDict.merge(getBasicDictionary()) { (_, new) in new }
         
         // 2. 从考研词典中提取词汇
-        let kaoyanWords = loadKaoyanVocabulary()
+        let kaoyanWords = await loadKaoyanVocabulary()
         expandedDict.merge(kaoyanWords) { (_, new) in new }
         
         // 3. 从用户词典中提取词汇
-        let userWords = loadUserVocabulary()
+        let userWords = await loadUserVocabulary()
         expandedDict.merge(userWords) { (_, new) in new }
         
         logger.info("扩展词典构建完成，共包含 \(expandedDict.count) 个词汇")

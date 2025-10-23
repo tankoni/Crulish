@@ -23,7 +23,7 @@ class CacheManager: CacheManagerProtocol {
     private var hitCount: Int = 0
     private var missCount: Int = 0
     
-    init(maxCacheSize: Int = 100, defaultExpiration: TimeInterval = 300) {
+    init(maxCacheSize: Int = 50, defaultExpiration: TimeInterval = 300) {
         self.maxCacheSize = maxCacheSize
         self.defaultExpiration = defaultExpiration
         

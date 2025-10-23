@@ -15,6 +15,7 @@ struct VocabularyTestView: View {
     @StateObject private var viewModel: VocabularyTestViewModel
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appCoordinator: AppCoordinator
     
     // MARK: - Animation States
     @State private var isContentVisible = false
@@ -25,59 +26,39 @@ struct VocabularyTestView: View {
     init(
         vocabularyTestService: VocabularyTestServiceProtocol,
         dictionaryService: DictionaryServiceProtocol,
-        errorHandler: ErrorHandlerProtocol
+        errorHandler: ErrorHandlerProtocol,
+        testResultExportService: TestResultExportService,
+        appCoordinator: AppCoordinator
     ) {
         self._viewModel = StateObject(wrappedValue: VocabularyTestViewModel(
             vocabularyTestService: vocabularyTestService,
             dictionaryService: dictionaryService,
-            errorHandler: errorHandler
+            errorHandler: errorHandler,
+            testResultExportService: testResultExportService,
+            appCoordinator: appCoordinator
         ))
     }
     
+    // MARK: - Lifecycle
+    private func setupExportService() {
+        // 从环境中获取导出服务并注入到ViewModel
+        let exportService = appCoordinator.getTestResultExportService()
+        viewModel.setExportService(exportService)
+    }
+    
+    @State private var isDataLoaded = false // 防止重复加载数据
+    
     var body: some View {
         NavigationView {
-            ZStack {
-                // 背景渐变
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.8), value: isContentVisible)
-                
+            VStack(spacing: 0) {
                 if viewModel.isTestActive {
-                    // 测试进行中界面
                     testActiveView
                 } else {
-                    // 测试准备界面
                     testPreparationView
                 }
             }
-            .opacity(isContentVisible ? 1.0 : 0.0)
-            .offset(y: isContentVisible ? 0 : 20)
-            .animation(.easeOut(duration: 0.6), value: isContentVisible)
             .navigationTitle("词汇量测试")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                }
-                
-                if viewModel.isTestActive {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(viewModel.isPaused ? "继续" : "暂停") {
-                            if viewModel.isPaused {
-                                viewModel.resumeTest()
-                            } else {
-                                viewModel.pauseTest()
-                            }
-                        }
-                    }
-                }
-            }
         }
         .alert("错误", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("确定") {
@@ -88,9 +69,60 @@ struct VocabularyTestView: View {
                 Text(errorMessage)
             }
         }
+        .alert("继续测试", isPresented: Binding(
+            get: { viewModel.testStateManager.showTestContinuationAlert },
+            set: { viewModel.testStateManager.showTestContinuationAlert = $0 }
+        )) {
+            Button("删除记录并重新开始", role: .destructive) {
+                viewModel.startNewTest()
+            }
+            if viewModel.incompleteTest != nil {
+                Button("继续上次测试") {
+                    viewModel.continueIncompleteTest()
+                }
+            }
+            Button("取消", role: .cancel) {
+                viewModel.testStateManager.showTestContinuationAlert = false
+            }
+        } message: {
+            if let progress = viewModel.testStateManager.incompleteTestProgress {
+                Text("检测到词典 \(progress.dictionaryName) 有未完成测试：进度 \(progress.progressText)。继续上次测试将从第 \(progress.currentIndex + 1) 个单词继续。重新开始将删除现有记录并创建新测试。")
+            } else {
+                Text("检测到未完成的测试。继续将恢复当前进度；重新开始将删除现有记录并创建新测试。")
+            }
+        }
+        .alert("分组测试完成", isPresented: Binding(
+            get: { viewModel.testStateManager.showGroupCompletionAlert },
+            set: { viewModel.testStateManager.showGroupCompletionAlert = $0 }
+        )) {
+            Button("继续下一组") {
+                viewModel.moveToNextWord()
+            }
+            Button("完成测试") {
+                viewModel.finishTest()
+            }
+            Button("取消", role: .cancel) {
+                viewModel.testStateManager.showGroupCompletionAlert = false
+            }
+        } message: {
+            Text("当前分组测试已完成！您可以继续测试下一组，或者结束当前测试查看结果。")
+        }
         .onAppear {
-            withAnimation(.easeOut(duration: 0.6).delay(0.1)) {
-                isContentVisible = true
+            // 防止重复加载数据
+            if !isDataLoaded {
+                withAnimation(.easeOut(duration: 0.6).delay(0.1)) {
+                    isContentVisible = true
+                }
+                setupExportService()
+                viewModel.loadTestHistory()
+                viewModel.loadAvailableDictionaries()
+                isDataLoaded = true
+            }
+        }
+        .onDisappear {
+            // 取消所有异步任务
+            Task { @MainActor in
+                viewModel.cancelAllTasks()
             }
         }
     }
@@ -185,6 +217,13 @@ struct VocabularyTestView: View {
                 testModeSelectionView
                 
                 groupSelectionView
+                
+                testSizeSelectionView
+                    
+                    // 分组进度显示
+                if viewModel.testSizeMode == .grouped && viewModel.totalGroups > 1 {
+                    groupProgressView
+                }
             }
             
             // 开始测试按钮
@@ -295,6 +334,130 @@ struct VocabularyTestView: View {
         .padding(.top, 8)
     }
     
+    private var testSizeSelectionView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("测试数量")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 8) {
+                // 全部测试选项
+                TestSizeCard(
+                    title: "全部测试",
+                    subtitle: "一次性测试选择词典的所有单词",
+                    count: viewModel.selectedDictionary?.totalWords ?? 0,
+                    isSelected: viewModel.testSizeMode == .all,
+                    onSelect: {
+                        viewModel.selectTestSizeMode(.all)
+                    }
+                )
+                
+                // 分组测试选项
+                TestSizeCard(
+                    title: "分组测试",
+                    subtitle: "将词典分为多组，每组测试指定数量的单词",
+                    count: viewModel.configurationManager.estimatedWordsCount,
+                    isSelected: viewModel.testSizeMode == .grouped,
+                    onSelect: {
+                        viewModel.selectTestSizeMode(.grouped)
+                    }
+                )
+                
+                // 分组大小选择
+                if viewModel.testSizeMode == .grouped {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("每组单词数")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                        
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 8) {
+                            ForEach([50, 100, 200, 300], id: \.self) { size in
+                                Button(action: {
+                                    viewModel.selectTestSize(size)
+                                }) {
+                                    Text("\(size) 个")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(viewModel.configurationManager.testSize.wordCount == size ? .white : .primary)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(viewModel.configurationManager.testSize.wordCount == size ? Color.blue : Color(UIColor.systemGray6))
+                                        )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                        
+                        if viewModel.totalGroups > 0 {
+                            Text("总共 \(viewModel.totalGroups) 组")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 4)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+            }
+        }
+         .padding(.top, 8)
+     }
+    
+    // MARK: - 分组进度视图
+    private var groupProgressView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .foregroundColor(.blue)
+                Text("测试进度")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("当前分组:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(viewModel.currentGroupIndex + 1) / \(viewModel.totalGroups)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                }
+                
+                // 进度条
+                ProgressView(value: Double(viewModel.currentGroupIndex + 1), total: Double(viewModel.totalGroups))
+                    .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                    .scaleEffect(y: 2)
+                
+                HStack {
+                    Text("每组单词数:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(viewModel.configurationManager.estimatedWordsCount) 个")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                }
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(UIColor.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(UIColor.systemGray4), lineWidth: 1)
+                )
+        )
+    }
+    
     private var startTestButton: some View {
         Button(action: {
             viewModel.startTest()
@@ -304,7 +467,7 @@ struct VocabularyTestView: View {
                     .font(.title2)
                 Text("开始测试")
                     .font(.headline)
-                    .fontWeight(.semibold)
+                    .fontWeight(.bold)
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
@@ -324,9 +487,44 @@ struct VocabularyTestView: View {
     
     private var testHistorySection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("测试历史")
-                .font(.headline)
-                .fontWeight(.semibold)
+            HStack {
+                Text("测试历史")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                // 导出按钮
+                if viewModel.hasExportableData(for: viewModel.selectedDictionary?.name ?? "") {
+                    Menu {
+                        Button(action: {
+                            viewModel.exportVocabularyTestWords(format: .markdown)
+                        }) {
+                            Label("导出为 Markdown", systemImage: "doc.text")
+                        }
+                        
+                        Button(action: {
+                            viewModel.exportVocabularyTestWords(format: .pdf)
+                        }) {
+                            Label("导出为 PDF", systemImage: "doc.richtext")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.caption)
+                            Text("导出单词")
+                                .font(.caption)
+                        }
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+                    .disabled(viewModel.isExporting)
+                    .opacity(viewModel.isExporting ? 0.6 : 1.0)
+                }
+            }
             
             LazyVStack(spacing: 8) {
                 ForEach(viewModel.testHistory.prefix(5)) { test in
@@ -336,12 +534,53 @@ struct VocabularyTestView: View {
                 }
             }
             
-            if viewModel.testHistory.count > 5 {
+            if viewModel.testHistory.count > 0 {
                 NavigationLink("查看全部历史记录") {
                     TestHistoryListView(viewModel: viewModel)
                 }
                 .font(.footnote)
                 .foregroundColor(.blue)
+            }
+            
+            // 导出进度和错误提示
+            if viewModel.isExporting {
+                VStack(spacing: 8) {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("正在导出单词数据...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if viewModel.exportProgress > 0 {
+                        ProgressView(value: viewModel.exportProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .frame(height: 4)
+                    }
+                }
+                .padding(.top, 8)
+            }
+            
+            if let exportError = viewModel.exportError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                    
+                    Text(exportError)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Button("重试") {
+                        viewModel.clearExportError()
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                }
+                .padding(.top, 8)
             }
         }
         .padding(20)
@@ -362,6 +601,64 @@ struct VocabularyTestView: View {
             } else {
                 // 测试内容
                 testContentView
+                
+                // 控制按钮区域
+                testControlButtonsView
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+            }
+        }
+    }
+    
+    // MARK: - Test Control Buttons
+    private var testControlButtonsView: some View {
+        HStack(spacing: 16) {
+            // 暂停按钮
+            Button(action: {
+                viewModel.pauseTest()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "pause.circle")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("暂停")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(.orange)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.orange.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.orange, lineWidth: 1)
+                        )
+                )
+            }
+            
+            Spacer()
+            
+            // 结束测试按钮
+            Button(action: {
+                viewModel.stopTest()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "stop.circle")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("结束测试")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(.red)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.red.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.red, lineWidth: 1)
+                        )
+                )
             }
         }
     }
@@ -401,8 +698,8 @@ struct VocabularyTestView: View {
             // 进度信息
             HStack {
                 Text("\(viewModel.currentWordIndex + 1) / \(viewModel.testWords.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 
                 Spacer()
                 
@@ -481,17 +778,78 @@ struct VocabularyTestView: View {
                 case .chineseToEnglish:
                     WordTestCard(
                         word: currentWord,
+                        testMode: viewModel.selectedTestMode,
                         onMasterySelected: { mastery in
                             viewModel.selectMasteryLevel(mastery)
                         }
                     )
                     .padding(20)
                 }
+                
+                // 导航按钮区域
+                navigationButtonsView
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                
             } else {
                 // 加载状态
                 ProgressView("加载单词中...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+    }
+    
+    private var navigationButtonsView: some View {
+        HStack(spacing: 16) {
+            // 上一个按钮
+            Button(action: {
+                viewModel.moveToPreviousWord()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("上一个")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(viewModel.canMoveToPrevious ? .blue : .gray)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(viewModel.canMoveToPrevious ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(viewModel.canMoveToPrevious ? Color.blue : Color.gray, lineWidth: 1)
+                        )
+                )
+            }
+            .disabled(!viewModel.canMoveToPrevious)
+            
+            Spacer()
+            
+            // 下一个按钮
+            Button(action: {
+                viewModel.moveToNextWord()
+            }) {
+                HStack(spacing: 8) {
+                    Text("下一个")
+                        .font(.system(size: 16, weight: .medium))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(viewModel.canMoveToNext ? .blue : .gray)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(viewModel.canMoveToNext ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(viewModel.canMoveToNext ? Color.blue : Color.gray, lineWidth: 1)
+                        )
+                )
+            }
+            .disabled(!viewModel.canMoveToNext)
         }
     }
 }
@@ -690,12 +1048,12 @@ struct StatisticItem: View {
                 .animation(.easeInOut(duration: 0.2), value: isHighlighted)
         )
         .onChange(of: count) { oldValue, newValue in
-            // 动画更新数值
+            // 更新动画值
             withAnimation(.easeInOut(duration: 0.3)) {
                 animatedValue = newValue
             }
             
-            // 高亮效果
+            // 如果数值增加，触发高亮效果
             if newValue > oldValue {
                 withAnimation(.easeInOut(duration: 0.1)) {
                     isHighlighted = true
@@ -714,10 +1072,83 @@ struct StatisticItem: View {
     }
 }
 
+// MARK: - TestSizeCard Component
+struct TestSizeCard: View {
+    let title: String
+    let subtitle: String
+    let count: Int
+    let isSelected: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                // 选择指示器
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundColor(isSelected ? .blue : .secondary)
+                
+                // 内容区域
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    HStack {
+                        Label("\(count) 个单词", systemImage: "number.circle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        if isSelected {
+                            Text("已选择")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.blue)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(UIColor.systemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.blue : Color(UIColor.systemGray4), lineWidth: isSelected ? 2 : 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 #Preview {
+    let mockModelContainer = try! ModelContainer(for: VocabularyTest.self, TestedWord.self)
+    let mockModelContext = ModelContext(mockModelContainer)
+    let mockDictionaryService = MockDictionaryService()
+    let mockAppCoordinator = AppCoordinator(serviceContainer: ServiceContainer.shared)
+    
     VocabularyTestView(
-        vocabularyTestService: MockVocabularyTestService(),
-        dictionaryService: MockDictionaryService(),
-        errorHandler: MockErrorHandler()
+        vocabularyTestService: MockVocabularyTestService(dictionaryService: mockDictionaryService),
+        dictionaryService: mockDictionaryService,
+        errorHandler: MockErrorHandler(),
+        testResultExportService: TestResultExportService(modelContext: mockModelContext, dictionaryService: mockDictionaryService),
+        appCoordinator: mockAppCoordinator
     )
 }

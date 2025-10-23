@@ -50,7 +50,7 @@ struct QuestionTestCard: View {
                 isAnimating = true
             }
         }
-        .onChange(of: question.id) {
+        .onChange(of: question.id) { _, _ in
             // 重置状态
             selectedOption = nil
             
@@ -66,7 +66,7 @@ struct QuestionTestCard: View {
         VStack(spacing: 16) {
             // 题目类型标识
             HStack {
-                Image(systemName: question.mode == .englishToChinese ? "abc" : "character.textbox")
+                Image(systemName: question.mode == .englishToChinese ? "textformat.abc" : "character.textbox")
                     .font(.caption)
                     .foregroundColor(.blue)
                 
@@ -232,10 +232,19 @@ struct OptionButton: View {
                     )
                     .frame(width: 20, height: 20)
                     .overlay(
-                        Image(systemName: showResult && option.isCorrect ? "checkmark" : (showResult && isSelected && !option.isCorrect ? "xmark" : ""))
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
+                        Group {
+                            if showResult && option.isCorrect {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                            } else if showResult && isSelected && !option.isCorrect {
+                                Image(systemName: "xmark")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                            }
+                        }
                     )
                 
                 // 选项文本

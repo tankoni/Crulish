@@ -23,6 +23,11 @@ class DictionaryLoader {
     private var dictionaryInfos: [DictionaryInfo] = []
     private var isLoaded: Bool = false
     
+    // 文件缓存：避免重复解析JSON文件
+    private var fileCache: [String: (info: DictionaryInfo, words: [DictionaryWord])] = [:]
+    private var fileCacheTimestamps: [String: Date] = [:]
+    private let cacheValidityDuration: TimeInterval = 3600 // 1小时缓存有效期
+    
     // 当前使用的词典
     private var currentDictionaryName: String = ""
     
@@ -49,8 +54,9 @@ class DictionaryLoader {
     }
     
     // MARK: - Public Methods
-    
-    /// 加载所有词典
+
+    /// 加载所有词典文件
+    @MainActor
     func loadDictionaries() async throws {
         guard !isLoading else {
             logger.warning("Dictionary loading already in progress")
@@ -109,6 +115,67 @@ class DictionaryLoader {
         } catch {
             loadingError = error
             logger.error("Failed to load dictionaries: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// 仅加载词典信息（轻量级，不解析词条内容）
+    @MainActor
+    func loadDictionaryInfosOnly() async throws {
+        guard !isLoading else {
+            logger.warning("Dictionary loading already in progress (infos-only)")
+            return
+        }
+
+        isLoading = true
+        loadingProgress = 0.0
+        loadingError = nil
+
+        defer { isLoading = false }
+
+        do {
+            logger.info("[InfosOnly] Starting to load dictionary infos")
+
+            let dictionaryFiles = try scanDictionaryFiles()
+            logger.info("[InfosOnly] Found \(dictionaryFiles.count) dictionary files")
+
+            if dictionaryFiles.isEmpty {
+                throw DictionaryLoaderError.noDictionariesFound
+            }
+
+            // 不触碰已解析的词条缓存，清理仅限信息集合
+            dictionaryInfos.removeAll()
+
+            for (index, fileURL) in dictionaryFiles.enumerated() {
+                loadingProgress = Double(index) / Double(dictionaryFiles.count)
+
+                let fileName = fileURL.lastPathComponent
+
+                // 若缓存已有完整解析结果，直接复用其信息部分，避免重复解析
+                if let cached = fileCache[fileName] {
+                    dictionaryInfos.append(cached.0)
+                    logger.info("[InfosOnly] Using cached info for: \(fileName) with \(cached.0.totalWords) words")
+                    continue
+                }
+
+                do {
+                    // 轻量统计：基于逐行计数估算词条数量（适用于考研行分隔 JSON）
+                    let info = try buildInfoByLineCounting(fileURL)
+                    dictionaryInfos.append(info)
+                    logger.info("[InfosOnly] Counted \(info.totalWords) words for: \(fileName)")
+                } catch {
+                    logger.error("[InfosOnly] Failed to build info for \(fileName): \(error.localizedDescription)")
+                }
+            }
+
+            loadingProgress = 1.0
+            isLoaded = true
+
+            if let first = dictionaryInfos.first { currentDictionaryName = first.name }
+            logger.info("[InfosOnly] Successfully loaded \(dictionaryInfos.count) dictionary infos")
+        } catch {
+            loadingError = error
+            logger.error("[InfosOnly] Failed to load dictionary infos: \(error.localizedDescription)")
             throw error
         }
     }
@@ -212,9 +279,35 @@ class DictionaryLoader {
     }
     
     /// 重新加载词典
+    @MainActor
     func reloadDictionaries() async throws {
+        // 清除缓存，强制重新加载
+        fileCache.removeAll()
+        fileCacheTimestamps.removeAll()
         isLoaded = false
         try await loadDictionaries()
+    }
+
+    /// 按需加载指定词典的词条并缓存（不影响其它词典）
+    @MainActor
+    func loadWords(for fileName: String) async throws -> [DictionaryWord] {
+        // 直接通过 Bundle 查找文件
+        guard let fileURL = Bundle.main.url(forResource: fileName, withExtension: nil) ??
+                Bundle.main.url(forResource: (fileName as NSString).deletingPathExtension, withExtension: (fileName as NSString).pathExtension.isEmpty ? "json" : (fileName as NSString).pathExtension) else {
+            throw DictionaryLoaderError.noDictionariesFound
+        }
+
+        let (info, words) = try await loadDictionaryFile(fileURL)
+        // 维护 loadedDictionaries，键使用 info.name 以与既有接口一致
+        loadedDictionaries[info.name] = words
+
+        // 若信息集合未包含该词典，补充信息（避免后续获取列表缺项）
+        if !dictionaryInfos.contains(where: { $0.fileName == fileName || $0.name == info.name }) {
+            dictionaryInfos.append(info)
+        }
+
+        logger.info("[OnDemand] Loaded words for \(fileName): \(words.count) words")
+        return words
     }
     
     /// 检查是否已加载
@@ -245,25 +338,32 @@ class DictionaryLoader {
         
         // 尝试多种路径查找策略
         let pathStrategies: [() -> URL?] = [
-            // 策略1: Bundle根目录直接查找词典文件（iOS应用中Resources文件会被复制到Bundle根目录）
-            { Bundle.main.resourceURL },
-            // 策略2: Bundle.main.resourcePath 直接查找
+            // 策略1: Bundle.main.resourceURL + Resources/dict (最常见的情况)
+            { Bundle.main.resourceURL?.appendingPathComponent("Resources/dict") },
+            // 策略2: Bundle.main.resourcePath + Resources/dict
             { 
                 guard let resourcePath = Bundle.main.resourcePath else { return nil }
-                return URL(fileURLWithPath: resourcePath)
+                return URL(fileURLWithPath: (resourcePath as NSString).appendingPathComponent("Resources/dict"))
             },
-            // 策略3: Bundle.main.resourceURL + dict
+            // 策略3: Bundle根目录直接查找dict文件夹（iOS应用中Resources文件会被复制到Bundle根目录）
             { Bundle.main.resourceURL?.appendingPathComponent("dict") },
             // 策略4: Bundle.main.resourcePath + dict
             { 
                 guard let resourcePath = Bundle.main.resourcePath else { return nil }
                 return URL(fileURLWithPath: (resourcePath as NSString).appendingPathComponent("dict"))
             },
-            // 策略5: Bundle.main.bundleURL + Contents/Resources/dict (for macOS)
+            // 策略5: Bundle根目录直接查找词典文件（iOS应用中Resources文件会被复制到Bundle根目录）
+            { Bundle.main.resourceURL },
+            // 策略6: Bundle.main.resourcePath 直接查找
+            { 
+                guard let resourcePath = Bundle.main.resourcePath else { return nil }
+                return URL(fileURLWithPath: resourcePath)
+            },
+            // 策略7: Bundle.main.bundleURL + Contents/Resources/dict (for macOS)
             { Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/dict") },
-            // 策略6: Bundle.main.bundleURL + dict (直接查找)
+            // 策略8: Bundle.main.bundleURL + dict (直接查找)
             { Bundle.main.bundleURL.appendingPathComponent("dict") },
-            // 策略7: 查找特定的dict路径
+            // 策略9: 查找特定的dict路径
             {
                 let bundlePath = Bundle.main.bundlePath
                 return URL(fileURLWithPath: bundlePath).appendingPathComponent("dict")
@@ -334,14 +434,31 @@ class DictionaryLoader {
     }
     
     /// 加载单个词典文件
+    @MainActor
     private func loadDictionaryFile(_ fileURL: URL) async throws -> (DictionaryInfo, [DictionaryWord]) {
-        logger.info("Loading dictionary file: \(fileURL.lastPathComponent)")
+        let fileName = fileURL.lastPathComponent
+        
+        // 检查缓存是否有效
+        if let cachedData = fileCache[fileName],
+           let timestamp = fileCacheTimestamps[fileName],
+           Date().timeIntervalSince(timestamp) < cacheValidityDuration {
+            logger.info("Using cached data for dictionary file: \(fileName)")
+            return cachedData
+        }
+        
+        logger.info("Loading dictionary file: \(fileName)")
         
         do {
             // 首先尝试使用有道词典解析器
             if let (youdaoInfo, youdaoWords) = try? await youdaoParser.parseDictionaryFile(fileURL) {
-                logger.info("Successfully loaded \(youdaoWords.count) words from Youdao format: \(fileURL.lastPathComponent)")
-                return (youdaoInfo, youdaoWords)
+                logger.info("Successfully loaded \(youdaoWords.count) words from Youdao format: \(fileName)")
+                
+                // 缓存结果
+                let result = (youdaoInfo, youdaoWords)
+                fileCache[fileName] = result
+                fileCacheTimestamps[fileName] = Date()
+                
+                return result
             }
             
             // 如果有道格式解析失败，尝试原有格式
@@ -405,14 +522,52 @@ class DictionaryLoader {
             )
             
             logger.info("Successfully loaded dictionary: \(dictionaryInfo.displayName) with \(words.count) words")
-            return (dictionaryInfo, words)
+            
+            // 缓存结果
+            let result = (dictionaryInfo, words)
+            fileCache[fileName] = result
+            fileCacheTimestamps[fileName] = Date()
+            
+            return result
         } catch {
-            logger.error("Failed to load dictionary file: \(fileURL.lastPathComponent). Error: \(error.localizedDescription)")
+            logger.error("Failed to load dictionary file: \(fileName). Error: \(error.localizedDescription)")
             if let decodingError = error as? DecodingError {
                 logger.error("Decoding error details: \(decodingError)")
             }
             throw error
         }
+    }
+
+    /// 基于逐行计数构建词典信息（不解析词条内容）
+    private func buildInfoByLineCounting(_ fileURL: URL) throws -> DictionaryInfo {
+        let fileName = fileURL.lastPathComponent
+
+        // 文件大小用于信息展示与粗略成本估计
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let fileSize = fileAttributes[.size] as? Int64 ?? 0
+
+        // 行计数（跳过空行），适配考研行分隔 JSON；对数组 JSON 格式，计数可能偏差，但不解析词条可避免高内存占用
+        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        let totalWords = content.split(whereSeparator: { $0.isNewline }).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+
+        let baseName = fileURL.deletingPathExtension().lastPathComponent
+        let dictionaryInfo = DictionaryInfo(
+            name: baseName,
+            displayName: baseName,
+            fileName: fileName,
+            filePath: fileURL.path,
+            version: "1.0",
+            description: "",
+            language: "en",
+            totalWords: totalWords,
+            difficultyLevels: [],
+            categories: [],
+            fileSize: fileSize,
+            checksum: "",
+            isEnabled: true,
+            priority: 0
+        )
+        return dictionaryInfo
     }
     
     /// 提取难度级别

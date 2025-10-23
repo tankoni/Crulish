@@ -30,47 +30,66 @@ class WordDefinitionViewModel: ObservableObject {
     }
     
     // MARK: - 简单定义查询（用于弹窗显示）
+    /// 加载单词的简单定义（用于tooltip显示）
     func loadDefinition(for word: String) async {
-        guard let dictionaryService = dictionaryService else {
-            simpleDefinition = "服务未初始化"
-            return
-        }
-        
         // 防止重复查询同一个单词
-        if isQuerying || (word == lastQueriedWord && !simpleDefinition.isEmpty) {
+        if word == lastQueriedWord && !simpleDefinition.isEmpty {
             print("[DEBUG][WordDefinitionViewModel] 跳过重复查询: \(word)")
             return
         }
         
+        // 防止并发查询
+        if isQuerying {
+            print("[DEBUG][WordDefinitionViewModel] 正在查询中，跳过: \(word)")
+            return
+        }
+        
         isQuerying = true
-        isLoading = true
-        errorMessage = nil
         lastQueriedWord = word
         
-        print("[INFO][WordDefinitionViewModel] 开始查询单词: \(word)")
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        
+        guard let dictionaryService = dictionaryService else {
+            await MainActor.run {
+                errorMessage = "词典服务未初始化"
+                isLoading = false
+                isQuerying = false
+            }
+            return
+        }
         
         // 优先查找考研词典
         if let kaoyanDetails = dictionaryService.getKaoyanWordDetails(word) {
-            let translations = kaoyanDetails.translations.map { $0.tranCn }.joined(separator: "; ")
-            simpleDefinition = translations.isEmpty ? "暂无释义" : translations
-            let us = kaoyanDetails.usPhone ?? ""
-            let uk = kaoyanDetails.ukPhone ?? ""
-            simplePhonetic = !us.isEmpty || !uk.isEmpty ? "[US] \(us) [UK] \(uk)" : nil
+            await MainActor.run {
+                simpleDefinition = kaoyanDetails.translations.first?.tranCn ?? "暂无释义"
+                let us = kaoyanDetails.usPhone ?? ""
+                let uk = kaoyanDetails.ukPhone ?? ""
+                simplePhonetic = !us.isEmpty || !uk.isEmpty ? "[US] \(us) [UK] \(uk)" : nil
+                isLoading = false
+                isQuerying = false
+            }
         } else {
             // 回退到普通词典
-            if let dictWord = dictionaryService.lookupWord(word, context: "") ,
+            if let dictWord = dictionaryService.lookupWord(word, context: ""),
                let definition = dictWord.definitions.first {
-                simpleDefinition = definition.meaning
-                simplePhonetic = dictWord.phonetic
+                await MainActor.run {
+                    simpleDefinition = definition.meaning
+                    simplePhonetic = dictWord.phonetic
+                    isLoading = false
+                    isQuerying = false
+                }
             } else {
-                simpleDefinition = "未找到释义"
-                simplePhonetic = nil
+                await MainActor.run {
+                    simpleDefinition = "未找到释义"
+                    simplePhonetic = nil
+                    isLoading = false
+                    isQuerying = false
+                }
             }
         }
-        
-        isLoading = false
-        isQuerying = false
-        print("[INFO][WordDefinitionViewModel] 完成查询单词: \(word)")
     }
     
     // MARK: - 详细定义查询（用于详细页面显示）

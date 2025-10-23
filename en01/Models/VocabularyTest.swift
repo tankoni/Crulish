@@ -13,6 +13,7 @@ import SwiftUI
 @Model
 final class VocabularyTest: @unchecked Sendable {
     var id: UUID
+    var dictionaryId: UUID? // 词典ID，与DictionaryInfo.id关联（可选以支持旧数据迁移）
     var dictionaryName: String // 使用的词典名称
     var dictionaryFileName: String // 词典文件名
     var testDate: Date // 测试日期
@@ -33,6 +34,12 @@ final class VocabularyTest: @unchecked Sendable {
     var isCompleted: Bool // 是否完成测试
     var isPaused: Bool // 是否暂停测试
     
+    // 测试会话状态 - 用于继续测试时的状态恢复
+    var sessionMasteredCount: Int // 当前会话掌握的单词数
+    var sessionFamiliarCount: Int // 当前会话眼熟的单词数
+    var sessionUnfamiliarCount: Int // 当前会话陌生的单词数
+    var isNewSession: Bool // 是否为新测试会话（区分新测试和继续测试）
+    
     // 测试配置
     var sampleSize: Int // 抽样单词数量
     var difficultyRange: String // 难度范围，如"1-3"表示基础到高级
@@ -40,8 +47,10 @@ final class VocabularyTest: @unchecked Sendable {
     // 测试结果详情
     private var testResultsData: Data? // 存储序列化的测试结果详情
     
+    // 简化构造函数
     init(dictionaryName: String, sampleSize: Int = 100, difficultyRange: String = "1-4") {
         self.id = UUID()
+        self.dictionaryId = nil // 默认为 nil，实际使用时应设置正确的词典ID
         self.dictionaryName = dictionaryName
         self.dictionaryFileName = ""
         self.testDate = Date()
@@ -61,14 +70,38 @@ final class VocabularyTest: @unchecked Sendable {
         self.accuracy = 0.0
         self.isCompleted = false
         self.isPaused = false
+        
+        // 初始化测试会话状态
+        self.sessionMasteredCount = 0
+        self.sessionFamiliarCount = 0
+        self.sessionUnfamiliarCount = 0
+        self.isNewSession = true
+        
         self.sampleSize = sampleSize
         self.difficultyRange = difficultyRange
         self.testResultsData = nil
     }
     
-    // 用于从 Core Data 实体创建的构造函数
-    init(id: UUID, dictionaryName: String, dictionaryFileName: String, totalWords: Int, masteredCount: Int, familiarCount: Int, unfamiliarCount: Int, currentWordIndex: Int, isCompleted: Bool, isPaused: Bool, createdAt: Date, completedAt: Date?, estimatedVocabularySize: Int, accuracyPercentage: Double) {
+    // 完整参数构造函数
+    init(
+        id: UUID,
+        dictionaryId: UUID?,
+        dictionaryName: String,
+        dictionaryFileName: String,
+        totalWords: Int,
+        masteredCount: Int,
+        familiarCount: Int,
+        unfamiliarCount: Int,
+        currentWordIndex: Int,
+        isCompleted: Bool,
+        isPaused: Bool,
+        createdAt: Date,
+        completedAt: Date?,
+        estimatedVocabularySize: Int,
+        accuracyPercentage: Double
+    ) {
         self.id = id
+        self.dictionaryId = dictionaryId
         self.dictionaryName = dictionaryName
         self.dictionaryFileName = dictionaryFileName
         self.testDate = createdAt
@@ -88,10 +121,19 @@ final class VocabularyTest: @unchecked Sendable {
         self.accuracy = accuracyPercentage / 100.0
         self.isCompleted = isCompleted
         self.isPaused = isPaused
+        
+        // 初始化测试会话状态 - 继续测试时保持原有状态
+        self.sessionMasteredCount = masteredCount
+        self.sessionFamiliarCount = familiarCount
+        self.sessionUnfamiliarCount = unfamiliarCount
+        self.isNewSession = false // 通过完整构造函数创建的通常是继续测试
+        
         self.sampleSize = totalWords
         self.difficultyRange = "1-4"
         self.testResultsData = nil
     }
+    
+
 }
 
 // 测试结果详情
@@ -127,10 +169,16 @@ enum VocabularyTestStatus: String, CaseIterable {
 extension VocabularyTest {
     // 计算词汇量估算
     func calculateEstimatedVocabulary(totalDictionaryWords: Int) {
-        guard totalWords > 0 else { return }
+        guard totalWords > 0 else { 
+            self.estimatedVocabulary = 0
+            return 
+        }
         
         let knownRatio = Double(knownWords) / Double(totalWords)
         self.estimatedVocabulary = Int(knownRatio * Double(totalDictionaryWords))
+        
+        // 同时更新统计数据以确保一致性
+        updateStatistics()
     }
     
     // 计算准确度（基于响应时间和一致性）
@@ -175,6 +223,41 @@ extension VocabularyTest {
     func completeTest() {
         self.isCompleted = true
         self.unknownWords = totalWords - knownWords
+        self.completedAt = Date()
+        
+        // 更新统计数据
+        updateStatistics()
+    }
+    
+    // 更新统计数据
+    func updateStatistics() {
+        let results = getTestResults()
+        
+        // 重置统计计数
+        var masteredCount = 0
+        var familiarCount = 0
+        var unfamiliarCount = 0
+        
+        // 根据测试结果计算统计数据
+        for result in results {
+            if result.isKnown {
+                // 根据响应时间判断是掌握还是熟悉
+                if result.responseTime < 2.0 {
+                    masteredCount += 1
+                } else {
+                    familiarCount += 1
+                }
+            } else {
+                unfamiliarCount += 1
+            }
+        }
+        
+        // 更新统计字段
+        self.masteredCount = masteredCount
+        self.familiarCount = familiarCount
+        self.unfamiliarCount = unfamiliarCount
+        
+        print("📊 [VocabularyTest] 统计数据已更新: 掌握(\(masteredCount)) 熟悉(\(familiarCount)) 陌生(\(unfamiliarCount))")
     }
     
     // 获取测试状态

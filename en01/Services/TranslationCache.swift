@@ -23,13 +23,13 @@ class TranslationCache {
     private let cleanupInterval: TimeInterval = 300 // 5分钟清理一次
     private var lastCleanup = Date()
     
-    init(maxCacheSize: Int = 1000, expirationTime: TimeInterval = 3600) {
+    init(maxCacheSize: Int = 500, expirationTime: TimeInterval = 3600) {
         self.maxCacheSize = maxCacheSize
         self.expirationTime = expirationTime
         
         // 配置NSCache
         cache.countLimit = maxCacheSize
-        cache.totalCostLimit = 50 * 1024 * 1024 // 50MB
+        cache.totalCostLimit = 20 * 1024 * 1024 // 从50MB减少到20MB
         
         // 启动定期清理
         startPeriodicCleanup()

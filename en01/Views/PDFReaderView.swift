@@ -596,28 +596,29 @@ struct PDFContentView: View {
     
     // MARK: - 预览
     struct PDFReaderView_Previews: PreviewProvider {
-        static var previews: some View {
-            if let url = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
-                PDFReaderView(
-                    pdfURL: url,
-                    article: Article(
-                        title: "Sample PDF",
-                        content: "Sample content",
-                        year: 2024,
-                        examType: "考研一",
-                        difficulty: .medium,
-                        topic: "Reading",
-                        imageName: "sample"
-                    ),
-                    viewModel: ProgressViewModel(
-                        userProgressService: MockUserProgressService(),
-                        articleService: MockArticleService(),
-                        errorHandler: MockErrorHandler()
-                    )
+    static var previews: some View {
+        if let url = Bundle.main.url(forResource: "sample", withExtension: "pdf") {
+            PDFReaderView(
+                pdfURL: url,
+                article: Article(
+                    title: "Sample PDF",
+                    content: "Sample content",
+                    year: 2024,
+                    examType: "考研一",
+                    difficulty: .medium,
+                    topic: "Reading",
+                    imageName: "sample"
+                ),
+                viewModel: ProgressViewModel(
+                    userProgressService: ServiceContainer.shared.getUserProgressService(),
+                    articleService: ServiceContainer.shared.getArticleService(),
+                    errorHandler: ServiceContainer.shared.getErrorHandler(),
+                    statisticsExportService: ServiceContainer.shared.getStatisticsExportService()
                 )
-            } else {
-                Text("PDF not found")
-            }
+            )
+        } else {
+            Text("PDF not found")
         }
     }
+}
 }

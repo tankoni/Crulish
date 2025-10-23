@@ -279,7 +279,7 @@ struct KaoyanDictionaryStatusView: View {
         errorHandler: mockErrorHandler
     )
     
-    return KaoyanDictionaryStatusView()
+    KaoyanDictionaryStatusView()
         .modelContainer(container)
         .environmentObject(dictionaryService)
 }

@@ -24,6 +24,12 @@ enum DictionaryServiceError: Error {
 class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗余的ObservableObject
     // 添加@Published属性以支持观察，例如：
     @Published var dictionaryWords: [String: DictionaryWord] = [:] // 使dictionaryWords可观察
+    
+    // 添加词典加载状态跟踪
+    @Published var isBaseDictionaryLoaded: Bool = false
+    @Published var isKaoyanDictionaryLoaded: Bool = false
+    @Published var kaoyanDictionaryLoadingProgress: Double = 0.0
+    
     private let textProcessor = TextProcessor()
     private let dictionaryLoader = DictionaryLoader()
     private let youdaoParser = YoudaoDictionaryParser()
@@ -31,6 +37,11 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
     // 分批加载配置
     private let batchSize = 1000 // 每批加载1000个单词
     private let maxLoadTime: TimeInterval = 3.0 // 最大加载时间3秒
+    
+    // 考研词典缓存
+    private var kaoyanWordsCache: [KaoyanWord] = []
+    private var kaoyanCacheLastUpdated: Date?
+    private let kaoyanCacheValidityDuration: TimeInterval = 300 // 5分钟缓存有效期
     
     init(
         modelContext: ModelContext,
@@ -44,20 +55,74 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             subsystem: "com.en01.services",
             category: "DictionaryService"
         )
-        Task {
+        Task { @MainActor in
             await loadDictionary()
         }
     }
     
-    // MARK: - 词典管理
+    // MARK: - 词典状态管理
     
+    /// 检查基础词典是否已加载
+    func isBaseDictionaryReady() -> Bool {
+        return isBaseDictionaryLoaded && !dictionaryWords.isEmpty
+    }
+    
+    /// 检查考研词典是否已加载
+    func isKaoyanDictionaryReady() -> Bool {
+        return isKaoyanDictionaryLoaded
+    }
+    
+    /// 获取考研词典加载进度
+    func getKaoyanDictionaryProgress() -> Double {
+        return kaoyanDictionaryLoadingProgress
+    }
+    
+    /// 等待考研词典加载完成（最多等待指定时间）
+    func waitForKaoyanDictionary(timeout: TimeInterval = 10.0) async throws -> Bool {
+        let startTime = Date()
+        
+        while !isKaoyanDictionaryLoaded {
+            if Date().timeIntervalSince(startTime) > timeout {
+                logger.warning("[DictionaryService] 等待考研词典加载超时: \(timeout)秒")
+                throw DictionaryServiceError.loadingTimeout
+            }
+            
+            // 每100ms检查一次
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        
+        logger.info("[DictionaryService] 考研词典加载完成，等待时间: \(Date().timeIntervalSince(startTime))秒")
+        return true
+    }
+    
+    /// 刷新考研词典缓存
+    private func refreshKaoyanCache() {
+        do {
+            let descriptor = FetchDescriptor<KaoyanWord>()
+            kaoyanWordsCache = try modelContext.fetch(descriptor)
+            kaoyanCacheLastUpdated = Date()
+            logger.info("[DictionaryService] 考研词典缓存已刷新，共 \(kaoyanWordsCache.count) 个单词")
+        } catch {
+            logger.error("[DictionaryService] 刷新考研词典缓存失败: \(error.localizedDescription)")
+            kaoyanWordsCache = []
+        }
+    }
+    
+    /// 检查考研词典缓存是否有效
+    private func isKaoyanCacheValid() -> Bool {
+        guard let lastUpdated = kaoyanCacheLastUpdated else { return false }
+        return Date().timeIntervalSince(lastUpdated) < kaoyanCacheValidityDuration
+    }
+
     /// 获取可用词典列表
     func getAvailableDictionaries() -> AnyPublisher<[DictionaryInfo], Error> {
         return Future { [weak self] promise in
             Task {
                 do {
-                    try await self?.dictionaryLoader.loadDictionaries()
+                    // 改为轻量模式：仅加载词典信息，避免解析所有词条
+                    try await self?.dictionaryLoader.loadDictionaryInfosOnly()
                     let dictionaries = self?.dictionaryLoader.getDictionaryInfos() ?? []
+                    self?.logger.info("[DictionaryService] Infos-only dictionaries ready: \(dictionaries.count)")
                     promise(.success(dictionaries))
                 } catch {
                     promise(.failure(error))
@@ -90,89 +155,67 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             
             // 如果词典较小，直接加载
             if dictionaryInfo.totalWords <= batchSize {
-                let words = try await loadFullDictionary(fileName: fileName)
+                let words = try await dictionaryLoader.loadWords(for: fileName)
+                logger.info("[DictionaryService] Loaded full dictionary via cache: \(fileName) -> \(words.count) words")
                 promise(.success(words))
                 return
             }
             
             // 大词典分批加载
-            var allWords: [DictionaryWord] = []
-            let totalBatches = (dictionaryInfo.totalWords + batchSize - 1) / batchSize
+            let allWords = try await dictionaryLoader.loadWords(for: fileName)
+            let totalBatches = (allWords.count + batchSize - 1) / batchSize
             
             for batchIndex in 0..<totalBatches {
                 // 检查是否超时
                 if Date().timeIntervalSince(startTime) > maxLoadTime {
-                    logger.warning("Dictionary loading timeout, loaded \(allWords.count) words")
+                    logger.warning("Dictionary loading timeout, prepared \(allWords.count) words")
                     break
                 }
                 
                 let offset = batchIndex * batchSize
-                let batchWords = try await loadDictionaryBatch(fileName: fileName, offset: offset, limit: batchSize)
-                allWords.append(contentsOf: batchWords)
+                guard offset < allWords.count else { break }
+                let endIndex = min(offset + batchSize, allWords.count)
+                _ = Array(allWords[offset..<endIndex]) // 触发分批分片但不立即返回，累计到末尾一次性返回
                 
                 // 添加小延迟以避免阻塞主线程
                 try await Task.sleep(nanoseconds: 10_000_000) // 10ms
             }
             
-            logger.info("Loaded \(allWords.count) words from \(fileName) in \(Date().timeIntervalSince(startTime))s")
+            logger.info("[DictionaryService] Prepared \(allWords.count) words from \(fileName) in \(Date().timeIntervalSince(startTime))s")
             promise(.success(allWords))
             
         } catch {
-            logger.error("Failed to load dictionary \(fileName): \(error.localizedDescription)")
+            logger.error("Failed to load dictionary with batching: \(error.localizedDescription)")
             promise(.failure(error))
         }
     }
     
     /// 加载完整词典（小词典）
     private func loadFullDictionary(fileName: String) async throws -> [DictionaryWord] {
-        // fileName已经包含.json扩展名，直接使用Bundle.main.url查找文件
-        guard let url = Bundle.main.url(forResource: fileName, withExtension: nil) else {
-            throw DictionaryServiceError.fileNotFound
-        }
-        
-        do {
-            // 使用有道词典解析器
-            let (_, words) = try await youdaoParser.parseDictionaryFile(url)
-            logger.info("Successfully loaded \(words.count) words from Youdao format: \(fileName)")
-            return words
-        } catch {
-            logger.error("Failed to parse Youdao dictionary \(fileName): \(error.localizedDescription)")
-            throw error
-        }
+        // 改为复用 DictionaryLoader 的缓存与解析逻辑
+        let words = try await dictionaryLoader.loadWords(for: fileName)
+        logger.info("[DictionaryService] loadFullDictionary via loader: \(fileName) -> \(words.count) words")
+        return words
     }
     
     /// 加载词典批次
     private func loadDictionaryBatch(fileName: String, offset: Int, limit: Int) async throws -> [DictionaryWord] {
-        // fileName已经包含.json扩展名，直接使用Bundle.main.url查找文件
-        guard let url = Bundle.main.url(forResource: fileName, withExtension: nil) else {
-            throw DictionaryServiceError.fileNotFound
-        }
-        
-        do {
-            // 使用有道词典解析器加载完整词典，然后取批次
-            let (_, allWords) = try await youdaoParser.parseDictionaryFile(url)
-            
-            let endIndex = min(offset + limit, allWords.count)
-            guard offset < allWords.count else {
-                return []
-            }
-            
-            let batchWords = Array(allWords[offset..<endIndex])
-            logger.info("Loaded batch \(offset)-\(endIndex-1) from \(fileName): \(batchWords.count) words")
-            return batchWords
-        } catch {
-            logger.error("Failed to parse Youdao dictionary batch \(fileName): \(error.localizedDescription)")
-            throw error
-        }
+        // 复用已解析的结果，避免重复解析耗时与内存占用
+        let allWords = try await dictionaryLoader.loadWords(for: fileName)
+        let endIndex = min(offset + limit, allWords.count)
+        guard offset < allWords.count else { return [] }
+        let batchWords = Array(allWords[offset..<endIndex])
+        logger.info("[DictionaryService] Loaded batch via cache \(offset)-\(endIndex-1) from \(fileName): \(batchWords.count) words")
+        return batchWords
     }
     
     // 加载词典数据
     private func loadDictionary() async {
-        // 从本地JSON文件加载词典数据
         await loadDictionaryFromJSON()
-        
-        // 从数据库加载用户自定义词汇
-        loadUserDictionary()
+        await MainActor.run {
+            self.isBaseDictionaryLoaded = true
+            self.logger.info("[DictionaryService] 基础词典加载完成，共 \(self.dictionaryWords.count) 个单词")
+        }
     }
     
     /// 从JSON文件加载词典数据
@@ -507,10 +550,60 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
     // 获取用户词汇记录
     func getUserWordRecords() -> [UserWord] {
         return self.performSafeOperation("获取用户词汇记录") {
-            let descriptor = FetchDescriptor<UserWord>(
+            // 获取查词记录的UserWord
+            let userWordDescriptor = FetchDescriptor<UserWord>(
                 sortBy: [SortDescriptor(\UserWord.lastLookupDate, order: .reverse)]
             )
-            return self.safeFetch(descriptor, operation: "获取用户词汇列表")
+            let userWords = self.safeFetch(userWordDescriptor, operation: "获取用户词汇列表")
+            
+            // 获取测试记录的TestedWord
+            let testedWordDescriptor = FetchDescriptor<TestedWord>(
+                sortBy: [SortDescriptor(\TestedWord.testedAt, order: .reverse)]
+            )
+            let testedWords = self.safeFetch(testedWordDescriptor, operation: "获取测试词汇列表")
+            
+            // 将TestedWord转换为UserWord并合并
+            var allWords = userWords
+            let existingWords = Set(userWords.map { $0.word.lowercased() })
+            
+            for testedWord in testedWords {
+                // 如果该单词不在查词记录中，则从测试记录创建UserWord
+                if !existingWords.contains(testedWord.word.lowercased()) {
+                    let userWord = UserWord(
+                        word: testedWord.word,
+                        context: "词汇量测试",
+                        sentence: "来自词汇量测试的单词",
+                        selectedDefinition: WordDefinition(
+                            partOfSpeech: .noun,
+                            meaning: "词汇量测试单词"
+                        )
+                    )
+                    userWord.masteryLevel = testedWord.masteryLevelEnum
+                    userWord.firstLookupDate = testedWord.testedAt
+                    userWord.lastLookupDate = testedWord.testedAt
+                    userWord.isFromTest = true
+                    userWord.testID = testedWord.testSessionId?.uuidString
+                    
+                    allWords.append(userWord)
+                } else {
+                    // 如果单词已存在，更新其测试相关信息
+                    if let existingIndex = allWords.firstIndex(where: { $0.word.lowercased() == testedWord.word.lowercased() }) {
+                        allWords[existingIndex].isFromTest = true
+                        allWords[existingIndex].testID = testedWord.testSessionId?.uuidString
+                        // 如果测试的掌握程度更新，则更新掌握程度
+                        if testedWord.testedAt > allWords[existingIndex].lastLookupDate {
+                            allWords[existingIndex].masteryLevel = testedWord.masteryLevelEnum
+                        }
+                    }
+                }
+            }
+            
+            // 按最后查看时间排序
+            return allWords.sorted { word1, word2 in
+                let date1 = word1.isFromTest ? (word1.testID != nil ? word1.lastLookupDate : word1.lastLookupDate) : word1.lastLookupDate
+                let date2 = word2.isFromTest ? (word2.testID != nil ? word2.lastLookupDate : word2.lastLookupDate) : word2.lastLookupDate
+                return date1 > date2
+            }
         } ?? []
     }
     
@@ -860,46 +953,101 @@ extension DictionaryService {
         // 输入验证
         guard !cleanWord.isEmpty else { return nil }
         
-        // 精确匹配（大小写敏感，使用 Predicate）
-        let exactPredicate = #Predicate<KaoyanWord> { $0.headWord == cleanWord }
-        let exactDescriptor = FetchDescriptor<KaoyanWord>(predicate: exactPredicate)
-        if let exactMatch = self.safeFetch(exactDescriptor, operation: "精确匹配考研单词").first {
-            return exactMatch
+        // 检查考研词典是否已加载
+        guard isKaoyanDictionaryLoaded else {
+            logger.warning("[DictionaryService] 考研词典尚未加载完成，无法查找单词: \(cleanWord)")
+            return nil
         }
         
-        // 获取所有单词用于内存过滤
-        let allWordsDescriptor = FetchDescriptor<KaoyanWord>()
-        let allWords = self.safeFetch(allWordsDescriptor, operation: "获取所有考研单词")
-        
-        // 大小写不敏感的精确匹配（内存过滤）
-        if let caseInsensitiveMatch = allWords.first(where: { $0.headWord.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
-            return caseInsensitiveMatch
+        // 检查并刷新缓存
+        if !isKaoyanCacheValid() {
+            refreshKaoyanCache()
         }
         
-        // 词形变化匹配
-        let morphologyProcessor = WordMorphologyProcessor.shared
-        let possibleForms = morphologyProcessor.getAllPossibleForms(for: cleanWord)
-        
-        for form in possibleForms {
-            if let morphMatch = allWords.first(where: { $0.headWord.caseInsensitiveCompare(form) == .orderedSame }) {
-                return morphMatch
+        // 使用缓存进行查找，避免重复数据库查询
+        if !kaoyanWordsCache.isEmpty {
+            // 精确匹配（大小写敏感）
+            if let exactMatch = kaoyanWordsCache.first(where: { $0.headWord == cleanWord }) {
+                return exactMatch
             }
-        }
-        
-        // 反向词形匹配（检查数据库中的词是否是查询词的变形）
-        for kaoyanWord in allWords {
-            let wordForms = morphologyProcessor.getAllPossibleForms(for: kaoyanWord.headWord)
-            if wordForms.contains(where: { $0.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
-                return kaoyanWord
+            
+            // 大小写不敏感的精确匹配
+            if let caseInsensitiveMatch = kaoyanWordsCache.first(where: { $0.headWord.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
+                return caseInsensitiveMatch
             }
+            
+            // 词形变化匹配
+            let morphologyProcessor = WordMorphologyProcessor.shared
+            let possibleForms = morphologyProcessor.getAllPossibleForms(for: cleanWord)
+            
+            for form in possibleForms {
+                if let morphMatch = kaoyanWordsCache.first(where: { $0.headWord.caseInsensitiveCompare(form) == .orderedSame }) {
+                    return morphMatch
+                }
+            }
+            
+            // 反向词形匹配（检查数据库中的词是否是查询词的变形）
+            for kaoyanWord in kaoyanWordsCache {
+                let wordForms = morphologyProcessor.getAllPossibleForms(for: kaoyanWord.headWord)
+                if wordForms.contains(where: { $0.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
+                    return kaoyanWord
+                }
+            }
+            
+            // 模糊匹配
+            if let fuzzyMatch = kaoyanWordsCache.first(where: { $0.headWord.contains(cleanWord) || cleanWord.contains($0.headWord) }) {
+                return fuzzyMatch
+            }
+            
+            return nil
         }
         
-        // 模糊匹配（内存过滤）
-        if let fuzzyMatch = allWords.first(where: { $0.headWord.contains(cleanWord) || cleanWord.contains($0.headWord) }) {
-            return fuzzyMatch
+        // 如果缓存为空，回退到数据库查询
+        do {
+            // 精确匹配（大小写敏感，使用 Predicate）
+            let exactPredicate = #Predicate<KaoyanWord> { $0.headWord == cleanWord }
+            let exactDescriptor = FetchDescriptor<KaoyanWord>(predicate: exactPredicate)
+            if let exactMatch = try modelContext.fetch(exactDescriptor).first {
+                return exactMatch
+            }
+            
+            // 获取所有单词用于内存过滤
+            let allWordsDescriptor = FetchDescriptor<KaoyanWord>()
+            let allWords = try modelContext.fetch(allWordsDescriptor)
+            
+            // 大小写不敏感的精确匹配（内存过滤）
+            if let caseInsensitiveMatch = allWords.first(where: { $0.headWord.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
+                return caseInsensitiveMatch
+            }
+            
+            // 词形变化匹配
+            let morphologyProcessor = WordMorphologyProcessor.shared
+            let possibleForms = morphologyProcessor.getAllPossibleForms(for: cleanWord)
+            
+            for form in possibleForms {
+                if let morphMatch = allWords.first(where: { $0.headWord.caseInsensitiveCompare(form) == .orderedSame }) {
+                    return morphMatch
+                }
+            }
+            
+            // 反向词形匹配（检查数据库中的词是否是查询词的变形）
+            for kaoyanWord in allWords {
+                let wordForms = morphologyProcessor.getAllPossibleForms(for: kaoyanWord.headWord)
+                if wordForms.contains(where: { $0.caseInsensitiveCompare(cleanWord) == .orderedSame }) {
+                    return kaoyanWord
+                }
+            }
+            
+            // 模糊匹配（内存过滤）
+            if let fuzzyMatch = allWords.first(where: { $0.headWord.contains(cleanWord) || cleanWord.contains($0.headWord) }) {
+                return fuzzyMatch
+            }
+            
+            return nil
+        } catch {
+            logger.error("[DictionaryService] 查找考研单词失败: \(error.localizedDescription)")
+            return nil
         }
-        
-        return nil
     }
     
     /// 获取考研单词的详细信息（包含释义、例句等）
@@ -949,36 +1097,58 @@ extension DictionaryService {
     }
     
     /// 初始化考研词典数据
+    @MainActor
     func initializeKaoyanDictionary() async {
         print("[INFO][DictionaryService] 开始初始化考研词典数据...")
+        kaoyanDictionaryLoadingProgress = 0.0
+        
         let importer = KaoyanDictionaryImporter(modelContext: modelContext)
         
         do {
+            kaoyanDictionaryLoadingProgress = 0.1
             let needsImport = try await importer.needsImport()
             print("[INFO][DictionaryService] 检查是否需要导入: \(needsImport)")
             
             if needsImport {
                 print("[INFO][DictionaryService] 开始导入考研词典数据...")
+                kaoyanDictionaryLoadingProgress = 0.2
+                
                 try await importer.importAllDictionaries()
+                kaoyanDictionaryLoadingProgress = 0.8
+                
                 print("[INFO][DictionaryService] 考研词典数据导入完成")
                 
                 // 验证导入结果
                 let descriptor = FetchDescriptor<KaoyanWord>()
                 let count = try modelContext.fetchCount(descriptor)
                 print("[INFO][DictionaryService] 导入后数据库中共有 \(count) 个考研单词")
+                kaoyanDictionaryLoadingProgress = 0.9
             } else {
                 print("[INFO][DictionaryService] 考研词典数据已存在，跳过导入")
+                kaoyanDictionaryLoadingProgress = 0.8
                 
                 // 显示现有数据统计
                 let descriptor = FetchDescriptor<KaoyanWord>()
                 let count = try modelContext.fetchCount(descriptor)
                 print("[INFO][DictionaryService] 数据库中现有 \(count) 个考研单词")
             }
+            
+            // 初始化缓存
+            refreshKaoyanCache()
+            kaoyanDictionaryLoadingProgress = 1.0
+            isKaoyanDictionaryLoaded = true
+            
+            logger.info("[DictionaryService] 考研词典初始化完成")
         } catch {
             print("[ERROR][DictionaryService] 导入考研词典失败: \(error.localizedDescription)")
             if let importError = error as? ImportError {
                 print("[ERROR][DictionaryService] 详细错误: \(importError.errorDescription ?? "未知错误")")
             }
+            
+            // 重置状态
+            kaoyanDictionaryLoadingProgress = 0.0
+            isKaoyanDictionaryLoaded = false
+            logger.error("[DictionaryService] 考研词典初始化失败: \(error.localizedDescription)")
         }
     }
     

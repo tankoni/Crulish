@@ -368,7 +368,7 @@ class LearningBehaviorAnalyzer {
         guard !interactions.isEmpty else { return .balanced }
         
         let lookupCount = interactions.filter { $0.type == .lookup }.count
-        let skipCount = interactions.filter { $0.type == .skip }.count
+        let _ = interactions.filter { $0.type == .skip }.count
         let totalCount = interactions.count
         
         let lookupRatio = Double(lookupCount) / Double(totalCount)
@@ -529,10 +529,10 @@ class LearningBehaviorAnalyzer {
     // MARK: - 表现模式分析
     
     private func analyzePerformancePatterns(sessions: [LearningSession]) -> PerformancePattern {
-        let accuracyTrend = calculateAccuracyTrend(sessions: sessions)
-        let speedTrend = calculateSpeedTrend(sessions: sessions)
-        let consistencyScore = calculatePerformanceConsistency(sessions: sessions)
-        let improvementRate = calculateImprovementRate(sessions: sessions)
+        let _ = calculateAccuracyTrend(sessions: sessions)
+        let _ = calculateSpeedTrend(sessions: sessions)
+        let _ = calculatePerformanceConsistency(sessions: sessions)
+        let _ = calculateImprovementRate(sessions: sessions)
         
         return PerformancePattern(
             trendDirection: .improving,

@@ -142,6 +142,40 @@ enum PartOfSpeech: String, CaseIterable, Codable {
         case .phrasal: return "yellow"
         }
     }
+    
+    /// 从字符串创建词性枚举
+    static func fromString(_ string: String?) -> PartOfSpeech? {
+        guard let string = string?.lowercased() else { return nil }
+        
+        switch string {
+        case "n", "noun", "n.":
+            return .noun
+        case "v", "verb", "v.", "vt", "vi":
+            return .verb
+        case "adj", "adjective", "adj.":
+            return .adjective
+        case "adv", "adverb", "adv.":
+            return .adverb
+        case "prep", "preposition", "prep.":
+            return .preposition
+        case "conj", "conjunction", "conj.":
+            return .conjunction
+        case "pron", "pronoun", "pron.":
+            return .pronoun
+        case "int", "interjection", "int.":
+            return .interjection
+        case "art", "article", "art.":
+            return .article
+        case "aux", "auxiliary", "aux.":
+            return .auxiliary
+        case "modal":
+            return .modal
+        case "phr", "phrasal", "phr.":
+            return .phrasal
+        default:
+            return nil
+        }
+    }
 }
 
 // 单词难度
@@ -260,7 +294,7 @@ final class UserWord: @unchecked Sendable {
 }
 
 // 掌握程度
-enum MasteryLevel: String, CaseIterable, Codable {
+enum MasteryLevel: String, CaseIterable, Codable, Comparable {
     case unfamiliar = "生疏"
     case familiar = "熟悉"
     case mastered = "掌握"
@@ -270,6 +304,20 @@ enum MasteryLevel: String, CaseIterable, Codable {
         case .unfamiliar: return 1
         case .familiar: return 2
         case .mastered: return 3
+        }
+    }
+    
+    // MARK: - Comparable 协议实现
+    static func < (lhs: MasteryLevel, rhs: MasteryLevel) -> Bool {
+        return lhs.level < rhs.level
+    }
+    
+    /// 用于累加式更新的分数值
+    var scoreValue: Int {
+        switch self {
+        case .unfamiliar: return 0
+        case .familiar: return 1
+        case .mastered: return 2
         }
     }
     
