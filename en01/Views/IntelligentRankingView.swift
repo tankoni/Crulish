@@ -8,6 +8,9 @@
 import SwiftUI
 import Combine
 import SwiftData
+import PDFKit
+import UniformTypeIdentifiers
+import Foundation
 
 // MARK: - IntelligentRankingView
 // 智能排序视图，使用 HomeView 中定义的 StatItem 组件
@@ -28,6 +31,12 @@ struct IntelligentRankingView: View {
     @State private var isBatchSelectionMode: Bool = false
     @State private var selectedArticleIds: Set<String> = []
     @State private var showBatchLearningConfirmation: Bool = false
+    
+    // 导出功能状态
+    @State private var showPDFExportDialog: Bool = false
+    @State private var showMarkdownExportDialog: Bool = false
+    @State private var pdfExportDocument: PDFExportDocument?
+    @State private var markdownExportDocument: MarkdownExportDocument?
     
     var body: some View {
         NavigationStack {
@@ -86,6 +95,32 @@ struct IntelligentRankingView: View {
                 }
             } message: {
                 Text("确定要将选中的 \(selectedArticleIds.count) 篇文章标记为已学习吗？")
+            }
+            .fileExporter(
+                isPresented: $showPDFExportDialog,
+                document: pdfExportDocument,
+                contentType: .pdf,
+                defaultFilename: "前10篇推荐文章.pdf"
+            ) { result in
+                switch result {
+                case .success(let url):
+                    print("✅ PDF导出成功: \(url)")
+                case .failure(let error):
+                    print("❌ PDF导出失败: \(error.localizedDescription)")
+                }
+            }
+            .fileExporter(
+                isPresented: $showMarkdownExportDialog,
+                document: markdownExportDocument,
+                contentType: .plainText,
+                defaultFilename: "前10篇推荐文章.md"
+            ) { result in
+                switch result {
+                case .success(let url):
+                    print("✅ Markdown导出成功: \(url)")
+                case .failure(let error):
+                    print("❌ Markdown导出失败: \(error.localizedDescription)")
+                }
             }
             .onAppear {
                 loadAvailableDictionaries()
@@ -451,6 +486,19 @@ struct IntelligentRankingView: View {
                     .padding(.vertical, 6)
                     .background(Color.blue.opacity(0.1))
                     .cornerRadius(8)
+                }
+                
+                // 排序反向按钮
+                Button(action: { 
+                    viewModel.toggleSortReverse()
+                }) {
+                    Image(systemName: viewModel.isReverseSort ? "arrow.down" : "arrow.up")
+                        .font(.subheadline)
+                        .foregroundColor(viewModel.isReverseSort ? .red : .blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background((viewModel.isReverseSort ? Color.red : Color.blue).opacity(0.1))
+                        .cornerRadius(8)
                 }
                 
                 Spacer()
@@ -822,10 +870,422 @@ struct IntelligentRankingView: View {
     }
     
     private func exportTopArticles() {
-        // 导出前10篇文章的逻辑
         let topArticles = Array(viewModel.rankedArticles.prefix(10))
-        // 实现导出功能
-        print("导出前10篇文章: \(topArticles.map { $0.article.title })")
+        
+        guard !topArticles.isEmpty else {
+            print("❌ 没有文章可以导出")
+            return
+        }
+        
+        // 检查文章类型：是否都是PDF文章
+        let pdfArticles = topArticles.filter { $0.article.pdfPath != nil }
+        let markdownArticles = topArticles.filter { $0.article.pdfPath == nil }
+        
+        if !pdfArticles.isEmpty && markdownArticles.isEmpty {
+            // 全部是PDF文章，执行PDF合并导出
+            exportPDFArticles(pdfArticles)
+        } else if pdfArticles.isEmpty && !markdownArticles.isEmpty {
+            // 全部是Markdown文章，执行Markdown整合导出
+            exportMarkdownArticles(markdownArticles)
+        } else if !pdfArticles.isEmpty && !markdownArticles.isEmpty {
+            // 混合类型，分别导出
+            print("⚠️ 检测到混合文章类型，将分别导出PDF和Markdown文章")
+            exportPDFArticles(pdfArticles)
+            exportMarkdownArticles(markdownArticles)
+        } else {
+            print("❌ 无法识别文章类型")
+        }
+    }
+    
+    private func exportPDFArticles(_ articles: [ArticleMatchResult]) {
+        Task {
+            do {
+                let mergedPDFData = try await mergePDFArticles(articles)
+                print("📄 PDF合并完成，数据大小: \(mergedPDFData.count) 字节")
+                
+                let document = PDFExportDocument(data: mergedPDFData)
+                print("📄 PDFExportDocument创建成功")
+                
+                // 直接在MainActor中设置状态，避免嵌套的异步调用
+                await MainActor.run {
+                    print("📄 开始设置导出状态...")
+                    
+                    // 先重置状态，确保干净的状态
+                    self.showPDFExportDialog = false
+                    self.pdfExportDocument = nil
+                    
+                    // 然后设置新的状态
+                    self.pdfExportDocument = document
+                    print("📄 pdfExportDocument已设置: \(self.pdfExportDocument != nil)")
+                    
+                    // 使用延迟确保document完全设置后再显示对话框
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒延迟
+                        self.showPDFExportDialog = true
+                        print("📄 showPDFExportDialog已设置为: \(self.showPDFExportDialog)")
+                        print("📄 document data size: \(self.pdfExportDocument?.data.count ?? 0)")
+                    }
+                }
+            } catch {
+                print("❌ PDF合并失败: \(error.localizedDescription)")
+                await MainActor.run {
+                    // 显示错误提示
+                    print("❌ 将显示错误提示给用户")
+                }
+            }
+        }
+    }
+    
+    private func exportMarkdownArticles(_ articles: [ArticleMatchResult]) {
+        Task {
+            do {
+                let mergedMarkdownContent = try await mergeMarkdownArticles(articles)
+                let document = MarkdownExportDocument(content: mergedMarkdownContent)
+                
+                await MainActor.run {
+                    // 先重置状态，确保干净的状态
+                    self.showMarkdownExportDialog = false
+                    self.markdownExportDocument = nil
+                    
+                    // 然后设置新的状态
+                    self.markdownExportDocument = document
+                    
+                    // 使用延迟确保document完全设置后再显示对话框
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒延迟
+                        self.showMarkdownExportDialog = true
+                        print("📄 Markdown导出对话框已显示")
+                    }
+                }
+            } catch {
+                print("❌ Markdown整合失败: \(error.localizedDescription)")
+                await MainActor.run {
+                    // 显示错误提示
+                    print("❌ 将显示Markdown导出错误提示给用户")
+                }
+            }
+        }
+    }
+    
+    private func mergePDFArticles(_ articles: [ArticleMatchResult]) async throws -> Data {
+        let mergedPDF = PDFDocument()
+        var successfulMerges = 0
+        var failedFiles: [(String, String)] = [] // (文件路径, 错误原因)
+        var fallbackContent: [String] = [] // 降级文本内容
+        
+        print("📄 开始合并 \(articles.count) 个PDF文件...")
+        
+        for (index, articleResult) in articles.enumerated() {
+            guard let pdfPath = articleResult.article.pdfPath else {
+                print("⚠️ 文章 '\(articleResult.article.title)' 没有PDF路径，跳过")
+                continue
+            }
+            
+            // 使用ResourcePathManager构建文件路径
+            guard let pdfURL = ResourcePathManager.shared.buildFileURL(relativePath: pdfPath) else {
+                let errorMsg = "无法构建文件URL"
+                failedFiles.append((pdfPath, errorMsg))
+                print("⚠️ 无法构建PDF文件URL: \(pdfPath)")
+                continue
+            }
+            
+            // 检查文件是否存在
+            guard ResourcePathManager.shared.fileExists(relativePath: pdfPath) else {
+                let errorMsg = "文件不存在"
+                failedFiles.append((pdfPath, errorMsg))
+                print("⚠️ PDF文件不存在: \(pdfPath)，添加文本降级")
+                
+                // 降级方案：添加文本内容
+                let fallbackText = """
+                
+                ==========================================
+                文章标题: \(articleResult.article.title)
+                考试类型: \(articleResult.article.examType)
+                PDF文件: \(pdfPath) (文件缺失)
+                
+                注意：此文章的PDF文件无法找到，已跳过PDF内容。
+                建议检查文件路径或重新导入该文章。
+                ==========================================
+                
+                """
+                fallbackContent.append(fallbackText)
+                continue
+            }
+            
+            // 尝试加载PDF文档
+            guard let pdfDocument = PDFDocument(url: pdfURL) else {
+                let errorMsg = "PDF文档加载失败"
+                failedFiles.append((pdfPath, errorMsg))
+                print("⚠️ 无法加载PDF文件: \(pdfPath)，添加文本降级")
+                
+                // 降级方案：添加文本内容
+                let fallbackText = """
+                
+                ==========================================
+                文章标题: \(articleResult.article.title)
+                考试类型: \(articleResult.article.examType)
+                PDF文件: \(pdfPath) (加载失败)
+                
+                注意：此文章的PDF文件无法正常加载，已跳过PDF内容。
+                可能的原因：文件损坏、格式不支持或权限问题。
+                ==========================================
+                
+                """
+                fallbackContent.append(fallbackText)
+                continue
+            }
+            
+            // 检查PDF是否有页面
+            guard pdfDocument.pageCount > 0 else {
+                let errorMsg = "PDF文档为空"
+                failedFiles.append((pdfPath, errorMsg))
+                print("⚠️ PDF文档为空: \(pdfPath)，添加文本降级")
+                
+                let fallbackText = """
+                
+                ==========================================
+                文章标题: \(articleResult.article.title)
+                考试类型: \(articleResult.article.examType)
+                PDF文件: \(pdfPath) (文档为空)
+                
+                注意：此PDF文档不包含任何页面内容。
+                ==========================================
+                
+                """
+                fallbackContent.append(fallbackText)
+                continue
+            }
+            
+            // 成功加载，将PDF页面添加到合并文档中
+            for pageIndex in 0..<pdfDocument.pageCount {
+                if let page = pdfDocument.page(at: pageIndex) {
+                    mergedPDF.insert(page, at: mergedPDF.pageCount)
+                }
+            }
+            
+            successfulMerges += 1
+            print("✅ 已合并PDF (\(index + 1)/\(articles.count)): \(articleResult.article.title)")
+        }
+        
+        // 如果有降级内容，创建文本页面添加到PDF中
+        if !fallbackContent.isEmpty {
+            let combinedFallbackText = fallbackContent.joined(separator: "\n")
+            if let textPage = createTextPage(content: combinedFallbackText) {
+                mergedPDF.insert(textPage, at: 0) // 插入到开头作为说明页
+                print("📝 已添加 \(fallbackContent.count) 个文章的文本降级内容")
+            }
+        }
+        
+        // 输出合并结果统计
+        print("📊 PDF合并完成统计:")
+        print("   - 成功合并: \(successfulMerges) 个文件")
+        print("   - 失败跳过: \(failedFiles.count) 个文件")
+        print("   - 降级处理: \(fallbackContent.count) 个文章")
+        print("   - 总页数: \(mergedPDF.pageCount) 页")
+        
+        if !failedFiles.isEmpty {
+            print("⚠️ 失败文件详情:")
+            for (path, reason) in failedFiles {
+                print("   - \(path): \(reason)")
+            }
+        }
+        
+        // 检查是否有任何内容可以导出
+        guard mergedPDF.pageCount > 0 else {
+            print("❌ 没有任何内容可以导出")
+            throw ArticleExportError.noValidPDFFiles
+        }
+        
+        // 生成PDF数据
+        guard let mergedData = mergedPDF.dataRepresentation() else {
+            print("❌ PDF数据生成失败")
+            throw ArticleExportError.pdfDataGenerationFailed
+        }
+        
+        print("✅ PDF合并成功，数据大小: \(mergedData.count) 字节")
+        return mergedData
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// 创建包含文本内容的PDF页面
+    private func createTextPage(content: String) -> PDFPage? {
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // A4 size in points
+        let renderer = UIGraphicsImageRenderer(size: pageRect.size)
+        
+        let image = renderer.image { context in
+            // 设置背景色
+            UIColor.white.setFill()
+            context.fill(pageRect)
+            
+            // 设置文本属性
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineSpacing = 4
+            paragraphStyle.paragraphSpacing = 8
+            
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 12),
+                .foregroundColor: UIColor.black,
+                .paragraphStyle: paragraphStyle
+            ]
+            
+            // 计算文本区域（留边距）
+            let textRect = pageRect.insetBy(dx: 40, dy: 40)
+            
+            // 绘制文本
+            content.draw(in: textRect, withAttributes: attributes)
+        }
+        
+        return PDFPage(image: image)
+    }
+    
+    private func mergeMarkdownArticles(_ articles: [ArticleMatchResult]) async throws -> String {
+        var mergedContent = "# 前\(articles.count)篇推荐文章\n\n"
+        mergedContent += "导出时间: \(DateFormatter.articleExportFormatter.string(from: Date()))\n\n"
+        mergedContent += "---\n\n"
+        
+        for (index, articleResult) in articles.enumerated() {
+            let article = articleResult.article
+            
+            // 构建markdown文件路径
+            let markdownPath = try buildMarkdownPath(for: article)
+            
+            guard let content = try? String(contentsOfFile: markdownPath, encoding: .utf8) else {
+                print("⚠️ 无法读取Markdown文件: \(markdownPath)")
+                // 如果无法读取文件，使用文章的content属性
+                mergedContent += "## \(index + 1). \(article.title)\n\n"
+                mergedContent += article.content
+                mergedContent += "\n\n---\n\n"
+                continue
+            }
+            
+            // 添加文章标题和排序信息
+            mergedContent += "## \(index + 1). \(article.title)\n\n"
+            mergedContent += "**匹配分数**: \(String(format: "%.1f", articleResult.matchScore))% | "
+            mergedContent += "**生词数**: \(articleResult.unknownWords) | "
+            mergedContent += "**难度**: \(articleResult.difficulty.rawValue)\n\n"
+            
+            // 高亮生词的内容
+            let highlightedContent = highlightUnknownWords(content, articleResult: articleResult)
+            mergedContent += highlightedContent
+            
+            mergedContent += "\n\n---\n\n"
+            
+            print("✅ 已整合Markdown: \(article.title)")
+        }
+        
+        return mergedContent
+    }
+    
+    private func buildMarkdownPath(for article: Article) throws -> String {
+        // 使用与SoloArticleService相同的Bundle扫描逻辑
+        guard let bundleURL = Bundle.main.bundleURL as URL? else {
+            throw ArticleExportError.resourcePathNotFound
+        }
+        
+        var mdFileURLs: [URL] = []
+        
+        // 优先扫描 bundle 中的 solo 子目录
+        let soloSubdirURL = bundleURL.appendingPathComponent("solo", isDirectory: true)
+        if FileManager.default.fileExists(atPath: soloSubdirURL.path) {
+            if let enumerator = FileManager.default.enumerator(at: soloSubdirURL, includingPropertiesForKeys: nil) {
+                for case let url as URL in enumerator {
+                    if url.pathExtension.lowercased() == "md" {
+                        mdFileURLs.append(url)
+                    }
+                }
+            }
+        } else {
+            // 回退：扫描整个 bundle
+            if let enumerator = FileManager.default.enumerator(at: bundleURL, includingPropertiesForKeys: nil) {
+                for case let url as URL in enumerator {
+                    if url.pathExtension.lowercased() == "md" {
+                        mdFileURLs.append(url)
+                    }
+                }
+            }
+        }
+        
+        guard !mdFileURLs.isEmpty else {
+            throw ArticleExportError.bundleResourceAccessFailed
+        }
+        
+        // 根据考试类型和年份过滤文件
+        let examTypeKeywords: [String]
+        if article.examType.contains("考研英语一") {
+            examTypeKeywords = ["考研英语一", "英语一"]
+        } else if article.examType.contains("考研英语二") {
+            examTypeKeywords = ["考研英语二", "英语二"]
+        } else {
+            examTypeKeywords = []
+        }
+        
+        let yearString = "\(article.year)"
+        
+        // 首先尝试找到同时匹配考试类型和年份的文件
+        for url in mdFileURLs {
+            let fileName = url.lastPathComponent
+            let filePath = url.path
+            
+            // 检查是否匹配年份
+            let matchesYear = fileName.contains(yearString) || filePath.contains(yearString)
+            
+            // 检查是否匹配考试类型
+            let matchesExamType = examTypeKeywords.isEmpty || examTypeKeywords.contains { keyword in
+                fileName.contains(keyword) || filePath.contains(keyword)
+            }
+            
+            if matchesYear && matchesExamType {
+                // 进一步检查标题关键词
+                let titleKeywords = extractTitleKeywords(from: article.title)
+                if titleKeywords.contains(where: { fileName.contains($0) }) {
+                    return url.path
+                }
+            }
+        }
+        
+        // 如果没有找到精确匹配，尝试只匹配年份
+        for url in mdFileURLs {
+            let fileName = url.lastPathComponent
+            let filePath = url.path
+            
+            if fileName.contains(yearString) || filePath.contains(yearString) {
+                return url.path
+            }
+        }
+        
+        // 如果仍然没有找到，返回第一个md文件
+        return mdFileURLs[0].path
+    }
+    
+    private func extractTitleKeywords(from title: String) -> [String] {
+        // 提取标题中的关键词用于文件匹配
+        let keywords = ["Reading", "Text", "Translation", "Writing", "Use of English", "阅读", "翻译", "写作", "完形"]
+        return keywords.filter { title.contains($0) }
+    }
+    
+    private func highlightUnknownWords(_ content: String, articleResult: ArticleMatchResult) -> String {
+        // 获取用户的生词列表
+        let userVocabulary = viewModel.getUserVocabulary()
+        let unknownWords = Set(userVocabulary.filter { $0.masteryLevel == .unfamiliar }.map { $0.word.lowercased() })
+        
+        var highlightedContent = content
+        
+        // 高亮显示生词（使用markdown的粗体语法）
+        for word in unknownWords {
+            let pattern = "\\b\(NSRegularExpression.escapedPattern(for: word))\\b"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(location: 0, length: highlightedContent.utf16.count)
+                highlightedContent = regex.stringByReplacingMatches(
+                    in: highlightedContent,
+                    options: [],
+                    range: range,
+                    withTemplate: "**$0**"
+                )
+            }
+        }
+        
+        return highlightedContent
     }
 }
 

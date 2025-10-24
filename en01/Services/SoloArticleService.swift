@@ -260,7 +260,7 @@ class SoloArticleService: BaseService {
             if fileManager.fileExists(atPath: soloDirectoryPath) {
                 let enumerator = fileManager.enumerator(atPath: soloDirectoryPath)
                 while let fileName = enumerator?.nextObject() as? String {
-                    if fileName.hasSuffix(".md") {
+                    if fileName.hasSuffix(".md") && isValidArticleFile(fileName) {
                         let filePath = (soloDirectoryPath as NSString).appendingPathComponent(fileName)
                         if let article = loadArticleFromMarkdownFile(filePath: filePath, relativePath: fileName) {
                             articles.append(article)
@@ -300,6 +300,11 @@ class SoloArticleService: BaseService {
             }
     
             for url in mdFileURLs {
+                // 过滤掉非标准格式的文件
+                if !isValidArticleFile(url.lastPathComponent) {
+                    continue
+                }
+                
                 let relativePath: String
                 if url.path.contains("/solo/") {
                     // 相对 solo 目录的路径
@@ -450,5 +455,40 @@ class SoloArticleService: BaseService {
         cacheManager.removeByPrefix(CacheKeys.soloArticlesByYear)
         cacheManager.removeByPrefix(CacheKeys.soloArticlesByExamType)
         cacheManager.remove(CacheKeys.soloArticleStats)
+    }
+    
+    /// 验证文件是否为有效的文章文件
+    private func isValidArticleFile(_ fileName: String) -> Bool {
+        // 排除非标准格式的文件
+        let excludedFiles = [
+            "GEMINI_API_GUIDE.md",
+            "README.md",
+            "CHANGELOG.md",
+            "LICENSE.md",
+            "CONTRIBUTING.md"
+        ]
+        
+        // 检查是否在排除列表中
+        if excludedFiles.contains(fileName) {
+            return false
+        }
+        
+        // 检查文件名是否包含年份信息（4位数字）
+        let yearPattern = "\\d{4}"
+        let yearRegex = try? NSRegularExpression(pattern: yearPattern)
+        let range = NSRange(location: 0, length: fileName.count)
+        
+        // 如果文件名包含年份或者符合EN1/EN2格式，则认为是有效文章
+        if yearRegex?.firstMatch(in: fileName, options: [], range: range) != nil {
+            return true
+        }
+        
+        // 检查是否符合EN1/EN2格式
+        if fileName.uppercased().hasPrefix("EN1") || fileName.uppercased().hasPrefix("EN2") {
+            return true
+        }
+        
+        // 其他情况暂时认为无效
+        return false
     }
 }

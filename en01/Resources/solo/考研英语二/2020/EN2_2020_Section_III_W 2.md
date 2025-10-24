@@ -1,3 +1,0 @@
-# Section III W
-
-riting

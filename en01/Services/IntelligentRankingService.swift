@@ -9,151 +9,9 @@ import Foundation
 import SwiftUI
 import Combine
 
-// MARK: - 文章匹配度结果
-struct ArticleMatchResult {
-    let article: Article
-    let matchScore: Double
-    let totalWords: Int
-    let unknownWords: Int
-    let familiarWords: Int
-    let masteredWords: Int
-    let difficulty: IntelligentRankingDifficultyLevel
-    let recommendation: RecommendationLevel
-    
-    var unknownPercentage: Double {
-        guard totalWords > 0 else { return 0 }
-        return Double(unknownWords) / Double(totalWords) * 100
-    }
-    
-    var masteredPercentage: Double {
-        guard totalWords > 0 else { return 0 }
-        return Double(masteredWords) / Double(totalWords) * 100
-    }
-}
-
-// MARK: - 智能排序难度等级
-enum IntelligentRankingDifficultyLevel: String, CaseIterable {
-    case beginner = "初级"
-    case elementary = "基础"
-    case intermediate = "中级"
-    case upperIntermediate = "中高级"
-    case advanced = "高级"
-    case expert = "专家"
-    
-    var color: Color {
-        switch self {
-        case .beginner: return .green
-        case .elementary: return .mint
-        case .intermediate: return .orange
-        case .upperIntermediate: return .yellow
-        case .advanced: return .red
-        case .expert: return .purple
-        }
-    }
-}
-
-// MARK: - 推荐等级
-enum RecommendationLevel: String, CaseIterable {
-    case perfect = "完美匹配"
-    case excellent = "强烈推荐"
-    case good = "推荐"
-    case fair = "一般"
-    case poor = "不推荐"
-    
-    var color: Color {
-        switch self {
-        case .perfect: return .green
-        case .excellent: return .blue
-        case .good: return .orange
-        case .fair: return .yellow
-        case .poor: return .red
-        }
-    }
-    
-    var priority: Int {
-        switch self {
-        case .perfect: return 5
-        case .excellent: return 4
-        case .good: return 3
-        case .fair: return 2
-        case .poor: return 1
-        }
-    }
-}
-
-// MARK: - 基础排序选项
-enum BasicSortOption: String, CaseIterable {
-    case matchScore = "匹配度"
-    case difficulty = "难度"
-    case recommendation = "推荐度"
-    case unknownWords = "生词数量"
-    case articleLength = "文章长度"
-    
-    func toRankingSortOption() -> RankingSortOption {
-        switch self {
-        case .matchScore: return .matchScore
-        case .difficulty: return .difficulty
-        case .recommendation: return .recommendation
-        case .unknownWords: return .unknownWords
-        case .articleLength: return .articleLength
-        }
-    }
-}
-
-// MARK: - 关键词排序选项
-enum KeywordSortOption: String, CaseIterable {
-    case none = "无"
-    case reading = "阅读理解"
-    case translation = "翻译"
-    case writing = "写作"
-    case knowledge = "知识运用"
-    
-    func toRankingSortOption() -> RankingSortOption {
-        switch self {
-        case .none: return .matchScore // 默认使用匹配度排序
-        case .reading: return .keywordReading
-        case .translation: return .keywordTranslation
-        case .writing: return .keywordWriting
-        case .knowledge: return .keywordKnowledge
-        }
-    }
-}
-
-// MARK: - 排序选项（保持向后兼容）
-enum RankingSortOption: String, CaseIterable, Codable {
-    case matchScore = "匹配度"
-    case difficulty = "难度"
-    case recommendation = "推荐度"
-    case unknownWords = "生词数量"
-    case articleLength = "文章长度"
-    case keywordReading = "阅读理解"
-    case keywordTranslation = "翻译"
-    case keywordWriting = "写作"
-    case keywordKnowledge = "知识运用"
-    
-    // 转换为基础排序选项
-    var asBasicOption: BasicSortOption? {
-        switch self {
-        case .matchScore: return .matchScore
-        case .difficulty: return .difficulty
-        case .recommendation: return .recommendation
-        case .unknownWords: return .unknownWords
-        case .articleLength: return .articleLength
-        default: return nil
-        }
-    }
-    
-    // 转换为关键词排序选项
-    var asKeywordOption: KeywordSortOption? {
-        switch self {
-        case .keywordReading: return .reading
-        case .keywordTranslation: return .translation
-        case .keywordWriting: return .writing
-        case .keywordKnowledge: return .knowledge
-        default: return nil
-        }
-    }
-}
+// 注意：ArticleMatchResult、IntelligentRankingDifficultyLevel、RecommendationLevel、
+// BasicSortOption、KeywordSortOption、RankingSortOption 已移动到 CommonTypes.swift 文件中，
+// 以便在整个项目中共享使用
 
 // MARK: - 智能排序服务
 @MainActor
@@ -162,6 +20,7 @@ class IntelligentRankingService: ObservableObject {
     // MARK: - Properties
     private let dictionaryService: DictionaryServiceProtocol
     private let errorHandler: ErrorHandlerProtocol
+    private let vocabularyTestService: VocabularyTestServiceProtocol?
     private var cancellables = Set<AnyCancellable>()
     
     // 词典相关属性
@@ -202,9 +61,10 @@ class IntelligentRankingService: ObservableObject {
     }
     
     // MARK: - Initialization
-    init(dictionaryService: DictionaryServiceProtocol? = nil) {
+    init(dictionaryService: DictionaryServiceProtocol? = nil, vocabularyTestService: VocabularyTestServiceProtocol? = nil) {
         self.dictionaryService = dictionaryService ?? ServiceContainer.shared.getDictionaryService()
         self.errorHandler = ServiceContainer.shared.getErrorHandler()
+        self.vocabularyTestService = vocabularyTestService
     }
     
     // 新增：设置自适应推荐引擎
@@ -265,8 +125,11 @@ class IntelligentRankingService: ObservableObject {
         vocabularyTestService: VocabularyTestServiceProtocol? = nil
     ) async -> [ArticleMatchResult] {
         
+        // 优先使用注入的词汇测试服务，其次使用传入的参数
+        let testService = vocabularyTestService ?? self.vocabularyTestService
+        
         // 如果提供了词汇测试服务，优先使用测试结果进行排序
-        if let testService = vocabularyTestService {
+        if let testService = testService {
             return await rankArticlesByTestResults(
                 articles, 
                 dictionaryName: dictionaryName, 

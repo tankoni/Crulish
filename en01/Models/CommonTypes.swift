@@ -952,3 +952,151 @@ public enum LearningOutcome: String, CaseIterable, Codable {
     case skipped = "skipped"
     case abandoned = "abandoned"
 }
+
+// MARK: - 智能排序相关类型
+
+// MARK: - 基础排序选项
+enum BasicSortOption: String, CaseIterable {
+    case matchScore = "匹配度"
+    case difficulty = "难度"
+    case recommendation = "推荐度"
+    case unknownWords = "生词数量"
+    case articleLength = "文章长度"
+    
+    func toRankingSortOption() -> RankingSortOption {
+        switch self {
+        case .matchScore: return .matchScore
+        case .difficulty: return .difficulty
+        case .recommendation: return .recommendation
+        case .unknownWords: return .unknownWords
+        case .articleLength: return .articleLength
+        }
+    }
+}
+
+// MARK: - 关键词排序选项
+enum KeywordSortOption: String, CaseIterable {
+    case none = "无"
+    case reading = "阅读理解"
+    case translation = "翻译"
+    case writing = "写作"
+    case knowledge = "知识运用"
+    
+    func toRankingSortOption() -> RankingSortOption {
+        switch self {
+        case .none: return .matchScore // 默认使用匹配度排序
+        case .reading: return .keywordReading
+        case .translation: return .keywordTranslation
+        case .writing: return .keywordWriting
+        case .knowledge: return .keywordKnowledge
+        }
+    }
+}
+
+// MARK: - 排序选项（保持向后兼容）
+enum RankingSortOption: String, CaseIterable, Codable {
+    case matchScore = "匹配度"
+    case difficulty = "难度"
+    case recommendation = "推荐度"
+    case unknownWords = "生词数量"
+    case articleLength = "文章长度"
+    case keywordReading = "阅读理解"
+    case keywordTranslation = "翻译"
+    case keywordWriting = "写作"
+    case keywordKnowledge = "知识运用"
+    
+    // 转换为基础排序选项
+    var asBasicOption: BasicSortOption? {
+        switch self {
+        case .matchScore: return .matchScore
+        case .difficulty: return .difficulty
+        case .recommendation: return .recommendation
+        case .unknownWords: return .unknownWords
+        case .articleLength: return .articleLength
+        default: return nil
+        }
+    }
+    
+    // 转换为关键词排序选项
+    var asKeywordOption: KeywordSortOption? {
+        switch self {
+        case .keywordReading: return .reading
+        case .keywordTranslation: return .translation
+        case .keywordWriting: return .writing
+        case .keywordKnowledge: return .knowledge
+        default: return nil
+        }
+    }
+}
+
+// MARK: - 智能排序难度级别
+enum IntelligentRankingDifficultyLevel: String, CaseIterable {
+    case beginner = "初级"
+    case elementary = "基础"
+    case intermediate = "中级"
+    case upperIntermediate = "中高级"
+    case advanced = "高级"
+    case expert = "专家"
+    
+    var color: Color {
+        switch self {
+        case .beginner: return .green
+        case .elementary: return .mint
+        case .intermediate: return .orange
+        case .upperIntermediate: return .yellow
+        case .advanced: return .red
+        case .expert: return .purple
+        }
+    }
+}
+
+// MARK: - 推荐级别
+enum RecommendationLevel: String, CaseIterable {
+    case perfect = "完美匹配"
+    case excellent = "强烈推荐"
+    case good = "推荐"
+    case fair = "一般"
+    case poor = "不推荐"
+    
+    var color: Color {
+        switch self {
+        case .perfect: return .green
+        case .excellent: return .blue
+        case .good: return .orange
+        case .fair: return .yellow
+        case .poor: return .red
+        }
+    }
+    
+    var priority: Int {
+        switch self {
+        case .perfect: return 5
+        case .excellent: return 4
+        case .good: return 3
+        case .fair: return 2
+        case .poor: return 1
+        }
+    }
+}
+
+// MARK: - 文章匹配结果
+struct ArticleMatchResult {
+    let article: Article
+    let matchScore: Double
+    let totalWords: Int
+    let unknownWords: Int
+    let familiarWords: Int
+    let masteredWords: Int
+    let difficulty: IntelligentRankingDifficultyLevel
+    let recommendation: RecommendationLevel
+    
+    var unknownPercentage: Double {
+        guard totalWords > 0 else { return 0 }
+        return Double(unknownWords) / Double(totalWords) * 100
+    }
+    
+    var masteredPercentage: Double {
+        guard totalWords > 0 else { return 0 }
+        return Double(masteredWords) / Double(totalWords) * 100
+    }
+}

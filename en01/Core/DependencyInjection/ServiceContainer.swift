@@ -163,7 +163,10 @@ class ServiceContainer {
         startupProgressManager.updateStage(.loadingOptionalServices, message: "正在加载扩展服务...", detail: "初始化自适应学习服务")
 
         // 初始化智能排序服务（同步）
-        self.intelligentRankingService = IntelligentRankingService(dictionaryService: dictionaryService!)
+        self.intelligentRankingService = IntelligentRankingService(
+            dictionaryService: dictionaryService!,
+            vocabularyTestService: vocabularyTestService
+        )
 
         // 初始化自适应学习服务（同步）
         self.adaptiveLearningService = AdaptiveLearningService(

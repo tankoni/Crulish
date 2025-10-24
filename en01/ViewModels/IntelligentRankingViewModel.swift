@@ -18,6 +18,7 @@ class IntelligentRankingViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var selectedSortOption: RankingSortOption = .matchScore
     @Published var selectedReadingMode: ReadingMode = .yearlyExams
+    @Published var isReverseSort: Bool = false
     
     // 新增：词典测试状态管理
     @Published var availableDictionaries: [DictionaryInfo] = []
@@ -334,11 +335,26 @@ class IntelligentRankingViewModel: ObservableObject {
         }
     }
     
+    /// 切换排序反向状态
+    @MainActor
+    func toggleSortReverse() {
+        isReverseSort.toggle()
+        // 重新应用当前排序选项
+        sortArticles(by: selectedSortOption)
+    }
+    
     /// 按指定选项排序文章
     @MainActor
     func sortArticles(by option: RankingSortOption) {
         selectedSortOption = option
-        rankedArticles = rankingService.sortResults(allRankedResults, by: option)
+        var sortedResults = rankingService.sortResults(allRankedResults, by: option)
+        
+        // 如果启用了反向排序，则反转结果
+        if isReverseSort {
+            sortedResults.reverse()
+        }
+        
+        rankedArticles = sortedResults
     }
     
     /// 按基础排序选项排序文章
