@@ -31,7 +31,7 @@ struct LearningStatisticsView: View {
     
     init() {
         let cacheManager = CacheManager()
-        let errorHandler = ErrorHandler()
+        let errorHandler = UnifiedErrorHandler()
         
         // 创建临时的 ModelContainer 用于初始化
         let container = try! ModelContainer(for: UserWord.self, LearningRecord.self, VocabularyTest.self, WordClickRecord.self, Article.self)

@@ -268,13 +268,13 @@ struct InteractiveTextView_Previews: PreviewProvider {
             dictionaryService: DictionaryService(
                 modelContext: try! ModelContainer(for: UserWord.self).mainContext,
                 cacheManager: CacheManager(),
-                errorHandler: ErrorHandler()
+                errorHandler: UnifiedErrorHandler()
             ),
             translationService: TranslationServiceImpl(),
             learningTrackingService: LearningTrackingService(
                 modelContext: try! ModelContainer(for: LearningRecord.self).mainContext,
                 cacheManager: CacheManager(),
-                errorHandler: ErrorHandler()
+                errorHandler: UnifiedErrorHandler()
             )
         ))
     }

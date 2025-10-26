@@ -370,14 +370,12 @@ public struct TranslationConfig {
     }
     
     public static let `default` = TranslationConfig(
-        primaryProvider: .gemini,
-        fallbackProviders: [.geminiDirect, .local, .openai],
+        primaryProvider: .local,
+        fallbackProviders: [.gemini15flash, .gpt4o, .claude35sonnet],
         enableCache: true,
         cacheExpiration: 3600, // 1 hour
         maxCacheSize: 1000,
         enableLocalModel: true,
-        apiKeys: [
-            .geminiDirect: "AIzaSyBJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ"
-        ]
+        apiKeys: [:]
     )
 }

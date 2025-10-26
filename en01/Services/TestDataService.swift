@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import SwiftData
+import CryptoKit
 
 /// 测试数据服务 - 专门管理测试数据的持久化和查询
 class TestDataService: BaseService {
@@ -56,12 +57,19 @@ class TestDataService: BaseService {
             
             Task { @MainActor in
                 do {
+                    // 首先尝试使用新的稳定ID查询
                     let descriptor = FetchDescriptor<VocabularyTest>(
                         predicate: #Predicate { $0.dictionaryId == dictionaryId },
                         sortBy: [SortDescriptor(\.testDate, order: .reverse)]
                     )
                     
-                    let tests = try self.modelContext.fetch(descriptor)
+                    var tests = try self.modelContext.fetch(descriptor)
+                    
+                    // 如果没有找到测试记录，尝试基于文件名的备用查询机制
+                    if tests.isEmpty {
+                        tests = try self.findTestsByFileName(for: dictionaryId)
+                    }
+                    
                     promise(.success(tests))
                 } catch {
                     self.errorHandler.handle(error, context: "获取词典测试历史")
@@ -70,6 +78,87 @@ class TestDataService: BaseService {
             }
         }
         .eraseToAnyPublisher()
+    }
+    
+    /// 基于文件名的备用查询机制
+    /// 用于处理ID变更后的数据迁移
+    @MainActor
+    private func findTestsByFileName(for dictionaryId: UUID) throws -> [VocabularyTest] {
+        // 从DictionaryInfo中获取对应的文件名
+        guard let fileName = try findDictionaryFileName(for: dictionaryId) else {
+            return []
+        }
+        
+        // 基于文件名查询测试记录
+        let descriptor = FetchDescriptor<VocabularyTest>(
+            predicate: #Predicate { $0.dictionaryFileName == fileName },
+            sortBy: [SortDescriptor(\.testDate, order: .reverse)]
+        )
+        
+        let tests = try modelContext.fetch(descriptor)
+        
+        // 如果找到了测试记录，更新它们的dictionaryId为新的稳定ID
+        if !tests.isEmpty {
+            for test in tests {
+                test.dictionaryId = dictionaryId
+            }
+            try modelContext.save()
+        }
+        
+        return tests
+    }
+    
+    /// 根据词典ID查找对应的文件名
+    @MainActor
+    private func findDictionaryFileName(for dictionaryId: UUID) throws -> String? {
+        // 这里需要从DictionaryLoader或其他服务获取词典信息
+        // 由于我们无法直接访问DictionaryLoader，我们使用一个简化的方法
+        // 实际应用中可能需要通过依赖注入获取DictionaryLoader实例
+        
+        // 临时解决方案：从现有的测试记录中推断文件名模式
+        let allTestsDescriptor = FetchDescriptor<VocabularyTest>(
+            sortBy: [SortDescriptor(\.testDate, order: .reverse)]
+        )
+        
+        let allTests = try modelContext.fetch(allTestsDescriptor)
+        
+        // 尝试从文件名推断对应的ID
+        for test in allTests {
+            let fileName = test.dictionaryFileName
+            // 使用与DictionaryInfo相同的ID生成逻辑
+            let expectedId = generateStableID(fileName: fileName)
+            if expectedId == dictionaryId {
+                return fileName
+            }
+        }
+        
+        return nil
+    }
+    
+    /// 生成稳定ID（与DictionaryInfo中的逻辑保持一致）
+    private func generateStableID(fileName: String) -> UUID {
+        // 使用SHA-1哈希算法生成基于文件名的稳定UUID
+        let data = fileName.data(using: .utf8) ?? Data()
+        let hash = Insecure.SHA1.hash(data: data)
+        
+        // 将哈希值转换为UUID格式
+        let hashBytes = Array(hash)
+        
+        // 构造UUID字节数组（16字节）
+        var uuidBytes: [UInt8] = Array(hashBytes.prefix(16))
+        
+        // 设置版本号为5（基于名称的UUID）
+        uuidBytes[6] = (uuidBytes[6] & 0x0F) | 0x50
+        // 设置变体位
+        uuidBytes[8] = (uuidBytes[8] & 0x3F) | 0x80
+        
+        // 创建UUID
+        return UUID(uuid: (
+            uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+            uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+            uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+            uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+        ))
     }
     
     /// 获取最新测试

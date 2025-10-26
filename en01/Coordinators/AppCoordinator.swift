@@ -136,6 +136,10 @@ enum TabSelection: String, CaseIterable {
         return serviceContainer.getStatisticsExportService()
     }
     
+    func getTestDataService() -> TestDataService {
+        return serviceContainer.getTestDataService()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer

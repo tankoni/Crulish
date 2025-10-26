@@ -28,6 +28,12 @@ class IntelligentRankingViewModel: ObservableObject {
     @Published var showTestHistorySelection = false
     @Published var selectedTestState: DictionaryTestState?
     
+    // MARK: - 词典排序模式状态
+    /// 是否处于词典排序模式
+    var isDictionaryMode: Bool {
+        return selectedDictionary != nil
+    }
+    
     // 分阶段排序相关属性
     @Published var stagedRankingResults: StagedRankingResult?
     @Published var showStagedRanking = false
@@ -187,13 +193,16 @@ class IntelligentRankingViewModel: ObservableObject {
             
             // 检查是否选择了词典，如果选择了则使用基于词典的排序
             if let selectedDictionary = selectedDictionary {
-                print("🎯 使用词典排序: \(selectedDictionary.name)")
+                print("🎯 使用词典排序: \(selectedDictionary.name) (文件名: \(selectedDictionary.fileName))")
                 let results = await rankingService.rankArticlesByDictionary(
                     articles,
                     userVocabulary: userVocabulary,
-                    dictionaryName: selectedDictionary.name
+                    dictionaryName: selectedDictionary.fileName
                 )
                 allRankedResults = results
+                // 在词典模式下，直接使用词典排序结果，不进行二次排序
+                rankedArticles = results
+                selectedSortOption = .matchScore // 设置为匹配度，表示已按词典匹配度排序
             } else if isAdaptiveMode {
                 // 使用混合推荐
                 let results = try await rankingService.getHybridRecommendations(
@@ -209,13 +218,16 @@ class IntelligentRankingViewModel: ObservableObject {
                     userVocabulary: userVocabulary
                 )
                 lastAdaptiveRecommendationTimestamp = Date()
+                
+                sortArticles(by: selectedSortOption)
             } else {
                 // 使用传统推荐
                 let results = await rankingService.rankArticles(articles, userVocabulary: userVocabulary)
                 allRankedResults = results
+                
+                sortArticles(by: selectedSortOption)
             }
             
-            sortArticles(by: selectedSortOption)
             lastRankingTimestamp = Date()
             
         } catch {
@@ -369,16 +381,37 @@ class IntelligentRankingViewModel: ObservableObject {
     func sortArticlesWithKeywordAndBasic(keywordOption: KeywordSortOption, basicOption: BasicSortOption) {
         print("🔍 组合排序 - 关键词: \(keywordOption.rawValue), 基础: \(basicOption.rawValue)")
         
-        // 先按关键词筛选文章
-        let keywordFilteredArticles = filterArticlesByKeyword(allRankedResults, keyword: keywordOption)
+        // 在词典模式下，实现三层排序系统
+        if isDictionaryMode {
+            print("🎯 [词典模式] 执行三层排序：词典匹配 -> 关键词筛选 -> 基础排序")
+            
+            // 第一层：词典匹配的文章（已经按总匹配词数排序）
+            let dictionaryMatchedArticles = allRankedResults
+            print("🎯 [第一层] 词典匹配文章数: \(dictionaryMatchedArticles.count)")
+            
+            // 第二层：按关键词筛选
+            let keywordFilteredArticles = filterArticlesByKeyword(dictionaryMatchedArticles, keyword: keywordOption)
+            print("🎯 [第二层] 关键词筛选后文章数: \(keywordFilteredArticles.count)")
+            
+            // 第三层：按基础选项排序筛选后的文章
+            let finalSortedArticles = sortArticlesByBasicOptionForDictionary(keywordFilteredArticles, option: basicOption)
+            print("🎯 [第三层] 最终排序完成，文章数: \(finalSortedArticles.count)")
+            
+            rankedArticles = finalSortedArticles
+        } else {
+            // 非词典模式，使用原有逻辑
+            // 先按关键词筛选文章
+            let keywordFilteredArticles = filterArticlesByKeyword(allRankedResults, keyword: keywordOption)
+            
+            // 再按基础选项排序筛选后的文章
+            let sortedArticles = sortArticlesByBasicOption(keywordFilteredArticles, option: basicOption)
+            
+            rankedArticles = sortedArticles
+        }
         
-        // 再按基础选项排序筛选后的文章
-        let sortedArticles = sortArticlesByBasicOption(keywordFilteredArticles, option: basicOption)
-        
-        rankedArticles = sortedArticles
         selectedSortOption = keywordOption.toRankingSortOption()
         
-        print("🔍 排序完成 - 筛选后文章数: \(keywordFilteredArticles.count), 最终排序数: \(sortedArticles.count)")
+        print("🔍 排序完成 - 最终文章数: \(rankedArticles.count)")
     }
     
     /// 按关键词筛选文章
@@ -403,18 +436,101 @@ class IntelligentRankingViewModel: ObservableObject {
         return matchingArticles.isEmpty ? articles : matchingArticles
     }
     
+    /// 按基础选项排序文章（词典模式专用）
+    private func sortArticlesByBasicOptionForDictionary(_ articles: [ArticleMatchResult], option: BasicSortOption) -> [ArticleMatchResult] {
+        switch option {
+        case .matchScore:
+            // 匹配度：词典匹配词数多的文章越靠前（保持词典排序）
+            return articles.sorted { first, second in
+                if first.totalWords != second.totalWords {
+                    return first.totalWords > second.totalWords
+                }
+                return first.matchScore > second.matchScore
+            }
+        case .difficulty:
+            // 难度：掌握词比例高的文章优先（容易理解的优先，保证更佳流畅的阅读体验）
+            return articles.sorted { first, second in
+                let firstMasteredRatio = first.totalWords > 0 ? Double(first.masteredWords) / Double(first.totalWords) : 0
+                let secondMasteredRatio = second.totalWords > 0 ? Double(second.masteredWords) / Double(second.totalWords) : 0
+                return firstMasteredRatio > secondMasteredRatio // 掌握词比例高的（容易理解的）排在前面
+            }
+        case .recommendation:
+            // 推荐度：综合考虑匹配度、难度、生词数量占比、文章长度等所有因素
+            return articles.sorted { first, second in
+                let firstScore = calculateRecommendationScore(first)
+                let secondScore = calculateRecommendationScore(second)
+                return firstScore > secondScore
+            }
+        case .unknownWords:
+            // 生词数量：将熟悉词计入陌生词进行排序（越多越靠前）
+            return articles.sorted { first, second in
+                let firstEffectiveUnknown = first.unknownWords + first.familiarWords
+                let secondEffectiveUnknown = second.unknownWords + second.familiarWords
+                return firstEffectiveUnknown > secondEffectiveUnknown
+            }
+        case .articleLength:
+            // 文章长度：文章总词数/词典匹配词数比例小的优先
+            return articles.sorted { first, second in
+                let firstArticleWords = extractWordsFromArticle(first.article).count
+                let secondArticleWords = extractWordsFromArticle(second.article).count
+                let firstRatio = first.totalWords > 0 ? Double(firstArticleWords) / Double(first.totalWords) : Double.infinity
+                let secondRatio = second.totalWords > 0 ? Double(secondArticleWords) / Double(second.totalWords) : Double.infinity
+                return firstRatio < secondRatio
+            }
+        }
+    }
+    
+    /// 计算推荐度分数（词典模式专用）
+    private func calculateRecommendationScore(_ result: ArticleMatchResult) -> Double {
+        // 权重配置
+        let matchWeight = 0.3      // 匹配度权重
+        let difficultyWeight = 0.25 // 难度权重
+        let unknownWordsWeight = 0.25 // 生词数量权重
+        let lengthWeight = 0.2     // 文章长度权重
+        
+        // 匹配度分数（0-1）
+        let matchScore = result.totalWords > 0 ? Double(result.totalWords) / 100.0 : 0 // 假设100为满分
+        let normalizedMatchScore = min(matchScore, 1.0)
+        
+        // 难度分数（掌握词比例，0-1）- 只考虑masteredWords，与排序逻辑保持一致
+        let difficultyScore = result.totalWords > 0 ? Double(result.masteredWords) / Double(result.totalWords) : 0
+        
+        // 生词数量分数（适中的生词数量得分更高，0-1）- 使用有效陌生词数（包含熟悉词）
+        let effectiveUnknownWords = result.unknownWords + result.familiarWords
+        let optimalUnknownWords = 50.0 // 理想的生词数量
+        let unknownWordsScore = 1.0 - abs(Double(effectiveUnknownWords) - optimalUnknownWords) / optimalUnknownWords
+        let normalizedUnknownWordsScore = max(unknownWordsScore, 0.0)
+        
+        // 文章长度分数（适中长度得分更高，0-1）
+        let optimalLength = 1000.0 // 理想的文章长度
+        let lengthScore = 1.0 - abs(Double(result.article.content.count) - optimalLength) / optimalLength
+        let normalizedLengthScore = max(lengthScore, 0.0)
+        
+        // 综合分数
+        let totalScore = normalizedMatchScore * matchWeight +
+                        difficultyScore * difficultyWeight +
+                        normalizedUnknownWordsScore * unknownWordsWeight +
+                        normalizedLengthScore * lengthWeight
+        
+        return totalScore
+    }
+    
     /// 按基础选项排序文章
     private func sortArticlesByBasicOption(_ articles: [ArticleMatchResult], option: BasicSortOption) -> [ArticleMatchResult] {
         switch option {
         case .matchScore:
             return articles.sorted { $0.matchScore > $1.matchScore }
         case .difficulty:
-            return articles.sorted { $0.difficulty.rawValue < $1.difficulty.rawValue }
+            return articles.sorted { $0.difficulty.sortOrder < $1.difficulty.sortOrder }
         case .recommendation:
             return articles.sorted { $0.recommendation.priority > $1.recommendation.priority }
         case .unknownWords:
-            // 生词数量：越多越靠前（降序）
-            return articles.sorted { $0.unknownWords > $1.unknownWords }
+            // 生词数量：将熟悉词计入陌生词进行排序（越多越靠前）
+            return articles.sorted { first, second in
+                let firstEffectiveUnknown = first.unknownWords + first.familiarWords
+                let secondEffectiveUnknown = second.unknownWords + second.familiarWords
+                return firstEffectiveUnknown > secondEffectiveUnknown
+            }
         case .articleLength:
             // 文章长度：越长越靠前（降序）
             return articles.sorted { $0.totalWords > $1.totalWords }
@@ -901,6 +1017,10 @@ extension IntelligentRankingViewModel {
             self.selectedTestState = testState
         }
         
+        // 自动切换到词典排序模式
+        print("🎯 选择词典: \(dictionary.name)，自动切换到词典排序模式")
+        self.selectedSortOption = .matchScore // 设置为匹配度排序，这是词典排序的默认选项
+        
         // 基于选中的词典重新加载和排序文章
         Task {
             await loadRankedArticles()
@@ -1029,6 +1149,7 @@ extension IntelligentRankingViewModel {
     
     /// 重置词典选择状态
     func resetDictionarySelection() {
+        print("🔄 重置词典选择，退出词典排序模式")
         self.selectedDictionary = nil
         self.selectedTestState = nil
         self.showDictionarySelection = false
@@ -1036,5 +1157,10 @@ extension IntelligentRankingViewModel {
         self.showStagedRanking = false
         self.stagedRankingResults = nil
         self.currentStage = 1
+        
+        // 重新加载文章，使用默认排序
+        Task {
+            await loadRankedArticles()
+        }
     }
 }

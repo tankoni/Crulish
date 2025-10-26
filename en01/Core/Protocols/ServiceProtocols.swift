@@ -2,13 +2,14 @@
 //  ServiceProtocols.swift
 //  en01
 //
-//  Created by AI Assistant on 2024/12/30.
+//  Created by tankonitk on 2024/12/19.
 //
 
 import Foundation
 import Combine
 import SwiftData
-import Foundation
+
+// Note: VocabularyStats is defined in Word.swift and should be accessible through the module
 
 // MARK: - Article Service Protocol
 

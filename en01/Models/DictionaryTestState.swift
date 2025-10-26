@@ -68,6 +68,18 @@ struct DictionaryTestState {
         return selectedTest ?? latestTest
     }
     
+    // 获取已测试词数（从TestDataService获取正确数据）
+    func getTestedWordsCount(using testDataService: TestDataService) async -> Int {
+        do {
+            let results = try await testDataService.getDictionaryTestResults(for: dictionary.fileName)
+                .values.first(where: { _ in true })
+            return results?.totalTestedWords ?? 0
+        } catch {
+            print("❌ 获取已测试词数失败: \(error.localizedDescription)")
+            return 0
+        }
+    }
+    
     init(dictionaryId: UUID, dictionaryName: String, dictionary: DictionaryInfo, testHistory: [VocabularyTest] = [], selectedTest: VocabularyTest? = nil) {
         self.dictionaryId = dictionaryId
         self.dictionaryName = dictionaryName

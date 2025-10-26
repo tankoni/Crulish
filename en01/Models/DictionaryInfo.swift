@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 import CryptoKit
 
 // 词典信息结构
@@ -53,7 +54,8 @@ struct DictionaryInfo: Codable, Identifiable, Equatable {
         statistics: DictionaryStatistics? = nil,
         configuration: DictionaryConfiguration? = nil
     ) {
-        self.id = UUID()
+        // 使用基于文件名的稳定ID生成策略
+        self.id = Self.generateStableID(fileName: fileName)
         self.name = name
         self.displayName = displayName
         self.fileName = fileName
@@ -76,6 +78,35 @@ struct DictionaryInfo: Codable, Identifiable, Equatable {
         
         // 初始化配置
         self.configuration = configuration ?? DictionaryConfiguration()
+    }
+    
+    // MARK: - Stable ID Generation
+    
+    /// 基于文件名生成稳定的UUID
+    /// 相同的文件名将始终生成相同的UUID，确保词典ID的一致性
+    private static func generateStableID(fileName: String) -> UUID {
+        // 使用SHA-1哈希算法生成基于文件名的稳定UUID
+        let data = fileName.data(using: .utf8) ?? Data()
+        let hash = Insecure.SHA1.hash(data: data)
+        
+        // 将哈希值转换为UUID格式
+        let hashBytes = Array(hash)
+        
+        // 构造UUID字节数组（16字节）
+        var uuidBytes: [UInt8] = Array(hashBytes.prefix(16))
+        
+        // 设置版本号为5（基于名称的UUID）
+        uuidBytes[6] = (uuidBytes[6] & 0x0F) | 0x50
+        // 设置变体位
+        uuidBytes[8] = (uuidBytes[8] & 0x3F) | 0x80
+        
+        // 创建UUID
+        return UUID(uuid: (
+            uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+            uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+            uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+            uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+        ))
     }
     
     // MARK: - Computed Properties

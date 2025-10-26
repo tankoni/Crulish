@@ -71,26 +71,30 @@ struct ProgressDashboardView: View {
     
     // MARK: - 时间范围选择器
     private var timeRangeSelector: some View {
-        HStack {
-            ForEach(TimeRange.allCases, id: \.self) { range in
-                Button(action: {
-                    selectedTimeRange = range
-                    viewModel.setTimeRange(range.rawValue)
-                }) {
-                    Text(range.displayName)
-                        .font(.subheadline)
-                        .fontWeight(selectedTimeRange == range ? .semibold : .regular)
-                        .foregroundColor(selectedTimeRange == range ? .white : .primary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(selectedTimeRange == range ? Color.blue : Color(.systemGray6))
-                        )
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(TimeRange.allCases, id: \.self) { range in
+                    Button(action: {
+                        selectedTimeRange = range
+                        viewModel.setTimeRange(range.rawValue)
+                    }) {
+                        Text(range.displayName)
+                            .font(.subheadline)
+                            .fontWeight(selectedTimeRange == range ? .semibold : .regular)
+                            .foregroundColor(selectedTimeRange == range ? .white : .primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(selectedTimeRange == range ? Color.blue : Color(.systemGray6))
+                            )
+                    }
                 }
             }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
     }
     
     // MARK: - 今日统计概览

@@ -632,6 +632,27 @@ enum ReviewFilter: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - Vocabulary Tab
+enum VocabularyTab: String, CaseIterable, Codable {
+    case myWords = "myWords"
+    case personalDictionaries = "personalDictionaries"
+    case review = "review"
+    case statistics = "statistics"
+    
+    var title: String {
+        switch self {
+        case .myWords:
+            return "我的单词"
+        case .personalDictionaries:
+            return "个人词典"
+        case .review:
+            return "复习"
+        case .statistics:
+            return "统计"
+        }
+    }
+}
+
 // MARK: - Vocabulary Sort Option
 enum VocabularySortOption: String, CaseIterable, Codable {
     case alphabetical = "alphabetical"
@@ -963,6 +984,50 @@ enum BasicSortOption: String, CaseIterable {
     case unknownWords = "生词数量"
     case articleLength = "文章长度"
     
+    var displayName: String {
+        return self.rawValue
+    }
+    
+    var icon: String {
+        switch self {
+        case .matchScore: return "target"
+        case .difficulty: return "chart.bar"
+        case .recommendation: return "star"
+        case .unknownWords: return "questionmark.circle"
+        case .articleLength: return "doc.text"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .matchScore:
+            return "按词汇匹配得分排序，得分高靠前"
+        case .difficulty:
+            return "按文章难度从低到高排序"
+        case .recommendation:
+            return "按推荐等级排序，推荐度高靠前"
+        case .unknownWords:
+            return "按陌生与熟悉词数量，越多越靠前"
+        case .articleLength:
+            return "按文章词数排序，更长的文章靠前"
+        }
+    }
+    
+    var dictionaryModeDescription: String {
+        switch self {
+        case .matchScore:
+            return "词典匹配词数多的文章优先"
+        case .difficulty:
+            return "'掌握词/陌生词'比例高的文章优先（容易理解的优先）"
+        case .recommendation:
+            return "综合权重评分（匹配度40% + 难度30% + 生词占比20% + 文章长度10%）"
+        case .unknownWords:
+            return "陌生词多的文章优先"
+        case .articleLength:
+            return "文章总词数/词典匹配词数比例小的优先"
+        }
+    }
+    
     func toRankingSortOption() -> RankingSortOption {
         switch self {
         case .matchScore: return .matchScore
@@ -981,6 +1046,35 @@ enum KeywordSortOption: String, CaseIterable {
     case translation = "翻译"
     case writing = "写作"
     case knowledge = "知识运用"
+    
+    var displayName: String {
+        return self.rawValue
+    }
+    
+    var icon: String {
+        switch self {
+        case .none: return "minus.circle"
+        case .reading: return "book"
+        case .translation: return "textformat.abc"
+        case .writing: return "pencil"
+        case .knowledge: return "lightbulb"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .none:
+            return "不按关键词过滤，采用基础排序"
+        case .reading:
+            return "优先含“阅读理解”相关词的文章"
+        case .translation:
+            return "优先含“翻译”相关词的文章"
+        case .writing:
+            return "优先含“写作”相关词的文章"
+        case .knowledge:
+            return "优先含“知识运用”相关词的文章"
+        }
+    }
     
     func toRankingSortOption() -> RankingSortOption {
         switch self {
@@ -1046,6 +1140,17 @@ enum IntelligentRankingDifficultyLevel: String, CaseIterable {
         case .upperIntermediate: return .yellow
         case .advanced: return .red
         case .expert: return .purple
+        }
+    }
+    
+    var sortOrder: Int {
+        switch self {
+        case .beginner: return 1
+        case .elementary: return 2
+        case .intermediate: return 3
+        case .upperIntermediate: return 4
+        case .advanced: return 5
+        case .expert: return 6
         }
     }
 }

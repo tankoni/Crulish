@@ -345,14 +345,15 @@ enum MasteryLevel: String, CaseIterable, Codable, Comparable {
 extension UserWord {
     // 更新掌握程度
     func updateMasteryLevel(_ level: MasteryLevel) {
-        self.masteryLevel = level
-        self.lastReviewDate = Date()
+        // 直接修改存储属性
+        masteryLevel = level
+        lastReviewDate = Date()
 
         updateReviewDate(basedOn: level)
 
         // 如果已掌握，可以减少复习频率
         if level == .mastered {
-            self.isMarkedForReview = false
+            isMarkedForReview = false
         }
     }
 
@@ -390,17 +391,33 @@ extension UserWord {
     // 新增：记录测试结果
     func recordTestResult(isCorrect: Bool, responseTime: TimeInterval) {
         if isCorrect {
-            self.correctAnswers += 1
+            correctAnswers += 1
             // 正确回答提升记忆强度
-            self.memoryStrength = min(1.0, memoryStrength + 0.1)
+            memoryStrength = min(1.0, memoryStrength + 0.1)
         } else {
-            self.incorrectAnswers += 1
+            incorrectAnswers += 1
             // 错误回答降低记忆强度
-            self.memoryStrength = max(0.0, memoryStrength - 0.05)
+            memoryStrength = max(0.0, memoryStrength - 0.05)
+        }
+        
+        // 同步更新masteryLevel属性，基于答题比例计算
+        let newMasteryLevel = calculateMasteryLevelFromAnswers()
+        if newMasteryLevel != masteryLevel {
+            updateMasteryLevel(newMasteryLevel)
         }
         
         recordClick(responseTime: responseTime)
         updateOptimalReviewInterval()
+    }
+    
+    // 新增：基于答题比例计算掌握程度
+    private func calculateMasteryLevelFromAnswers() -> MasteryLevel {
+        if correctAnswers >= 3 && incorrectAnswers == 0 {
+            return .mastered
+        } else {
+            let ratio = correctAnswers > 0 ? Double(correctAnswers) / Double(correctAnswers + incorrectAnswers) : 0
+            return ratio >= 0.6 ? .familiar : .unfamiliar
+        }
     }
     
     // 新增：更新学习优先级
@@ -557,6 +574,7 @@ extension UserWord {
             return "继续保持学习"
         }
     }
+
 }
 
 // 复习结果记录
@@ -567,7 +585,7 @@ struct ReviewResult: Codable {
     let masteryLevelBefore: MasteryLevel
     let masteryLevelAfter: MasteryLevel
     let reviewType: ReviewType
-    
+
     enum ReviewType: String, Codable {
         case scheduled = "定时复习"
         case manual = "手动复习"

@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import SwiftData
 
 // 注意：ArticleMatchResult、IntelligentRankingDifficultyLevel、RecommendationLevel、
 // BasicSortOption、KeywordSortOption、RankingSortOption 已移动到 CommonTypes.swift 文件中，
@@ -117,7 +118,7 @@ class IntelligentRankingService: ObservableObject {
         }
     }
     
-    /// 基于指定词典的文章排序 - 增强版本，支持词典测试结果
+    /// 基于指定词典的文章排序 - 基于词典重合度排序
     func rankArticlesByDictionary(
         _ articles: [Article], 
         userVocabulary: [UserWord],
@@ -125,29 +126,24 @@ class IntelligentRankingService: ObservableObject {
         vocabularyTestService: VocabularyTestServiceProtocol? = nil
     ) async -> [ArticleMatchResult] {
         
-        // 优先使用注入的词汇测试服务，其次使用传入的参数
-        let testService = vocabularyTestService ?? self.vocabularyTestService
-        
-        // 如果提供了词汇测试服务，优先使用测试结果进行排序
-        if let testService = testService {
-            return await rankArticlesByTestResults(
-                articles, 
-                dictionaryName: dictionaryName, 
-                testService: testService
-            )
-        }
+        print("🎯 [词典排序] 开始基于词典重合度排序: \(dictionaryName)")
         
         // 获取词典词汇
         guard let dictionaryWords = await getDictionaryVocabulary(dictionaryName: dictionaryName) else {
+            print("❌ [词典排序] 获取词典词汇失败，回退到普通排序")
             // 如果获取词典失败，回退到普通排序
             return await rankArticles(articles, userVocabulary: userVocabulary)
         }
+        
+        print("✅ [词典排序] 成功获取词典词汇: \(dictionaryWords.count) 个单词")
         
         // 分析用户在该词典中的掌握情况
         let userDictionaryMastery = analyzeDictionaryMastery(
             userVocabulary: userVocabulary, 
             dictionaryWords: dictionaryWords
         )
+        
+        print("📊 [词典排序] 用户掌握情况 - 未知: \(userDictionaryMastery.unknown.count), 熟悉: \(userDictionaryMastery.familiar.count), 掌握: \(userDictionaryMastery.mastered.count)")
         
         // 计算基于词典的匹配度
         let results = await calculateDictionaryMatchScores(
@@ -156,7 +152,23 @@ class IntelligentRankingService: ObservableObject {
             userMastery: userDictionaryMastery
         )
         
+        print("✅ [词典排序] 排序完成，共 \(results.count) 篇文章")
         return results
+    }
+    
+    /// 基于词典测试结果的文章排序 - 独立方法
+    func rankArticlesByDictionaryTestResults(
+        _ articles: [Article], 
+        userVocabulary: [UserWord],
+        dictionaryName: String,
+        vocabularyTestService: VocabularyTestServiceProtocol
+    ) async -> [ArticleMatchResult] {
+        
+        return await rankArticlesByTestResults(
+            articles, 
+            dictionaryName: dictionaryName, 
+            testService: vocabularyTestService
+        )
     }
     
     /// 基于词典测试结果的文章排序 - 新增方法
@@ -347,11 +359,11 @@ class IntelligentRankingService: ObservableObject {
             // 只考虑词典中包含的单词
             if dictionaryWords.contains(word) {
                 switch userWord.masteryLevel {
-                case .unfamiliar:
+                case MasteryLevel.unfamiliar:
                     unknownWords.insert(word)
-                case .familiar:
+                case MasteryLevel.familiar:
                     familiarWords.insert(word)
-                case .mastered:
+                case MasteryLevel.mastered:
                     masteredWords.insert(word)
                 }
             }
@@ -384,15 +396,19 @@ class IntelligentRankingService: ObservableObject {
             }
         }
         
-        // 按匹配度排序（陌生词数量优先，然后是匹配度分数）
-        return results.sorted { first, second in
-            // 优先考虑陌生词数量（从高到低，学习难度从高到低）
-            if first.unknownWords != second.unknownWords {
-                return first.unknownWords > second.unknownWords
+        // 按总匹配词数排序（匹配词数多的文章在前面）
+        let sortedResults = results.sorted { first, second in
+            // 优先按总匹配词数排序（从高到低）
+            if first.totalWords != second.totalWords {
+                return first.totalWords > second.totalWords
             }
-            // 然后考虑匹配度分数
+            // 如果匹配词数相同，按匹配度分数排序
             return first.matchScore > second.matchScore
         }
+        
+        print("🎯 [词典排序] 排序完成，前5篇文章匹配词数: \(sortedResults.prefix(5).map { "\($0.article.title): \($0.totalWords)词" }.joined(separator: ", "))")
+        
+        return sortedResults
     }
     
     /// 计算单篇文章与词典的匹配度
@@ -787,23 +803,25 @@ class IntelligentRankingService: ObservableObject {
             return .beginner 
         }
         
-        let unknownPercentage = Double(stats.unknown) / Double(totalWords) * 100
-        // print("🎯 [难度判定] 陌生词百分比: \(String(format: "%.1f", unknownPercentage))%")
+        // 计算有效陌生词百分比（包含熟悉词）- 与排序逻辑保持一致
+        let effectiveUnknownWords = stats.unknown + stats.familiar
+        let unknownPercentage = Double(effectiveUnknownWords) / Double(totalWords) * 100
+        // print("🎯 [难度判定] 有效陌生词百分比: \(String(format: "%.1f", unknownPercentage))%")
         
         let difficulty: IntelligentRankingDifficultyLevel
         switch unknownPercentage {
         case 0..<15:
             difficulty = .beginner
-            // print("🟢 [难度判定] 陌生词 < 15% → 初级")
+            // print("🟢 [难度判定] 有效陌生词 < 15% → 初级")
         case 15..<30:
             difficulty = .intermediate
-            // print("🟡 [难度判定] 陌生词 15-30% → 中级")
+            // print("🟡 [难度判定] 有效陌生词 15-30% → 中级")
         case 30..<50:
             difficulty = .advanced
-            // print("🟠 [难度判定] 陌生词 30-50% → 高级")
+            // print("🟠 [难度判定] 有效陌生词 30-50% → 高级")
         default:
             difficulty = .expert
-            // print("🔴 [难度判定] 陌生词 ≥ 50% → 专家级")
+            // print("🔴 [难度判定] 有效陌生词 ≥ 50% → 专家级")
         }
         
         return difficulty
@@ -1043,8 +1061,12 @@ class IntelligentRankingService: ObservableObject {
         case .recommendation:
             return results.sorted { $0.recommendation.priority > $1.recommendation.priority }
         case .unknownWords:
-            // 生词数量：越多越靠前（降序）
-            return results.sorted { $0.unknownWords > $1.unknownWords }
+            // 生词数量：将熟悉词计入陌生词进行排序（越多越靠前）
+            return results.sorted { first, second in
+                let firstEffectiveUnknown = first.unknownWords + first.familiarWords
+                let secondEffectiveUnknown = second.unknownWords + second.familiarWords
+                return firstEffectiveUnknown > secondEffectiveUnknown
+            }
         case .articleLength:
             // 文章长度：越长越靠前（降序）
             return results.sorted { $0.totalWords > $1.totalWords }

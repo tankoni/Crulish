@@ -273,7 +273,7 @@ class VocabularyViewModel: ObservableObject {
     }
     
     // MARK: - Filtering and Sorting
-    private func filterVocabulary() {
+    public func filterVocabulary() {
         var filtered = vocabulary
         
         // 搜索筛选
@@ -388,21 +388,28 @@ class VocabularyViewModel: ObservableObject {
         }
     }
     
+    // 修正：确保标记为需要复习而不是切换
     func markWordForReview(_ word: UserWord) {
-        Task {
-            dictionaryService.toggleReviewFlag(for: word)
-            
-            await MainActor.run {
-                // 更新本地数据
-                if let index = self.vocabulary.firstIndex(where: { $0.id == word.id }) {
-                    self.vocabulary[index].isMarkedForReview = true
-                    self.vocabulary[index].lastLookupDate = Date()
+        dictionaryService.markForReview(word)
+        if let index = vocabulary.firstIndex(where: { $0.id == word.id }) {
+            vocabulary[index].isMarkedForReview = true
+            vocabulary[index].nextReviewDate = Date() // 立即进入复习队列
+        }
+        filterVocabulary()
+    }
+
+    // 新增：从指定单词开始复习会话
+    func startReview(from word: UserWord?) {
+        Task { @MainActor in
+            if let startWord = word {
+                reviewWords = wordsNeedingReview
+                if let idx = reviewWords.firstIndex(where: { $0.id == startWord.id }) {
+                    currentReviewIndex = idx
+                } else {
+                    currentReviewIndex = 0
                 }
-                
-                self.filterVocabulary()
             }
-            
-            errorHandler.logSuccess("标记单词需要复习: \(word.word)")
+            startReview()
         }
     }
     

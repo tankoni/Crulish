@@ -33,6 +33,7 @@ class ServiceContainer {
     private var learningTrackingService: LearningTrackingService?
     private var testResultExportService: TestResultExportService?
     private var statisticsExportService: StatisticsExportService?
+    private var testDataService: TestDataService?
     
     // 自适应学习相关服务
     private var adaptiveLearningService: AdaptiveLearningService?
@@ -193,6 +194,13 @@ class ServiceContainer {
             intelligentRankingService: intelligentRankingService!,
             dictionaryService: dictionaryService!,
             vocabularyTestService: vocabularyTestService,
+            errorHandler: unifiedErrorHandler
+        )
+
+        // 初始化测试数据服务（同步）
+        self.testDataService = TestDataService(
+            modelContext: modelContext,
+            cacheManager: cacheManager,
             errorHandler: unifiedErrorHandler
         )
 
@@ -527,6 +535,14 @@ class ServiceContainer {
     func getStatisticsExportService() -> StatisticsExportServiceProtocol {
         guard let service = statisticsExportService else {
             fatalError("StatisticsExportService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取测试数据服务
+    func getTestDataService() -> TestDataService {
+        guard let service = testDataService else {
+            fatalError("TestDataService not initialized. Call configure(with:) first.")
         }
         return service
     }

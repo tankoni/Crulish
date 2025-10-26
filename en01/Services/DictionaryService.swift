@@ -555,55 +555,86 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
                 sortBy: [SortDescriptor(\UserWord.lastLookupDate, order: .reverse)]
             )
             let userWords = self.safeFetch(userWordDescriptor, operation: "获取用户词汇列表")
+            print("✅ [DictionaryService] 获取到 \(userWords.count) 个查词记录")
             
             // 获取测试记录的TestedWord
             let testedWordDescriptor = FetchDescriptor<TestedWord>(
                 sortBy: [SortDescriptor(\TestedWord.testedAt, order: .reverse)]
             )
             let testedWords = self.safeFetch(testedWordDescriptor, operation: "获取测试词汇列表")
+            print("✅ [DictionaryService] 获取到 \(testedWords.count) 个测试记录")
             
-            // 将TestedWord转换为UserWord并合并
-            var allWords = userWords
-            let existingWords = Set(userWords.map { $0.word.lowercased() })
+            // 创建词汇映射表，避免重复查找
+            var wordMap: [String: UserWord] = [:]
+            
+            // 首先添加所有查词记录
+            for userWord in userWords {
+                wordMap[userWord.word.lowercased()] = userWord
+            }
+            
+            // 处理测试记录
+            var newWordsFromTest = 0
+            var updatedExistingWords = 0
             
             for testedWord in testedWords {
-                // 如果该单词不在查词记录中，则从测试记录创建UserWord
-                if !existingWords.contains(testedWord.word.lowercased()) {
+                let wordKey = testedWord.word.lowercased()
+                
+                if let existingWord = wordMap[wordKey] {
+                    // 更新现有单词的测试信息
+                    existingWord.isFromTest = true
+                    existingWord.testID = testedWord.testSessionId?.uuidString
+                    existingWord.testSource = testedWord.dictionaryName
+                    
+                    // 如果测试时间更新，更新掌握程度
+                    if testedWord.testedAt > existingWord.lastLookupDate {
+                        existingWord.masteryLevel = testedWord.masteryLevelEnum
+                    }
+                    
+                    // 补充释义（如果缺失）
+                    if existingWord.selectedDefinition == nil {
+                        if let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试") {
+                            existingWord.selectedDefinition = dictWord.definitions.first
+                        }
+                    }
+                    updatedExistingWords += 1
+                } else {
+                    // 创建新的UserWord（来自测试）
+                    let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试")
+                    let definition = dictWord?.definitions.first ?? WordDefinition(
+                        partOfSpeech: .noun,
+                        meaning: testedWord.dictionaryName.isEmpty ? "测试词条" : "来自\(testedWord.dictionaryName)的测试词条"
+                    )
+                    
                     let userWord = UserWord(
                         word: testedWord.word,
                         context: "词汇量测试",
                         sentence: "来自词汇量测试的单词",
-                        selectedDefinition: WordDefinition(
-                            partOfSpeech: .noun,
-                            meaning: "词汇量测试单词"
-                        )
+                        selectedDefinition: definition
                     )
+                    
+                    // 设置测试相关属性
                     userWord.masteryLevel = testedWord.masteryLevelEnum
                     userWord.firstLookupDate = testedWord.testedAt
                     userWord.lastLookupDate = testedWord.testedAt
                     userWord.isFromTest = true
                     userWord.testID = testedWord.testSessionId?.uuidString
+                    userWord.testSource = testedWord.dictionaryName
                     
-                    allWords.append(userWord)
-                } else {
-                    // 如果单词已存在，更新其测试相关信息
-                    if let existingIndex = allWords.firstIndex(where: { $0.word.lowercased() == testedWord.word.lowercased() }) {
-                        allWords[existingIndex].isFromTest = true
-                        allWords[existingIndex].testID = testedWord.testSessionId?.uuidString
-                        // 如果测试的掌握程度更新，则更新掌握程度
-                        if testedWord.testedAt > allWords[existingIndex].lastLookupDate {
-                            allWords[existingIndex].masteryLevel = testedWord.masteryLevelEnum
-                        }
-                    }
+                    wordMap[wordKey] = userWord
+                    newWordsFromTest += 1
                 }
             }
             
-            // 按最后查看时间排序
-            return allWords.sorted { word1, word2 in
-                let date1 = word1.isFromTest ? (word1.testID != nil ? word1.lastLookupDate : word1.lastLookupDate) : word1.lastLookupDate
-                let date2 = word2.isFromTest ? (word2.testID != nil ? word2.lastLookupDate : word2.lastLookupDate) : word2.lastLookupDate
-                return date1 > date2
+            print("✅ [DictionaryService] 从测试记录新增 \(newWordsFromTest) 个单词")
+            print("✅ [DictionaryService] 更新了 \(updatedExistingWords) 个现有单词的测试信息")
+            
+            // 转换为数组并排序
+            let allWords = Array(wordMap.values).sorted { word1, word2 in
+                return word1.lastLookupDate > word2.lastLookupDate
             }
+            
+            print("✅ [DictionaryService] 最终返回 \(allWords.count) 个词汇记录")
+            return allWords
         } ?? []
     }
     
@@ -757,9 +788,19 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
         let userRecords = getUserWordRecords()
         
         let totalWords = userRecords.count
-        let unfamiliarWords = userRecords.filter { $0.masteryLevel == .unfamiliar }.count
-        let familiarWords = userRecords.filter { $0.masteryLevel == .familiar }.count
-        let masteredWords = userRecords.filter { $0.masteryLevel == .mastered }.count
+        
+        // 使用基于答题比例的实时计算，与VocabularyView保持一致
+        let masteredWords = userRecords.filter { $0.correctAnswers >= 3 && $0.incorrectAnswers == 0 }.count
+        
+        let familiarWords = userRecords.filter { word in
+            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
+            return ratio >= 0.6 && ratio < 1.0
+        }.count
+        
+        let unfamiliarWords = userRecords.filter { word in
+            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
+            return ratio < 0.6
+        }.count
         
         // 今日查词数
         let today = Calendar.current.startOfDay(for: Date())

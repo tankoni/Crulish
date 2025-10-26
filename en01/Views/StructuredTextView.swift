@@ -192,59 +192,62 @@ struct TextToolbar: View {
     @StateObject private var inputManager = UnifiedInputManager.shared
     
     var body: some View {
-        HStack {
-            // 页面导航
-            Button(action: onPreviousPage) {
-                Image(systemName: "chevron.left")
-                    .font(.title2)
-            }
-            .disabled(currentPage <= 1)
-            
-            Text("\(currentPage) / \(totalPages)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            Button(action: onNextPage) {
-                Image(systemName: "chevron.right")
-                    .font(.title2)
-            }
-            .disabled(currentPage >= totalPages)
-            
-            Spacer()
-            
-            // 搜索框
-            HStack {
-                TextField("搜索...", text: $localSearchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .onTapGesture {
-                        inputManager.beginInputSession(
-                            fieldId: "structured_text_search",
-                            priority: 1,
-                            inputType: .search
-                        )
-                    }
-                    .onSubmit {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // 页面导航
+                Button(action: onPreviousPage) {
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
+                }
+                .disabled(currentPage <= 1)
+                
+                Text("\(currentPage) / \(totalPages)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                
+                Button(action: onNextPage) {
+                    Image(systemName: "chevron.right")
+                        .font(.title2)
+                }
+                .disabled(currentPage >= totalPages)
+                
+                Spacer()
+                
+                // 搜索框
+                HStack {
+                    TextField("搜索...", text: $localSearchText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .onTapGesture {
+                            inputManager.beginInputSession(
+                                fieldId: "structured_text_search",
+                                priority: 1,
+                                inputType: .search
+                            )
+                        }
+                        .onSubmit {
+                            onSearch(localSearchText)
+                            inputManager.endInputSession(fieldId: "structured_text_search")
+                        }
+                    
+                    Button(action: { 
                         onSearch(localSearchText)
                         inputManager.endInputSession(fieldId: "structured_text_search")
+                    }) {
+                        Image(systemName: "magnifyingglass")
                     }
-                
-                Button(action: { 
-                    onSearch(localSearchText)
-                    inputManager.endInputSession(fieldId: "structured_text_search")
-                }) {
-                    Image(systemName: "magnifyingglass")
+                    .disabled(localSearchText.isEmpty)
                 }
-                .disabled(localSearchText.isEmpty)
+                .frame(maxWidth: 200)
+                
+                // 设置按钮
+                Button(action: { showingSettings = true }) {
+                    Image(systemName: "textformat.size")
+                        .font(.title2)
+                }
             }
-            .frame(maxWidth: 200)
-            
-            // 设置按钮
-            Button(action: { showingSettings = true }) {
-                Image(systemName: "textformat.size")
-                    .font(.title2)
-            }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color(red: 0.95, green: 0.95, blue: 0.95))
         .shadow(radius: 1)

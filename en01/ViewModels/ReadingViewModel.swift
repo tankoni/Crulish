@@ -390,7 +390,7 @@ class ReadingViewModel: ObservableObject {
     // MARK: - Learning Progress Tracking
     private func updateWordLearningProgress(_ word: UserWord) async {
         // 更新词汇学习优先级
-        word.updateLearningPriority()
+        // word.updateLearningPriority() // 暂时注释掉，该方法不存在
         
         // 记录学习会话
         let sessionDuration = Date().timeIntervalSince(word.lastLookupDate)
@@ -440,9 +440,12 @@ class ReadingViewModel: ObservableObject {
         }
         
         // 基于学习效率分类
-        if word.learningEfficiency >= 80 {
+        let totalAnswers = word.correctAnswers + word.incorrectAnswers
+        let efficiency = totalAnswers > 0 ? Double(word.correctAnswers) / Double(totalAnswers) * 100 : 0
+        
+        if efficiency >= 80 {
             newCategories.append("高效学习")
-        } else if word.learningEfficiency >= 60 {
+        } else if efficiency >= 60 {
             newCategories.append("正常学习")
         } else {
             newCategories.append("需要加强")
@@ -479,11 +482,11 @@ class ReadingViewModel: ObservableObject {
         // 根据记忆强度调整复习间隔
         if word.memoryStrength < 0.3 {
             word.isMarkedForReview = true
-            word.updateReviewDate(basedOn: .unfamiliar)
+            word.updateReviewDate(basedOn: MasteryLevel.unfamiliar)
         } else if word.memoryStrength < 0.6 {
-            word.updateReviewDate(basedOn: .familiar)
+            word.updateReviewDate(basedOn: MasteryLevel.familiar)
         } else {
-            word.updateReviewDate(basedOn: .mastered)
+            word.updateReviewDate(basedOn: MasteryLevel.mastered)
         }
     }
     

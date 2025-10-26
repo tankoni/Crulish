@@ -6,18 +6,17 @@
 //
 
 import SwiftUI
+import SwiftData
+import Combine
 
 struct VocabularyView: View {
-    @ObservedObject var viewModel: VocabularyViewModel
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var dictionaryService: DictionaryService
     @Environment(UnifiedErrorHandler.self) private var errorHandler
     @EnvironmentObject private var appCoordinator: AppCoordinator
     @StateObject private var inputManager = UnifiedInputManager.shared
     
-    init(viewModel: VocabularyViewModel) {
-        self.viewModel = viewModel
-    }
+    @StateObject private var viewModel: VocabularyViewModel
     @State private var selectedTab: VocabularyTab = .myWords
     @State private var searchText = ""
     @State private var selectedMastery: MasteryLevel?
@@ -29,6 +28,12 @@ struct VocabularyView: View {
     @State private var debounceTask: Task<Void, Never>? // 防抖任务
     @State private var isDataLoaded = false // 防止重复加载
     
+    init(viewModel: VocabularyViewModel) {
+        self._viewModel = StateObject(wrappedValue: viewModel)
+    }
+    
+
+    
     // 个人学习词典相关状态
     @State private var personalDictionaries: [PersonalDictionary] = []
     @State private var availableDictionaries: [DictionaryInfo] = []
@@ -37,6 +42,10 @@ struct VocabularyView: View {
     @State private var personalDictionaryManager: PersonalDictionaryManager?
     @State private var kaoyanDictionaryImporter: KaoyanDictionaryImporter?
     @State private var isShowingVocabularyTest = false // 控制词汇量测试界面显示
+    @State private var testHistory: [VocabularyTest] = [] // 测试历史
+    @State private var latestTest: VocabularyTest? // 最新测试
+    @State private var isLoadingTestData = false // 测试数据加载状态
+    @State private var cancellables = Set<AnyCancellable>() // Combine订阅管理
     
     var body: some View {
         NavigationView {
@@ -50,25 +59,28 @@ struct VocabularyView: View {
             }
         }
         .onAppear {
-            // 避免重复加载数据
+            // 防止重复加载
             if !isDataLoaded {
-                loadVocabularyData()
+                viewModel.loadVocabulary()
                 initializePersonalDictionaryManager()
+                loadTestData() // 加载测试数据
                 isDataLoaded = true
             }
         }
         .onChange(of: selectedTab) { _, _ in
-            loadVocabularyData()
+            viewModel.loadVocabulary()
         }
         .onChange(of: searchText) { _, _ in
             // 防抖处理，避免频繁过滤
-            debounceFilter()
+            debounceFilterWords()
         }
-        .onChange(of: selectedMastery) { _, _ in
-            filterWords()
+        .onChange(of: selectedMastery) { _, newValue in
+            // 直接使用MasteryLevel，无需转换
+            viewModel.setMasteryFilter(newValue)
         }
-        .onChange(of: sortOption) { _, _ in
-            sortWords()
+        .onChange(of: sortOption) { _, newValue in
+            // 使用公共方法设置排序选项
+            viewModel.setSortOption(newValue)
         }
         .sheet(isPresented: $isShowingVocabularyTest) {
             VocabularyTestView(
@@ -78,6 +90,17 @@ struct VocabularyView: View {
                 testResultExportService: appCoordinator.getTestResultExportService(),
                 appCoordinator: appCoordinator
             )
+        }
+        // 新增：复习会话弹窗
+        .sheet(
+            isPresented: .init(
+                get: { viewModel.isReviewing },
+                set: { viewModel.isReviewing = $0 }
+            )
+        ) {
+            ReviewSessionView(viewModel: viewModel)
+                .environmentObject(dictionaryService)
+                .environmentObject(appCoordinator)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartVocabularyTest"))) { _ in
             isShowingVocabularyTest = true
@@ -121,7 +144,7 @@ struct VocabularyView: View {
             }
             
             Button {
-                startVocabularyTest()
+                isShowingVocabularyTest = true
             } label: {
                 Label("词汇量测试", systemImage: "brain.head.profile.fill")
             }
@@ -131,9 +154,8 @@ struct VocabularyView: View {
     }
     
     // MARK: - 标签栏
-    
     private var vocabularyTabBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 8) {
             ForEach(VocabularyTab.allCases, id: \.self) { tab in
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -144,6 +166,9 @@ struct VocabularyView: View {
                         Text(tab.title)
                             .font(.subheadline)
                             .fontWeight(selectedTab == tab ? .semibold : .regular)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .fixedSize(horizontal: false, vertical: true)
                         
                         if selectedTab == tab {
                             Rectangle()
@@ -155,12 +180,15 @@ struct VocabularyView: View {
                                 .foregroundColor(.clear)
                         }
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                 }
                 .foregroundColor(selectedTab == tab ? .blue : .secondary)
                 .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 12)
         .background(Color(.systemBackground))
     }
     
@@ -219,10 +247,19 @@ struct VocabularyView: View {
                         }
                     }
                 } label: {
-                    FilterChip(
-                        title: selectedMastery?.displayName ?? "掌握程度",
-                        isSelected: selectedMastery != nil
-                    )
+                    HStack(spacing: 4) {
+                        Text(selectedMastery?.displayName ?? "掌握程度")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(selectedMastery != nil ? Color.blue : Color(.systemGray5))
+                    .foregroundColor(selectedMastery != nil ? .white : .primary)
+                    .cornerRadius(16)
                 }
                 
                 // 排序选项
@@ -233,10 +270,19 @@ struct VocabularyView: View {
                         }
                     }
                 } label: {
-                    FilterChip(
-                        title: sortOption.displayName,
-                        isSelected: true
-                    )
+                    HStack(spacing: 4) {
+                        Text(sortOption.displayName)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(16)
                 }
                 
                 // 清除筛选
@@ -275,44 +321,439 @@ struct VocabularyView: View {
         }
     }
     
-    // MARK: - 我的单词
-    
-    private var myWordsView: some View {
-        Group {
-            if filteredWords.isEmpty {
-                emptyWordsView
+    // MARK: - 个人词典视图
+    private var personalDictionariesView: some View {
+        VStack(spacing: 16) {
+            if personalDictionaries.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "book.closed")
+                        .font(.system(size: 50))
+                        .foregroundColor(.secondary)
+                    
+                    Text("暂无个人词典")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("您可以导入词典或创建新的个人词典")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("导入词典") {
+                        isShowingDictionaryImport = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(filteredWords) { wordRecord in
-                        WordRecordRow(wordRecord: wordRecord) {
-                            viewModel.showWordDetail(wordRecord)
-                        }
-                        .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        .listRowSeparator(.hidden)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
-                                viewModel.toggleReviewFlag(for: wordRecord)
-                            } label: {
-                                Image(systemName: wordRecord.needsReview ? "flag.slash" : "flag")
+                    ForEach(personalDictionaries, id: \.id) { dictionary in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(dictionary.name)
+                                    .font(.headline)
+                                    .fontWeight(.medium)
+                                
+                                Spacer()
+                                
+                                Text("\(dictionary.wordCount) 词")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
-                            .tint(.orange)
                             
-                            Button {
-                                viewModel.deleteWordRecord(wordRecord)
-                                loadVocabularyData()
-                            } label: {
-                                Image(systemName: "trash")
+                            Text(dictionary.description)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                            
+                            HStack {
+                                Text("创建时间：\(dictionary.importDate, formatter: dateFormatter)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
                             }
-                            .tint(.red)
                         }
+                        .padding(.vertical, 4)
                     }
-                }
-                .listStyle(PlainListStyle())
-                .refreshable {
-                    loadVocabularyData()
                 }
             }
         }
+        .navigationTitle("个人词典")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("导入") {
+                    isShowingDictionaryImport = true
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingDictionaryImport) {
+            // 词典导入界面
+            NavigationView {
+                VStack {
+                    Text("词典导入功能")
+                        .font(.headline)
+                        .padding()
+                    
+                    Spacer()
+                    
+                    Button("关闭") {
+                        isShowingDictionaryImport = false
+                    }
+                    .padding()
+                }
+                .navigationTitle("导入词典")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter
+    }
+    
+    // MARK: - 词汇量测试卡片
+    
+    private var vocabularyTestCard: some View {
+        Button {
+            isShowingVocabularyTest = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "brain.head.profile")
+                    .font(.title2)
+                    .foregroundColor(.orange)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("词汇量测试")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                    
+                    Text("测试词汇水平")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - 测试历史区域
+    
+    private var testHistorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("测试历史")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if isLoadingTestData {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                }
+            }
+            
+            if testHistory.isEmpty && !isLoadingTestData {
+                VStack(spacing: 8) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                    
+                    Text("暂无测试记录")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("开始第一次词汇量测试吧")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            } else if !testHistory.isEmpty {
+                VStack(spacing: 12) {
+                    // 测试概览卡片
+                    testStatisticsCard
+                    
+                    // 测试历史列表
+                    LazyVStack(spacing: 8) {
+                        ForEach(testHistory.prefix(5), id: \.id) { test in
+                            testHistoryRow(test: test)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+    
+    // MARK: - 测试统计卡片
+    
+    private var testStatisticsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("测试概览")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Text("共 \(testHistory.count) 次测试")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            if let latest = latestTest {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("最近测试")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Text(formatDate(latest.testDate))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack {
+                        Text(latest.dictionaryName)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        if latest.isCompleted {
+                            Text("已完成")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.1))
+                                .cornerRadius(4)
+                        } else {
+                            Text("未完成")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+    
+    // MARK: - 测试历史行
+    
+    private func testHistoryRow(test: VocabularyTest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(test.dictionaryName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Text(formatDate(test.testDate))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            if test.isCompleted {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("已掌握")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("\(test.masteredCount)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.green)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("熟悉")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("\(test.familiarCount)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("不熟悉")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("\(test.unfamiliarCount)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.red)
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("估计词汇量")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("\(test.estimatedVocabulary)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.blue)
+                    }
+                }
+            } else {
+                HStack {
+                    Text("测试未完成")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    
+                    Spacer()
+                    
+                    if test.totalWords > 0 {
+                        Text("进度: \(test.knownWords + test.unknownWords)/\(test.totalWords)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.systemGray5), lineWidth: 1)
+        )
+    }
+
+    // MARK: - 我的单词
+    
+    @State private var selectedWordForDetail: UserWord?
+    @State private var showingWordDetail = false
+    
+    private var myWordsView: some View {
+        VStack(spacing: 0) {
+            // 词汇量测试卡片
+            vocabularyTestCard
+                .padding(.horizontal)
+                .padding(.top, 16)
+            
+            // 掌握程度分类按钮
+            masteryLevelButtons
+            
+            // 测试历史区域
+            testHistorySection
+            
+            // 单词列表
+            Group {
+                if filteredWords.isEmpty {
+                    emptyWordsView
+                } else {
+                    List {
+                        ForEach(filteredWords) { wordRecord in
+                            WordRecordRow(wordRecord: wordRecord) {
+                                selectedWordForDetail = wordRecord
+                                showingWordDetail = true
+                            }
+                            .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .listRowSeparator(.hidden)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    viewModel.toggleReviewFlag(for: wordRecord)
+                                } label: {
+                                    Image(systemName: wordRecord.needsReview ? "flag.slash" : "flag")
+                                }
+                                .tint(.orange)
+                                
+                                Button {
+                                    viewModel.deleteWordRecord(wordRecord)
+                                    viewModel.loadVocabulary()
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .tint(.red)
+                            }
+                        }
+                    }
+                    .listStyle(PlainListStyle())
+                    .refreshable {
+                        viewModel.loadVocabulary()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingWordDetail) {
+            if let wordRecord = selectedWordForDetail {
+                WordDetailSheet(wordRecord: wordRecord)
+            }
+        }
+    }
+    
+    // MARK: - 掌握程度分类按钮
+    private var masteryLevelButtons: some View {
+        HStack(spacing: 12) {
+            // 已掌握按钮
+            MasteryLevelButton(
+                title: "已掌握",
+                count: getMasteredWordsCount(),
+                color: .green,
+                isSelected: selectedMastery == .mastered
+            ) {
+                selectedMastery = selectedMastery == .mastered ? nil : .mastered
+            }
+            
+            // 熟悉按钮
+            MasteryLevelButton(
+                title: "熟悉",
+                count: getFamiliarWordsCount(),
+                color: .orange,
+                isSelected: selectedMastery == .familiar
+            ) {
+                selectedMastery = selectedMastery == .familiar ? nil : .familiar
+            }
+            
+            // 不熟悉按钮
+            MasteryLevelButton(
+                title: "不熟悉",
+                count: getUnfamiliarWordsCount(),
+                color: .red,
+                isSelected: selectedMastery == .unfamiliar
+            ) {
+                selectedMastery = selectedMastery == .unfamiliar ? nil : .unfamiliar
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
     }
     
     private var emptyWordsView: some View {
@@ -366,7 +807,8 @@ struct VocabularyView: View {
                     LazyVStack(spacing: 8) {
                         ForEach(reviewWords.prefix(10)) { wordRecord in
                             ReviewWordRow(wordRecord: wordRecord) {
-                                viewModel.markWordForReview(wordRecord)
+                                // 点击复习按钮：从该词开始复习会话
+                                viewModel.startReview(from: wordRecord)
                             }
                         }
                     }
@@ -615,357 +1057,339 @@ struct VocabularyView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
     
-    // MARK: - 数据处理
-    
-    /// 加载词汇数据
-    private func loadVocabularyData() {
-        viewModel.loadVocabulary()
-        myWords = viewModel.vocabulary
-        vocabularyStats = VocabularyStats(
-            totalWords: viewModel.vocabularyStats.totalWords,
-            unfamiliarWords: viewModel.vocabularyStats.unknownWords,
-            familiarWords: viewModel.vocabularyStats.familiarWords,
-            masteredWords: viewModel.vocabularyStats.masteredWords,
-            todayLookups: 0,
-            weeklyLookups: 0,
-            averageLookupPerDay: 0.0,
-            mostLookedUpWords: []
-        )
-        filterWords()
-    }
-    
-    /// 防抖处理搜索，避免频繁过滤
-    private func debounceFilter() {
-        // 取消之前的任务
-        debounceTask?.cancel()
+    // MARK: - 单词详情弹窗
+    struct WordDetailSheet: View {
+        let wordRecord: UserWord
+        @Environment(\.dismiss) private var dismiss
+        @EnvironmentObject private var dictionaryService: DictionaryService
+        @State private var wordDefinition: DictionaryWordData?
+        @State private var isLoading = true
         
-        // 创建新的延迟任务
-        debounceTask = Task {
-            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms延迟
+        var body: some View {
+            NavigationView {
+                VStack(spacing: 0) {
+                    if isLoading {
+                        ProgressView("加载中...")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let definition = wordDefinition {
+                        ModernWordDefinitionCard(
+                            word: wordRecord.word,
+                            phonetic: definition.phonetic ?? "",
+                            definitions: definition.definitions.map { $0.meaning },
+                            examples: definition.definitions.flatMap { $0.examples },
+                            onClose: {
+                                dismiss()
+                            },
+                            onAddToVocabulary: { }
+                        )
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 50))
+                                .foregroundColor(.orange)
+                            
+                            Text("无法加载单词定义")
+                                .font(.headline)
+                            
+                            Text("单词：\(wordRecord.word)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            Text("来源：\(wordRecord.testSource ?? "未知")")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .navigationTitle("单词详情")
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarBackButtonHidden(true)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("关闭") {
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .task {
+                await loadWordDefinition()
+            }
+        }
+        
+        private func loadWordDefinition() async {
+            isLoading = true
             
-            if !Task.isCancelled {
+            // 使用同步方法查找单词定义
+            if let dictionaryWord = dictionaryService.lookupWord(wordRecord.word, context: wordRecord.context) {
+                // 转换为DictionaryWordData格式
+                let wordData = DictionaryWordData(
+                    word: dictionaryWord.word,
+                    phonetic: dictionaryWord.phonetic,
+                    definitions: dictionaryWord.definitions.map { definition in
+                        WordDefinitionData(
+                            partOfSpeech: definition.partOfSpeech,
+                            meaning: definition.meaning,
+                            englishMeaning: definition.englishMeaning,
+                            examples: definition.examples,
+                            contextKeywords: definition.contextKeywords
+                        )
+                    },
+                    frequency: dictionaryWord.frequency,
+                    difficulty: dictionaryWord.difficulty,
+                    tags: dictionaryWord.tags,
+                    categories: dictionaryWord.categories ?? []
+                )
+                
                 await MainActor.run {
-                    filterWords()
+                    self.wordDefinition = wordData
+                    self.isLoading = false
+                }
+            } else {
+                print("❌ 未找到单词定义: \(wordRecord.word)")
+                await MainActor.run {
+                    self.wordDefinition = nil
+                    self.isLoading = false
                 }
             }
         }
     }
+}
+
+
+// MARK: - VocabularyView 扩展
+extension VocabularyView {
+    // MARK: - 类型转换辅助方法
+    // 删除不再需要的转换方法
     
-    private func filterWords() {
-        var filtered = myWords
-        
-        // 搜索过滤
-        if !searchText.isEmpty {
-            filtered = filtered.filter { wordRecord in
-                wordRecord.word.localizedCaseInsensitiveContains(searchText) ||
-                wordRecord.selectedDefinition?.meaning.localizedCaseInsensitiveContains(searchText) == true
-            }
-        }
-        
-        // 掌握程度过滤
-        if let mastery = selectedMastery {
-            filtered = filtered.filter { $0.masteryLevel == mastery }
-        }
-        
-        filteredWords = filtered
-        sortWords()
+    // MARK: - 掌握程度统计方法
+    private func getMasteredWordsCount() -> Int {
+        viewModel.vocabulary.filter { $0.correctAnswers >= 3 && $0.incorrectAnswers == 0 }.count
     }
     
-    private func sortWords() {
-        switch sortOption {
-        case .recent:
-            filteredWords.sort(by: { $0.lastQueryDate > $1.lastQueryDate })
-        case .alphabetical:
-            filteredWords.sort(by: { $0.word < $1.word })
-        case .frequency:
-            filteredWords.sort(by: { $0.queryCount > $1.queryCount })
-        case .mastery:
-            filteredWords.sort(by: { $0.masteryLevel.rawValue < $1.masteryLevel.rawValue })
-        case .dateAdded:
-            filteredWords.sort(by: { $0.firstQueryDate > $1.firstQueryDate })
-        }
-    }
-    
-    // MARK: - 辅助方法
-    
-    private func getReviewWords() -> [UserWord]? {
-        return myWords.filter { $0.needsReview }
-    }
-    
-    private func getTodayReviewCount() -> Int {
-        let today = Calendar.current.startOfDay(for: Date())
-        return myWords.filter { wordRecord in
-            if let reviewDate = wordRecord.lastReviewDate {
-                return Calendar.current.isDate(reviewDate, inSameDayAs: today)
-            }
-            return false
+    private func getFamiliarWordsCount() -> Int {
+        viewModel.vocabulary.filter { word in
+            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
+            return ratio >= 0.6 && ratio < 1.0
         }.count
     }
     
-    private func getMasteredWordsCount() -> Int {
-        return myWords.filter { $0.masteryLevel == .mastered }.count
+    private func getUnfamiliarWordsCount() -> Int {
+        viewModel.vocabulary.filter { word in
+            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
+            return ratio < 0.6
+        }.count
     }
     
     private func getLearningWordsCount() -> Int {
-        return myWords.filter { $0.masteryLevel == .familiar }.count
-    }
-    
-    private func getUnfamiliarWordsCount() -> Int {
-        return myWords.filter { $0.masteryLevel == .unfamiliar }.count
+        getFamiliarWordsCount()
     }
     
     private func getMasteryPercentage(_ mastery: MasteryLevel) -> Double {
-        guard !myWords.isEmpty else { return 0 }
-        let count = myWords.filter { $0.masteryLevel == mastery }.count
-        return Double(count) / Double(myWords.count)
+        guard !viewModel.vocabulary.isEmpty else { return 0 }
+        let count: Int
+        switch mastery {
+        case .mastered: count = getMasteredWordsCount()
+        case .familiar: count = getFamiliarWordsCount()
+        case .unfamiliar: count = getUnfamiliarWordsCount()
+        }
+        return Double(count) / Double(viewModel.vocabulary.count)
     }
     
     private func getThisWeekNewWords() -> Int {
         let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        return myWords.filter { $0.firstQueryDate >= weekAgo }.count
+        return viewModel.vocabulary.filter { $0.firstLookupDate >= weekAgo }.count
     }
     
     private func getAverageDailyWords() -> Int {
-        guard !myWords.isEmpty else { return 0 }
-        let oldestDate = myWords.map { $0.firstQueryDate }.min() ?? Date()
+        guard !viewModel.vocabulary.isEmpty else { return 0 }
+        let oldestDate = viewModel.vocabulary.map { $0.firstLookupDate }.min() ?? Date()
         let daysSince = Calendar.current.dateComponents([.day], from: oldestDate, to: Date()).day ?? 1
-        return max(1, myWords.count / max(1, daysSince))
+        return max(1, viewModel.vocabulary.count / max(1, daysSince))
     }
     
     private func getFrequentWords() -> [UserWord] {
-        return myWords.sorted { $0.queryCount > $1.queryCount }
+        return viewModel.vocabulary.sorted { $0.lookupCount > $1.lookupCount }
     }
     
-    // MARK: - 个人学习词典相关方法
+    private func getReviewWords() -> [UserWord]? {
+        return viewModel.vocabulary.filter { $0.isMarkedForReview }
+    }
+    
+    private func getTodayReviewCount() -> Int {
+        let today = Calendar.current.startOfDay(for: Date())
+        return viewModel.vocabulary.filter { 
+            Calendar.current.isDate($0.lastLookupDate, inSameDayAs: today)
+        }.count
+    }
+    
+    // 计算属性：filteredMyWords
+    private var filteredMyWords: [UserWord] {
+        return viewModel.filteredVocabulary
+    }
+    
+    // MARK: - 辅助方法
     
     private func initializePersonalDictionaryManager() {
-        personalDictionaryManager = PersonalDictionaryManager(modelContext: modelContext)
-        kaoyanDictionaryImporter = KaoyanDictionaryImporter(modelContext: modelContext)
+        personalDictionaryManager = PersonalDictionaryManager(
+            modelContext: modelContext
+        )
+        kaoyanDictionaryImporter = KaoyanDictionaryImporter(
+            modelContext: modelContext
+        )
+        
+        // 加载个人词典数据
         loadPersonalDictionaries()
-        loadAvailableDictionaries()
     }
     
     private func loadPersonalDictionaries() {
         guard let manager = personalDictionaryManager else { return }
+        
         Task {
             do {
                 let dictionaries = try await manager.getPersonalDictionaries()
                 await MainActor.run {
-                    personalDictionaries = dictionaries
+                    self.personalDictionaries = dictionaries
+                    print("✅ 个人词典加载成功，共 \(dictionaries.count) 个词典")
                 }
             } catch {
-                print("加载个人词典失败: \(error)")
-            }
-        }
-    }
-    
-    private func loadAvailableDictionaries() {
-        guard let importer = kaoyanDictionaryImporter else { return }
-        Task {
-            do {
-                let kaoyanDictionaries = try await importer.getAvailableDictionaries()
-                let convertedDictionaries = kaoyanDictionaries.map { kaoyanDict in
-                    DictionaryInfo(
-                        name: kaoyanDict.name,
-                        displayName: kaoyanDict.name,
-                        fileName: kaoyanDict.fileName,
-                        filePath: "/path/to/\(kaoyanDict.fileName)",
-                        version: "1.0",
-                        description: kaoyanDict.description,
-                        language: "en",
-                        totalWords: kaoyanDict.wordCount,
-                        difficultyLevels: [1, 2, 3],
-                        categories: ["考研"],
-                        fileSize: 1024000,
-                        checksum: "checksum",
-                        isEnabled: !kaoyanDict.isImported,
-                        priority: 1,
-                        statistics: DictionaryStatistics(),
-                        configuration: DictionaryConfiguration()
-                    )
-                }
                 await MainActor.run {
-                    availableDictionaries = convertedDictionaries
+                    self.personalDictionaries = []
+                    print("❌ 个人词典加载失败: \(error.localizedDescription)")
                 }
-            } catch {
-                print("加载可用词典失败: \(error)")
             }
         }
     }
     
-    private func importSelectedDictionaries() {
-        guard let importer = kaoyanDictionaryImporter else { return }
+    private func debounceFilterWords() {
+        debounceTask?.cancel()
+        debounceTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms 延迟
+            if !Task.isCancelled {
+                await MainActor.run {
+                    filterVocabularyWords()
+                }
+            }
+        }
+    }
+    
+    private func filterVocabularyWords() {
+        viewModel.searchText = searchText
+        if let masteryLevel = convertToMasteryLevel(selectedMastery) {
+            viewModel.setMasteryFilter(masteryLevel)
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    /// 将可选的 MasteryLevel 转换为非可选类型
+    private func convertToMasteryLevel(_ level: MasteryLevel?) -> MasteryLevel? {
+        return level
+    }
+    
+    private func sortVocabularyWords() {
+        viewModel.setSortOption(sortOption)
+    }
+    
+    // MARK: - 测试数据加载
+    
+    private func loadTestData() {
+        guard !isLoadingTestData else { return }
         
-        Task {
-            do {
-                try await importer.importSelectedDictionaries(Array(selectedDictionariesForImport))
-                await MainActor.run {
-                    loadPersonalDictionaries()
-                    loadAvailableDictionaries()
-                    selectedDictionariesForImport.removeAll()
-                    isShowingDictionaryImport = false
-                }
-            } catch {
-                print("导入词典失败: \(error)")
-            }
-        }
-    }
-    
-    private func deletePersonalDictionary(_ dictionary: PersonalDictionary) {
-        guard let manager = personalDictionaryManager else { return }
+        isLoadingTestData = true
         
-        Task {
-            do {
-                try await manager.deleteDictionary(dictionary.id)
-                await MainActor.run {
-                    loadPersonalDictionaries()
-                    loadAvailableDictionaries()
-                }
-            } catch {
-                print("删除词典失败: \(error)")
-            }
-        }
-    }
-    
-    // MARK: - 个人学习词典视图
-    
-    private var personalDictionariesView: some View {
-        VStack(spacing: 0) {
-            // 导入词典按钮
-            HStack {
-                Text("已导入的学习词典")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Button {
-                    isShowingDictionaryImport = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("导入词典")
+        let testDataService = appCoordinator.getTestDataService()
+        
+        // 使用Combine订阅获取测试历史
+        testDataService.getTestHistory(limit: 20)
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { completion in
+                    if case .failure(let error) = completion {
+                        print("❌ [VocabularyView] 加载测试历史失败: \(error.localizedDescription)")
                     }
-                    .font(.subheadline)
-                    .foregroundColor(.blue)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top)
-            
-            // 词汇量测试入口
-            VStack(spacing: 12) {
-                Button {
-                    startVocabularyTest()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: "brain.head.profile")
-                                    .font(.title2)
-                                    .foregroundColor(.purple)
-                                
-                                Text("词汇量测试")
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.primary)
-                            }
-                            
-                            Text("测试您的英语词汇量水平")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.purple.opacity(0.1))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.purple.opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            
-            if personalDictionaries.isEmpty {
-                // 空状态视图
-                VStack(spacing: 16) {
-                    Image(systemName: "books.vertical")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-                    
-                    Text("还没有导入任何学习词典")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    
-                    Text("点击上方的\"导入词典\"按钮来添加您的第一个学习词典")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                    
-                    Button {
-                        isShowingDictionaryImport = true
-                    } label: {
-                        Text("开始导入")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(Color.blue)
-                            .cornerRadius(8)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // 词典列表
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(personalDictionaries, id: \.id) { dictionary in
-                            PersonalDictionaryCard(
-                                dictionary: dictionary,
-                                onDelete: { deletePersonalDictionary(dictionary) }
-                            )
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top)
-                }
-            }
-        }
-        .sheet(isPresented: $isShowingDictionaryImport) {
-            DictionaryImportView(
-                availableDictionaries: availableDictionaries,
-                selectedDictionaries: $selectedDictionariesForImport,
-                onImport: importSelectedDictionaries,
-                onCancel: {
-                    isShowingDictionaryImport = false
-                    selectedDictionariesForImport.removeAll()
+                    isLoadingTestData = false
+                },
+                receiveValue: { history in
+                    testHistory = history
+                    print("✅ [VocabularyView] 成功加载测试历史: \(history.count) 条记录")
                 }
             )
-        }
+            .store(in: &cancellables)
+        
+        // 使用Combine订阅获取最新测试
+        testDataService.getLatestTest()
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { completion in
+                    if case .failure(let error) = completion {
+                        print("❌ [VocabularyView] 加载最新测试失败: \(error.localizedDescription)")
+                    }
+                },
+                receiveValue: { latest in
+                    latestTest = latest
+                    if let latest = latest {
+                        print("✅ [VocabularyView] 成功加载最新测试: \(formatDate(latest.testDate))")
+                    }
+                }
+            )
+            .store(in: &cancellables)
     }
     
-    // MARK: - Navigation Methods
+    // MARK: - 辅助方法
     
-    private func startVocabularyTest() {
-        isShowingVocabularyTest = true
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter.string(from: date)
     }
 }
 
-// MARK: - 子视图组件
+// MARK: - 掌握程度按钮组件
+struct MasteryLevelButton: View {
+    let title: String
+    let count: Int
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text("\(count)")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(isSelected ? .white : color)
+                
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(isSelected ? .white : .secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? color : Color(.systemGray6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(color, lineWidth: isSelected ? 0 : 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
 
+// MARK: - MasteryLevel 扩展
+// 删除VocabularyMasteryLevel扩展，使用MasteryLevel的扩展
+
+// MARK: - UserWord 扩展
+// 注意：masteryLevel 已在 Word.swift 中定义为存储属性，此处不再重复定义
+
+// MARK: - 子视图组件
 struct WordRecordRow: View {
     let wordRecord: UserWord
     let action: () -> Void
@@ -986,7 +1410,7 @@ struct WordRecordRow: View {
                         .fill(wordRecord.masteryLevel.color)
                         .frame(width: 12, height: 12)
                     
-                    if wordRecord.needsReview {
+                    if wordRecord.isMarkedForReview {
                         Image(systemName: "flag.fill")
                             .foregroundColor(.orange)
                             .font(.caption)
@@ -994,20 +1418,20 @@ struct WordRecordRow: View {
                 }
                 
                 if let definition = wordRecord.selectedDefinition {
-                    Text(definition.meaning)
+                    Text("\(wordRecord.word)（\(wordRecord.testSource ?? "未知")）\(definition.meaning)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                 }
                 
                 HStack {
-                    Text("查询 \(wordRecord.queryCount) 次")
+                    Text("查询 \(wordRecord.lookupCount) 次")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     Spacer()
                     
-                    Text(RelativeDateTimeFormatter().localizedString(for: wordRecord.lastQueryDate, relativeTo: Date()))
+                    Text(RelativeDateTimeFormatter().localizedString(for: wordRecord.lastLookupDate, relativeTo: Date()))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -1026,104 +1450,139 @@ struct ReviewWordRow: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(wordRecord.word)
-                        .font(.subheadline)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(wordRecord.word)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                if let definition = wordRecord.selectedDefinition {
+                    Text(definition.meaning)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+            
+            Button(action: action) {
+                HStack(spacing: 4) {
+                    Text("复习")
+                        .font(.caption)
                         .fontWeight(.medium)
                     
-                    if let definition = wordRecord.selectedDefinition {
-                        Text(definition.meaning)
-                            .font(.caption)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                }
+                .foregroundColor(.blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - 预览
+#Preview {
+    let container = try! ModelContainer(for: UserWord.self)
+    let mockContext = ModelContext(container)
+    let mockCacheManager = MockCacheManager()
+    let mockErrorHandler = UnifiedErrorHandler()
+    let mockAppCoordinator = AppCoordinator(serviceContainer: ServiceContainer.shared)
+    
+    let mockDictionaryService = DictionaryService(
+        modelContext: mockContext,
+        cacheManager: mockCacheManager,
+        errorHandler: mockErrorHandler
+    )
+    
+    let mockUserProgressService = UserProgressService(
+        modelContext: mockContext,
+        cacheManager: mockCacheManager,
+        errorHandler: mockErrorHandler
+    )
+    
+    let mockViewModel = VocabularyViewModel(
+        dictionaryService: mockDictionaryService,
+        userProgressService: mockUserProgressService,
+        errorHandler: mockErrorHandler
+    )
+    
+    VocabularyView(viewModel: mockViewModel)
+        .modelContainer(container)
+        .environmentObject(mockDictionaryService)
+        .environmentObject(mockAppCoordinator)
+        .environment(mockErrorHandler)
+}
+
+// 新增：复习会话视图
+struct ReviewSessionView: View {
+    @ObservedObject var viewModel: VocabularyViewModel
+    @EnvironmentObject private var dictionaryService: DictionaryService
+    @Environment(UnifiedErrorHandler.self) private var errorHandler
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 16) {
+                if let word = viewModel.currentReviewWord {
+                    Text(word.word)
+                        .font(.title)
+                        .fontWeight(.bold)
+
+                    if let def = dictionaryService.lookupWord(word.word, context: word.context)?.definitions.first {
+                        Text(def.meaning)
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
-                            .lineLimit(1)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+
+                    SwiftUI.ProgressView(value: viewModel.reviewProgress)
+                        .padding(.horizontal)
+
+                    HStack(spacing: 12) {
+                        Button("记住了") {
+                            viewModel.reviewWord(word, correct: true)
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button("没记住") {
+                            viewModel.reviewWord(word, correct: false)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                } else {
+                    Text("没有待复习单词")
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("复习")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("关闭") {
+                        viewModel.finishReview()
+                        dismiss()
                     }
                 }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
         }
-        .buttonStyle(PlainButtonStyle())
+        .interactiveDismissDisabled(true)
     }
 }
 
-struct ReviewStatItem: View {
-    let title: String
-    let value: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(color)
-            
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// StatCard 已在 Components/StatCard.swift 中定义
-
-// MARK: - 子视图组件
-
-struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    
-    var body: some View {
-        Text(title)
-            .font(.caption)
-            .fontWeight(.medium)
-            .foregroundColor(isSelected ? .white : .primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.blue : Color(.systemGray5))
-            .cornerRadius(16)
-    }
-}
-
-// MARK: - 枚举定义
-
-enum VocabularyTab: String, CaseIterable {
-    case myWords = "myWords"
-    case personalDictionaries = "personalDictionaries"
-    case review = "review"
-    case statistics = "statistics"
-    
-    var title: String {
-        switch self {
-        case .myWords:
-            return "我的单词"
-        case .personalDictionaries:
-            return "学习词典"
-        case .review:
-            return "复习"
-        case .statistics:
-            return "统计"
-        }
-    }
-}
-
-
-
-#Preview {
-    VocabularyView(viewModel: VocabularyViewModel(
-        dictionaryService: MockDictionaryService(),
-        userProgressService: MockUserProgressService(),
-        errorHandler: MockErrorHandler()
-    ))
-}
+// ... existing code ...

@@ -270,71 +270,77 @@ struct HybridToolbar: View {
     let onNextPage: () -> Void
     
     var body: some View {
-        HStack {
-            // 混合模式选择器
-            Menu {
-                ForEach(HybridDisplayMode.allCases, id: \.self) { mode in
-                    Button(action: { hybridMode = mode }) {
-                        Label(mode.displayName, systemImage: mode.iconName)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // 混合模式选择器
+                Menu {
+                    ForEach(HybridDisplayMode.allCases, id: \.self) { mode in
+                        Button(action: { hybridMode = mode }) {
+                            Label(mode.displayName, systemImage: mode.iconName)
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: hybridMode.iconName)
+                        Text(hybridMode.displayName)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(6)
+                }
+                
+                Spacer()
+                
+                // 页面导航控件（连续滚动模式不显示）
+                if hybridMode != .tabbed && hybridMode != .continuous {
+                    Button(action: onPreviousPage) {
+                        Image(systemName: "chevron.left")
+                            .font(.title2)
+                    }
+                    .disabled(currentPage <= 1)
+                    
+                    Text("\(currentPage) / \(totalPages)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    
+                    Button(action: onNextPage) {
+                        Image(systemName: "chevron.right")
+                            .font(.title2)
+                    }
+                    .disabled(currentPage >= totalPages)
+                }
+                
+                // 连续滚动模式显示总页数
+                if hybridMode == .continuous {
+                    Text("共 \(totalPages) 页")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                // 同步滚动开关
+                if hybridMode == .sideBySide {
+                    Button(action: { syncScrolling.toggle() }) {
+                        Image(systemName: syncScrolling ? "link" : "link.badge.plus")
+                            .foregroundColor(syncScrolling ? .blue : .gray)
                     }
                 }
-            } label: {
-                HStack {
-                    Image(systemName: hybridMode.iconName)
-                    Text(hybridMode.displayName)
-                        .font(.caption)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(.systemGray5))
-                .cornerRadius(6)
-            }
-            
-            Spacer()
-            
-            // 页面导航控件（连续滚动模式不显示）
-            if hybridMode != .tabbed && hybridMode != .continuous {
-                Button(action: onPreviousPage) {
-                    Image(systemName: "chevron.left")
+                
+                // 设置按钮
+                Button(action: onSettingsTap) {
+                    Image(systemName: "gearshape")
                         .font(.title2)
                 }
-                .disabled(currentPage <= 1)
-                
-                Text("\(currentPage) / \(totalPages)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Button(action: onNextPage) {
-                    Image(systemName: "chevron.right")
-                        .font(.title2)
-                }
-                .disabled(currentPage >= totalPages)
             }
-            
-            // 连续滚动模式显示总页数
-            if hybridMode == .continuous {
-                Text("共 \(totalPages) 页")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            // 同步滚动开关
-            if hybridMode == .sideBySide {
-                Button(action: { syncScrolling.toggle() }) {
-                    Image(systemName: syncScrolling ? "link" : "link.badge.plus")
-                        .foregroundColor(syncScrolling ? .blue : .gray)
-                }
-            }
-            
-            // 设置按钮
-            Button(action: onSettingsTap) {
-                Image(systemName: "gearshape")
-                    .font(.title2)
-            }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color(.systemBackground))
         .shadow(radius: 1)
