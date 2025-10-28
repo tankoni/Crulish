@@ -47,6 +47,10 @@ struct VocabularyView: View {
     @State private var isLoadingTestData = false // 测试数据加载状态
     @State private var cancellables = Set<AnyCancellable>() // Combine订阅管理
     
+    // 重测模式相关状态
+    @State private var isShowingRetestMode = false // 控制重测模式界面显示
+    @State private var retestModeService: RetestModeService? // 重测模式服务
+    
     var body: some View {
         NavigationView {
             mainContent
@@ -64,6 +68,7 @@ struct VocabularyView: View {
                 viewModel.loadVocabulary()
                 initializePersonalDictionaryManager()
                 loadTestData() // 加载测试数据
+                initializeRetestModeService() // 初始化重测模式服务
                 isDataLoaded = true
             }
         }
@@ -90,6 +95,16 @@ struct VocabularyView: View {
                 testResultExportService: appCoordinator.getTestResultExportService(),
                 appCoordinator: appCoordinator
             )
+        }
+        .sheet(isPresented: $isShowingRetestMode) {
+            if let retestService = retestModeService {
+                RetestModeView(
+                    retestModeService: retestService,
+                    dictionaryService: dictionaryService,
+                    errorHandler: errorHandler,
+                    appCoordinator: appCoordinator
+                )
+            }
         }
         // 新增：复习会话弹窗
         .sheet(
@@ -147,6 +162,12 @@ struct VocabularyView: View {
                 isShowingVocabularyTest = true
             } label: {
                 Label("词汇量测试", systemImage: "brain.head.profile.fill")
+            }
+            
+            Button {
+                isShowingRetestMode = true
+            } label: {
+                Label("重测模式", systemImage: "arrow.clockwise.circle.fill")
             }
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -661,55 +682,56 @@ struct VocabularyView: View {
     @State private var showingWordDetail = false
     
     private var myWordsView: some View {
-        VStack(spacing: 0) {
-            // 词汇量测试卡片
-            vocabularyTestCard
-                .padding(.horizontal)
-                .padding(.top, 16)
-            
-            // 掌握程度分类按钮
-            masteryLevelButtons
-            
-            // 测试历史区域
-            testHistorySection
-            
-            // 单词列表
-            Group {
-                if filteredWords.isEmpty {
-                    emptyWordsView
-                } else {
-                    List {
-                        ForEach(filteredWords) { wordRecord in
-                            WordRecordRow(wordRecord: wordRecord) {
-                                selectedWordForDetail = wordRecord
-                                showingWordDetail = true
-                            }
-                            .listRowInsets(SwiftUI.EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                            .listRowSeparator(.hidden)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button {
-                                    viewModel.toggleReviewFlag(for: wordRecord)
-                                } label: {
-                                    Image(systemName: wordRecord.needsReview ? "flag.slash" : "flag")
+        ScrollView {
+            VStack(spacing: 0) {
+                // 词汇量测试卡片
+                vocabularyTestCard
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+                
+                // 掌握程度分类按钮
+                masteryLevelButtons
+                
+                // 测试历史区域
+                testHistorySection
+                
+                // 单词列表
+                Group {
+                    if filteredWords.isEmpty {
+                        emptyWordsView
+                    } else {
+                        LazyVStack(spacing: 8) {
+                            ForEach(filteredWords) { wordRecord in
+                                WordRecordRow(wordRecord: wordRecord) {
+                                    selectedWordForDetail = wordRecord
+                                    showingWordDetail = true
                                 }
-                                .tint(.orange)
-                                
-                                Button {
-                                    viewModel.deleteWordRecord(wordRecord)
-                                    viewModel.loadVocabulary()
-                                } label: {
-                                    Image(systemName: "trash")
+                                .padding(.horizontal, 16)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button {
+                                        viewModel.toggleReviewFlag(for: wordRecord)
+                                    } label: {
+                                        Image(systemName: wordRecord.needsReview ? "flag.slash" : "flag")
+                                    }
+                                    .tint(.orange)
+                                    
+                                    Button {
+                                        viewModel.deleteWordRecord(wordRecord)
+                                        viewModel.loadVocabulary()
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .tint(.red)
                                 }
-                                .tint(.red)
                             }
                         }
-                    }
-                    .listStyle(PlainListStyle())
-                    .refreshable {
-                        viewModel.loadVocabulary()
+                        .padding(.bottom, 20)
                     }
                 }
             }
+        }
+        .refreshable {
+            viewModel.loadVocabulary()
         }
         .sheet(isPresented: $showingWordDetail) {
             if let wordRecord = selectedWordForDetail {
@@ -785,68 +807,68 @@ struct VocabularyView: View {
     // MARK: - 复习视图
     
     private var reviewView: some View {
-        VStack(spacing: 20) {
-            // 复习统计
-            reviewStatsCard
-            
-            // 需要复习的单词
-            if let reviewWords = getReviewWords(), !reviewWords.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("待复习单词")
-                            .font(.headline)
-                            .fontWeight(.medium)
+        ScrollView {
+            VStack(spacing: 20) {
+                // 复习统计
+                reviewStatsCard
+                
+                // 需要复习的单词
+                if let reviewWords = getReviewWords(), !reviewWords.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("待复习单词")
+                                .font(.headline)
+                                .fontWeight(.medium)
+                            
+                            Spacer()
+                            
+                            Text("\(reviewWords.count)个")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
                         
-                        Spacer()
-                        
-                        Text("\(reviewWords.count)个")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    LazyVStack(spacing: 8) {
-                        ForEach(reviewWords.prefix(10)) { wordRecord in
-                            ReviewWordRow(wordRecord: wordRecord) {
-                                // 点击复习按钮：从该词开始复习会话
-                                viewModel.startReview(from: wordRecord)
+                        LazyVStack(spacing: 8) {
+                            ForEach(reviewWords.prefix(10)) { wordRecord in
+                                ReviewWordRow(wordRecord: wordRecord) {
+                                    // 点击复习按钮：从该词开始复习会话
+                                    viewModel.startReview(from: wordRecord)
+                                }
                             }
                         }
-                    }
-                    
-                    if reviewWords.count > 10 {
-                        Button("查看全部 \(reviewWords.count) 个单词") {
-                            viewModel.showAllReviewWords()
+                        
+                        if reviewWords.count > 10 {
+                            Button("查看全部 \(reviewWords.count) 个单词") {
+                                viewModel.showAllReviewWords()
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 8)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
                     }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(12)
+                    .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                } else {
+                    VStack(spacing: 16) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 50))
+                            .foregroundColor(.green)
+                        
+                        Text("今日复习已完成")
+                            .font(.title2)
+                            .fontWeight(.medium)
+                        
+                        Text("所有单词都已复习完毕，继续保持！")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, minHeight: 300)
                 }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-            } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.system(size: 50))
-                        .foregroundColor(.green)
-                    
-                    Text("今日复习已完成")
-                        .font(.title2)
-                        .fontWeight(.medium)
-                    
-                    Text("所有单词都已复习完毕，继续保持！")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            
-            Spacer()
+            .padding()
         }
-        .padding()
     }
     
     private var reviewStatsCard: some View {
@@ -1165,20 +1187,20 @@ extension VocabularyView {
     
     // MARK: - 掌握程度统计方法
     private func getMasteredWordsCount() -> Int {
-        viewModel.vocabulary.filter { $0.correctAnswers >= 3 && $0.incorrectAnswers == 0 }.count
+        return viewModel.vocabulary.filter { word in
+            word.masteryLevel == .mastered
+        }.count
     }
     
     private func getFamiliarWordsCount() -> Int {
-        viewModel.vocabulary.filter { word in
-            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
-            return ratio >= 0.6 && ratio < 1.0
+        return viewModel.vocabulary.filter { word in
+            word.masteryLevel == .familiar
         }.count
     }
     
     private func getUnfamiliarWordsCount() -> Int {
-        viewModel.vocabulary.filter { word in
-            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
-            return ratio < 0.6
+        return viewModel.vocabulary.filter { word in
+            word.masteryLevel == .unfamiliar
         }.count
     }
     
@@ -1345,6 +1367,13 @@ extension VocabularyView {
         formatter.timeStyle = .none
         formatter.locale = Locale(identifier: "zh_CN")
         return formatter.string(from: date)
+    }
+    
+    // MARK: - 重测模式服务初始化
+    
+    private func initializeRetestModeService() {
+        retestModeService = appCoordinator.getRetestModeService()
+        print("✅ [VocabularyView] 重测模式服务初始化成功")
     }
 }
 

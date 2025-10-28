@@ -212,7 +212,7 @@ struct WordTestCard: View {
                 }
                 
                 // 只在中译英模式下显示眼熟选项
-                if testMode == .chineseToEnglish {
+                if testMode == VocabularyTestMode.chineseToEnglish {
                     MasteryButton(
                         title: "眼熟",
                         subtitle: "有印象",
@@ -332,7 +332,7 @@ struct MasteryButton: View {
                 difficulty: .medium,
                 frequency: 3
             ),
-            testMode: .chineseToEnglish
+            testMode: VocabularyTestMode.chineseToEnglish
         ) { mastery in
             print("Selected mastery: \(mastery)")
         }

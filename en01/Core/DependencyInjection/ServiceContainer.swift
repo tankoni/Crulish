@@ -43,6 +43,9 @@ class ServiceContainer {
     private var compositeRankingService: CompositeRankingService?
     private var intelligentRankingService: IntelligentRankingService?
     
+    // 重测模式服务
+    private var retestModeService: RetestModeService?
+    
     // MARK: - 模型上下文
     private var modelContext: ModelContext?
     
@@ -202,6 +205,13 @@ class ServiceContainer {
             modelContext: modelContext,
             cacheManager: cacheManager,
             errorHandler: unifiedErrorHandler
+        )
+
+        // 初始化重测模式服务（同步）
+        self.retestModeService = RetestModeService(
+            modelContext: modelContext,
+            testDataService: testDataService!,
+            dictionaryService: dictionaryService!
         )
 
         startupProgressManager.completeStage(.loadingOptionalServices)
@@ -543,6 +553,14 @@ class ServiceContainer {
     func getTestDataService() -> TestDataService {
         guard let service = testDataService else {
             fatalError("TestDataService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取重测模式服务
+    func getRetestModeService() -> RetestModeService {
+        guard let service = retestModeService else {
+            fatalError("RetestModeService not initialized. Call configure(with:) first.")
         }
         return service
     }

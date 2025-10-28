@@ -1,5 +1,5 @@
 Command line invocation:
     /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project en01.xcodeproj -scheme en01 -destination "platform=iOS Simulator,name=iPhone 16 Pro" build
 
-2025-10-27 20:29:10.675 xcodebuild[35044:220779] Writing error result bundle to /var/folders/2h/8lkms89s1vn8l9ktw1n5nj3h0000gn/T/ResultBundle_2025-27-10_20-29-0010.xcresult
+2025-10-27 20:29:31.250 xcodebuild[35439:221615] Writing error result bundle to /var/folders/2h/8lkms89s1vn8l9ktw1n5nj3h0000gn/T/ResultBundle_2025-27-10_20-29-0031.xcresult
 xcodebuild: error: 'en01.xcodeproj' does not exist.

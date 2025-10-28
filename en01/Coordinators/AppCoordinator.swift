@@ -140,6 +140,10 @@ enum TabSelection: String, CaseIterable {
         return serviceContainer.getTestDataService()
     }
     
+    func getRetestModeService() -> RetestModeService {
+        return serviceContainer.getRetestModeService()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer

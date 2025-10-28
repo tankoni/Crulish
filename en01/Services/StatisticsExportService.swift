@@ -224,12 +224,9 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
             details += "\n无\n"
         } else {
             details += "\n"
-            for word in masteredWords.prefix(20) { // 限制显示数量
+            for word in masteredWords { // 移除数量限制，导出所有单词
                 let wordDetails = await getWordDetailsForExport(word.word)
                 details += "- **\(word.word)** \(wordDetails)\n"
-            }
-            if masteredWords.count > 20 {
-                details += "... 还有 \(masteredWords.count - 20) 个单词\n"
             }
         }
         
@@ -242,12 +239,9 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
             details += "\n无\n"
         } else {
             details += "\n"
-            for word in familiarWords.prefix(20) {
+            for word in familiarWords { // 移除数量限制，导出所有单词
                 let wordDetails = await getWordDetailsForExport(word.word)
                 details += "- **\(word.word)** \(wordDetails)\n"
-            }
-            if familiarWords.count > 20 {
-                details += "... 还有 \(familiarWords.count - 20) 个单词\n"
             }
         }
         
@@ -260,12 +254,9 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
             details += "\n无\n"
         } else {
             details += "\n"
-            for word in unfamiliarWords.prefix(20) {
+            for word in unfamiliarWords { // 移除数量限制，导出所有单词
                 let wordDetails = await getWordDetailsForExport(word.word)
                 details += "- **\(word.word)** \(wordDetails)\n"
-            }
-            if unfamiliarWords.count > 20 {
-                details += "... 还有 \(unfamiliarWords.count - 20) 个单词\n"
             }
         }
         

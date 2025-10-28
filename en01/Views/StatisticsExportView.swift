@@ -23,6 +23,7 @@ struct StatisticsExportView: View {
     @State private var selectedFormat: StatisticsExportFormat = .markdown
     @State private var includeCharts = false
     @State private var includeDetailedStats = true
+    @State private var categorizeVocabularyExport = false  // 新增：是否分类导出词汇
     @State private var isExporting = false
     @State private var exportProgress: Double = 0.0
     @State private var exportError: String?
@@ -157,6 +158,32 @@ struct StatisticsExportView: View {
                 
                 Toggle("包含详细统计", isOn: $includeDetailedStats)
                     .toggleStyle(SwitchToggleStyle(tint: .blue))
+                
+                // 只有选择了词汇统计时才显示分类导出选项
+                if selectedDataTypes.contains(.vocabularyStats) {
+                    Toggle("分类导出词汇", isOn: $categorizeVocabularyExport)
+                        .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    
+                    if categorizeVocabularyExport {
+                        Text("将已掌握、熟悉、陌生单词分别导出到三个文件")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 16)
+                    }
+                }
+                
+                // 为测试结果导出选项添加分类导出功能
+                if selectedDataTypes.contains(.testResults) {
+                    Toggle("分类导出测试词汇", isOn: $categorizeVocabularyExport)
+                        .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    
+                    if categorizeVocabularyExport {
+                        Text("将测试中的已掌握、熟悉、陌生单词分别导出到三个文件")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 16)
+                    }
+                }
             }
             .padding()
             .background(Color(.systemGray6))
@@ -314,6 +341,11 @@ struct StatisticsExportView: View {
         let fileName = "学习统计_\(dateFormatter.string(from: Date()))"
         print("📝 生成文件名: \(fileName)")
         
+        // 检查是否需要分类导出词汇
+        if categorizeVocabularyExport && (selectedDataTypes.contains(.vocabularyStats) || selectedDataTypes.contains(.testResults)) {
+            return try await exportCategorizedVocabulary(data: data, documentsPath: documentsPath, fileName: fileName)
+        }
+        
         switch selectedFormat {
         case StatisticsExportFormat.markdown:
             let content = try await generateMarkdownContent(from: data)
@@ -330,20 +362,195 @@ struct StatisticsExportView: View {
             }
             
         case StatisticsExportFormat.pdf:
-            // PDF导出功能需要更复杂的实现
-            // 暂时创建一个简单的文本文件
+            // 实现真正的PDF导出功能
             let content = try await generateMarkdownContent(from: data)
-            let fileURL = documentsPath.appendingPathComponent("\(fileName).txt")
-            print("📄 准备写入PDF文件(临时为txt): \(fileURL.path)")
+            let fileURL = documentsPath.appendingPathComponent("\(fileName).pdf")
+            print("📄 准备生成PDF文件: \(fileURL.path)")
             
             do {
-                try content.write(to: fileURL, atomically: true, encoding: .utf8)
-                print("✅ PDF文件(临时为txt)写入成功")
+                try await generatePDFFile(content: content, outputURL: fileURL)
+                print("✅ PDF文件生成成功")
                 return fileURL
             } catch {
-                print("❌ PDF文件写入失败: \(error.localizedDescription)")
+                print("❌ PDF文件生成失败: \(error.localizedDescription)")
                 throw error
             }
+        }
+    }
+    
+    // MARK: - 分类导出词汇功能
+    private func exportCategorizedVocabulary(data: StatisticsExportData, documentsPath: URL, fileName: String) async throws -> URL {
+        guard data.vocabularyStats != nil else {
+            throw NSError(domain: "ExportError", code: 1, userInfo: [NSLocalizedDescriptionKey: "词汇统计数据不可用"])
+        }
+        
+        let fileExtension = selectedFormat == .markdown ? "md" : "pdf"
+        
+        // 获取实际的单词列表数据
+        let descriptor = FetchDescriptor<TestedWord>(sortBy: [SortDescriptor(\.testedAt, order: .reverse)])
+        let testedWords = try modelContext.fetch(descriptor)
+        
+        // 按掌握程度分类获取单词列表
+        let masteredWordsList = testedWords.filter { $0.masteryLevel == MasteryLevel.mastered.rawValue }.map { $0.word }
+        let learningWordsList = testedWords.filter { $0.masteryLevel == MasteryLevel.familiar.rawValue }.map { $0.word }
+        let reviewWordsList = testedWords.filter { $0.masteryLevel == MasteryLevel.unfamiliar.rawValue }.map { $0.word }
+        
+        // 生成已掌握单词文件
+        let masteredContent = generateCategorizedContent(
+            title: "已掌握单词",
+            words: masteredWordsList,
+            exportDate: data.exportDate
+        )
+        let masteredFileURL = documentsPath.appendingPathComponent("\(fileName)_已掌握单词.\(fileExtension)")
+        
+        if selectedFormat == .markdown {
+            try masteredContent.write(to: masteredFileURL, atomically: true, encoding: .utf8)
+        } else {
+            try await generatePDFFile(content: masteredContent, outputURL: masteredFileURL)
+        }
+        print("✅ 已掌握单词文件写入成功: \(masteredFileURL.path)")
+        
+        // 生成熟悉单词文件
+        let learningContent = generateCategorizedContent(
+            title: "熟悉单词",
+            words: learningWordsList,
+            exportDate: data.exportDate
+        )
+        let learningFileURL = documentsPath.appendingPathComponent("\(fileName)_熟悉单词.\(fileExtension)")
+        
+        if selectedFormat == .markdown {
+            try learningContent.write(to: learningFileURL, atomically: true, encoding: .utf8)
+        } else {
+            try await generatePDFFile(content: learningContent, outputURL: learningFileURL)
+        }
+        print("✅ 熟悉单词文件写入成功: \(learningFileURL.path)")
+        
+        // 生成陌生单词文件
+        let reviewContent = generateCategorizedContent(
+            title: "陌生单词",
+            words: reviewWordsList,
+            exportDate: data.exportDate
+        )
+        let reviewFileURL = documentsPath.appendingPathComponent("\(fileName)_陌生单词.\(fileExtension)")
+        
+        if selectedFormat == .markdown {
+            try reviewContent.write(to: reviewFileURL, atomically: true, encoding: .utf8)
+        } else {
+            try await generatePDFFile(content: reviewContent, outputURL: reviewFileURL)
+        }
+        print("✅ 陌生单词文件写入成功: \(reviewFileURL.path)")
+        
+        // 返回第一个文件的URL（用于分享功能）
+        return masteredFileURL
+    }
+    
+    private func generateCategorizedContent(title: String, words: [String], exportDate: Date) -> String {
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateStyle = .medium
+        displayFormatter.timeStyle = .short
+        displayFormatter.locale = Locale(identifier: "zh_CN")
+        
+        var content = ""
+        if selectedFormat == .markdown {
+            content += "# \(title)\n\n"
+            content += "生成时间：\(displayFormatter.string(from: exportDate))\n\n"
+            content += "## 单词列表\n\n"
+            content += "共 \(words.count) 个单词\n\n"
+            
+            for (index, word) in words.enumerated() {
+                content += "\(index + 1). \(word)\n"
+            }
+        } else {
+            content += "\(title)\n\n"
+            content += "生成时间：\(displayFormatter.string(from: exportDate))\n\n"
+            content += "单词列表\n\n"
+            content += "共 \(words.count) 个单词\n\n"
+            
+            for (index, word) in words.enumerated() {
+                content += "\(index + 1). \(word)\n"
+            }
+        }
+        
+        return content
+    }
+    
+    // MARK: - PDF生成功能
+    private func generatePDFFile(content: String, outputURL: URL) async throws {
+        print("🎨 开始PDF渲染...")
+        
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // A4 size
+        let margin: CGFloat = 50
+        let contentRect = CGRect(x: margin, y: margin, width: pageRect.width - 2 * margin, height: pageRect.height - 2 * margin)
+        
+        UIGraphicsBeginPDFContextToFile(outputURL.path, pageRect, nil)
+        
+        guard UIGraphicsGetCurrentContext() != nil else {
+            print("❌ 无法创建PDF上下文")
+            throw NSError(domain: "PDFError", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法创建PDF上下文"])
+        }
+        
+        UIGraphicsBeginPDFPage()
+        var currentY: CGFloat = margin
+        
+        // 分割内容为行
+        let lines = content.components(separatedBy: .newlines)
+        
+        for line in lines {
+            // 检查是否需要新页面
+            if currentY > pageRect.height - margin - 50 {
+                UIGraphicsBeginPDFPage()
+                currentY = margin
+            }
+            
+            // 根据行内容选择字体和样式
+            let font: UIFont
+            let textColor: UIColor = .black
+            
+            if line.hasPrefix("# ") {
+                // 主标题
+                font = UIFont.boldSystemFont(ofSize: 20)
+            } else if line.hasPrefix("## ") {
+                // 二级标题
+                font = UIFont.boldSystemFont(ofSize: 16)
+            } else if line.hasPrefix("### ") {
+                // 三级标题
+                font = UIFont.boldSystemFont(ofSize: 14)
+            } else {
+                // 普通文本
+                font = UIFont.systemFont(ofSize: 12)
+            }
+            
+            // 清理Markdown标记
+            let cleanLine = line.replacingOccurrences(of: "^#+\\s*", with: "", options: .regularExpression)
+            
+            if !cleanLine.trimmingCharacters(in: .whitespaces).isEmpty {
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: textColor
+                ]
+                
+                let attributedString = NSAttributedString(string: cleanLine, attributes: attributes)
+                let textRect = CGRect(x: margin, y: currentY, width: contentRect.width, height: 30)
+                
+                attributedString.draw(in: textRect)
+                currentY += font.lineHeight + 5
+            } else {
+                // 空行
+                currentY += 10
+            }
+        }
+        
+        UIGraphicsEndPDFContext()
+        print("✅ PDF渲染完成")
+        
+        // 验证PDF文件
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            let attributes = try FileManager.default.attributesOfItem(atPath: outputURL.path)
+            let fileSize = attributes[.size] as? Int64 ?? 0
+            print("📊 PDF文件验证成功，大小: \(fileSize) 字节")
+        } else {
+            print("❌ PDF文件创建失败")
+            throw NSError(domain: "PDFError", code: 2, userInfo: [NSLocalizedDescriptionKey: "PDF文件创建失败"])
         }
     }
     
@@ -443,11 +650,8 @@ struct StatisticsExportView: View {
                     if masteredWords.isEmpty {
                         content += "暂无已掌握单词\n\n"
                     } else {
-                        for word in masteredWords.prefix(50) { // 限制显示数量避免文件过大
+                        for word in masteredWords {
                             content += "- \(word.word)\n"
-                        }
-                        if masteredWords.count > 50 {
-                            content += "... 还有 \(masteredWords.count - 50) 个单词\n"
                         }
                         content += "\n"
                     }
@@ -457,11 +661,8 @@ struct StatisticsExportView: View {
                     if familiarWords.isEmpty {
                         content += "暂无熟悉单词\n\n"
                     } else {
-                        for word in familiarWords.prefix(50) {
+                        for word in familiarWords {
                             content += "- \(word.word)\n"
-                        }
-                        if familiarWords.count > 50 {
-                            content += "... 还有 \(familiarWords.count - 50) 个单词\n"
                         }
                         content += "\n"
                     }
@@ -471,11 +672,8 @@ struct StatisticsExportView: View {
                     if unfamiliarWords.isEmpty {
                         content += "暂无陌生单词\n\n"
                     } else {
-                        for word in unfamiliarWords.prefix(50) {
+                        for word in unfamiliarWords {
                             content += "- \(word.word)\n"
-                        }
-                        if unfamiliarWords.count > 50 {
-                            content += "... 还有 \(unfamiliarWords.count - 50) 个单词\n"
                         }
                         content += "\n"
                     }

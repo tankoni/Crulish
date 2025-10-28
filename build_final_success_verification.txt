@@ -1,0 +1,788 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project en01.xcodeproj -scheme en01 -destination "platform=iOS Simulator,name=iPhone 16 Pro" build
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:45A3CF1C-6C9C-4C2B-85D6-C90D03DFE877, OS:18.4, name:iPhone 16 Pro }
+{ platform:iOS Simulator, arch:x86_64, id:45A3CF1C-6C9C-4C2B-85D6-C90D03DFE877, OS:18.4, name:iPhone 16 Pro }
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (1 target)
+    Target 'en01' in project 'en01' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/tankonitk/Library/Mobile Documents/com~apple~CloudDocs/xcode/Crulish/en01/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+Build description signature: 5bcaf23d142e6a466c07212364916306
+Build description path: /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/XCBuildData/5bcaf23d142e6a466c07212364916306.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache
+
+WriteAuxiliaryFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    write-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList
+
+WriteAuxiliaryFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.LinkFileList (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    write-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.LinkFileList
+
+ProcessProductPackaging /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/en01.entitlements /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+    Entitlements:
+    
+    {
+    "application-identifier" = "6HRY9ZWA53.com.crulish.en01";
+}
+    
+    builtin-productPackagingUtility /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/en01.entitlements -entitlements -format xml -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent
+
+WriteAuxiliaryFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftConstValuesFileList (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    write-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftConstValuesFileList
+
+ProcessProductPackaging /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/en01.entitlements /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+    Entitlements:
+    
+    {
+}
+    
+    builtin-productPackagingUtility /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/en01.entitlements -entitlements -format xml -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent
+
+ProcessProductPackagingDER /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent.der (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    /usr/bin/derq query -f xml -i /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent.der --raw
+
+ProcessProductPackagingDER /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent.der (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    /usr/bin/derq query -f xml -i /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent.der --raw
+
+CpResource /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/build_final_success_verification.txt /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/build_final_success_verification.txt (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/build_final_success_verification.txt /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app
+
+CpResource /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/build_final_verification.txt /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/build_final_verification.txt (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/build_final_verification.txt /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app
+
+ProcessInfoPlistFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/Info.plist /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Info.plist (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    builtin-infoPlistUtility /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/assetcatalog_generated_info.plist -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/Info.plist
+
+SwiftDriver en01 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name en01 -Onone -enforce-exclusivity\=checked @/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -target arm64-apple-ios17.6-simulator -g -module-cache-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Index.noindex/DataStore -swift-version 5 -I /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -F /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64 -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache -output-file-map /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01_const_extract_protocols.json -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-generated-files.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-own-target-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-all-target-headers.hmap -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-project-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources-normal/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-Swift.h -working-directory /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ WordMasterySelector.swift,\ fix_preview_mocks.swift,\ WordLookupRecord.swift,\ AdaptiveModels.swift,\ WordInteractionCoordinator.swift,\ AdaptiveSettingsSheet.swift,\ ContinuousTextView.swift,\ ReaderBottomToolbar.swift,\ SettingsView.swift,\ TestDataService.swift,\ VocabularyTestView.swift,\ UnifiedCacheManager.swift,\ AIModelSelectionView.swift,\ Word.swift,\ DistractorGenerator.swift,\ PDFService.swift,\ MemoryManager.swift,\ CompositeRankingService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/WordMasterySelector.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/fix_preview_mocks.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordLookupRecord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/AdaptiveModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Coordination/WordInteractionCoordinator.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/AdaptiveSettingsSheet.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ContinuousTextView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ReaderBottomToolbar.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/SettingsView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestDataService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/VocabularyTestView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/UnifiedCacheManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/AIModelSelectionView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Word.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DistractorGenerator.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/PDFService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/MemoryManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/CompositeRankingService.swift (in target 'en01' from project 'en01')
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/WordMasterySelector.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/fix_preview_mocks.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordLookupRecord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/AdaptiveModels.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Coordination/WordInteractionCoordinator.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/AdaptiveSettingsSheet.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ContinuousTextView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ReaderBottomToolbar.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/SettingsView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestDataService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/VocabularyTestView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/UnifiedCacheManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/AIModelSelectionView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Word.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DistractorGenerator.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/PDFService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/MemoryManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/CompositeRankingService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ TestHistoryListView.swift,\ AchievementBadgeView.swift,\ WordDefinitionViewModel.swift,\ Settings.swift,\ Translation.swift,\ PersonalDictionaryCard.swift,\ ServiceResult.swift,\ TestResultManager.swift,\ RetestModeViewModel.swift,\ StructuredTextView.swift,\ CompositeRankingModels.swift,\ ArticleRanking.swift,\ RetestModels.swift,\ TestResultHistory.swift,\ PerformanceTestApp.swift,\ AdaptiveLearningService.swift,\ ConstraintConflictResolver.swift,\ DictionaryTestState.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestHistoryListView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/AchievementBadgeView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/WordDefinitionViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Settings.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Translation.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PersonalDictionaryCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Services/ServiceResult.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/TestResultManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/RetestModeViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StructuredTextView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/CompositeRankingModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ArticleRanking.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/RetestModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestResultHistory.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PerformanceTestApp.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/AdaptiveLearningService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/ConstraintConflictResolver.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DictionaryTestState.swift (in target 'en01' from project 'en01')
+Failed frontend command:
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-frontend -frontend -c -filelist /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/sources-1 -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Views/TestHistoryListView.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Views/Components/AchievementBadgeView.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/ViewModels/WordDefinitionViewModel.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Models/Settings.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Models/Translation.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Views/PersonalDictionaryCard.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Core/Services/ServiceResult.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/ViewModels/TestResultManager.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/ViewModels/RetestModeViewModel.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Views/StructuredTextView.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Models/CompositeRankingModels.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Models/ArticleRanking.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Models/RetestModels.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Models/TestResultHistory.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Views/PerformanceTestApp.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Services/AdaptiveLearningService.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Core/InputManagement/ConstraintConflictResolver.swift -primary-file /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Models/DictionaryTestState.swift -supplementary-output-file-map /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/supplementaryOutputs-1 -emit-localized-strings -emit-localized-strings-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64 -target arm64-apple-ios17.6-simulator -Xllvm -aarch64-use-tbi -enable-objc-interop -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -I /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -F /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -no-color-diagnostics -enable-testing -g -debug-info-format\=dwarf -dwarf-version\=4 -module-cache-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -profile-generate -profile-coverage-mapping -swift-version 5 -enforce-exclusivity\=checked -Onone -D DEBUG -serialize-debugging-options -const-gather-protocols-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01_const_extract_protocols.json -enable-experimental-feature DebugDescriptionMacro -enable-bare-slash-regex -empty-abi-descriptor -validate-clang-modules-once -clang-build-session-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -working-directory -Xcc /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish -resource-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift -enable-anonymous-context-mangled-names -file-compilation-dir /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish -Xcc -ivfsstatcache -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/swift-overrides.hmap -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-generated-files.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-own-target-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-all-target-headers.hmap -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-project-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources-normal/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources -Xcc -DDEBUG\=1 -module-name en01 -frontend-parseable-output -disable-clang-spi -target-sdk-version 18.4 -target-sdk-name iphonesimulator18.4 -external-plugin-path /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server -external-plugin-path /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/local/lib/swift/host/plugins\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server -in-process-plugin-server-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/libSwiftInProcPluginServer.dylib -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/local/lib/swift/host/plugins -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/TestHistoryListView.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/AchievementBadgeView.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/WordDefinitionViewModel.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/Settings.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/Translation.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/PersonalDictionaryCard.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/ServiceResult.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/TestResultManager.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/RetestModeViewModel.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/StructuredTextView.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/CompositeRankingModels.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/ArticleRanking.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/RetestModels.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/TestResultHistory.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/PerformanceTestApp.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/AdaptiveLearningService.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/ConstraintConflictResolver.o -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/DictionaryTestState.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/TestHistoryListView.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/AchievementBadgeView.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/WordDefinitionViewModel.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/Settings.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/Translation.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/PersonalDictionaryCard.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/ServiceResult.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/TestResultManager.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/RetestModeViewModel.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/StructuredTextView.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/CompositeRankingModels.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/ArticleRanking.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/RetestModels.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/TestResultHistory.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/PerformanceTestApp.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/AdaptiveLearningService.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/ConstraintConflictResolver.o -index-unit-output-path /en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/DictionaryTestState.o -index-store-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Index.noindex/DataStore -index-system-modules
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestHistoryListView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/AchievementBadgeView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/WordDefinitionViewModel.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Settings.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Translation.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PersonalDictionaryCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Services/ServiceResult.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/TestResultManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/RetestModeViewModel.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+/Users/tankonitk/Library/Mobile Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/RetestModeViewModel.swift:262:51: error: value of type 'RetestWordItem' has no member 'masteryLevel'
+                counts[level] = words.filter { $0.masteryLevel == level }.count
+                                               ~~ ^~~~~~~~~~~~
+/Users/tankonitk/Library/Mobile Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/RetestModeViewModel.swift:275:17: warning: initialization of immutable value 'filters' was never used; consider replacing with assignment to '_' or removing it
+            let filters = RetestWordFilters(
+            ~~~~^~~~~~~
+            _
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StructuredTextView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/CompositeRankingModels.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ArticleRanking.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/RetestModels.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestResultHistory.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PerformanceTestApp.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/AdaptiveLearningService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/ConstraintConflictResolver.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DictionaryTestState.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ DictionaryLoader.swift,\ HybridReaderView.swift,\ TestResultView.swift,\ StatisticsExportService.swift,\ StudyRecommendation.swift,\ VocabularyTest.swift,\ MockServices.swift,\ AdaptiveInsightCard.swift,\ ReaderNavigationWrapper.swift,\ StatCard.swift,\ KaoyanDictionaryImporter.swift,\ TestHistorySelectionSheet.swift,\ GroupSelectionCard.swift,\ ColorExtensions.swift,\ SettingsModels.swift,\ AdaptiveRecommendationEngine.swift,\ TranslationModels.swift,\ ProgressDashboardView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DictionaryLoader.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/HybridReaderView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestResultView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/StatisticsExportService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/StudyRecommendation.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/VocabularyTest.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/MockServices.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/AdaptiveInsightCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ReaderNavigationWrapper.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/StatCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/KaoyanDictionaryImporter.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestHistorySelectionSheet.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/GroupSelectionCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ColorExtensions.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/SettingsModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/AdaptiveRecommendationEngine.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TranslationModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ProgressDashboardView.swift (in target 'en01' from project 'en01')
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DictionaryLoader.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/HybridReaderView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestResultView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/StatisticsExportService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/StudyRecommendation.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/VocabularyTest.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/MockServices.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/AdaptiveInsightCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ReaderNavigationWrapper.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/StatCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/KaoyanDictionaryImporter.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestHistorySelectionSheet.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/GroupSelectionCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ColorExtensions.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/SettingsModels.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/AdaptiveRecommendationEngine.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TranslationModels.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ProgressDashboardView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ MasteryProgressBar.swift,\ ErrorTypes.swift,\ TestStateManager.swift,\ TranslationServiceImpl.swift,\ TabItemView.swift,\ InputFocusManager.swift,\ Article.swift,\ VocabularyViewModel.swift,\ ReviewSessionRecord.swift,\ TestWord.swift,\ CompositeRankingView.swift,\ IntelligentRankingViewModel.swift,\ PerformanceTestResultsView.swift,\ LearningTrackingService.swift,\ TestConfigurationManager.swift,\ StatisticsView.swift,\ BaseService.swift,\ CommonTypes.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/MasteryProgressBar.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ErrorTypes.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/TestStateManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationServiceImpl.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TabItemView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/InputFocusManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Article.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ReviewSessionRecord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestWord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/CompositeRankingView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/IntelligentRankingViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PerformanceTestResultsView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/LearningTrackingService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/TestConfigurationManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StatisticsView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Services/BaseService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/CommonTypes.swift (in target 'en01' from project 'en01')
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/MasteryProgressBar.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ErrorTypes.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/TestStateManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationServiceImpl.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TabItemView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/InputFocusManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Article.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyViewModel.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ReviewSessionRecord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestWord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/CompositeRankingView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/IntelligentRankingViewModel.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PerformanceTestResultsView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/LearningTrackingService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/TestConfigurationManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StatisticsView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Services/BaseService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/CommonTypes.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ ArticleCompletionRecord.swift,\ TranslationErrorHandler.swift,\ WordMorphologyProcessor.swift,\ TestedWord.swift,\ AppCoordinator.swift,\ WordReviewRecord.swift,\ CryptoExtensions.swift,\ AppViewModel.swift,\ ErrorModule.swift,\ WordTestCard.swift,\ TestSessionService.swift,\ UnifiedInputManager.swift,\ PerformanceConfig.swift,\ VocabularyTestService.swift,\ InputManagementTests.swift,\ DetailedWordDefinition.swift,\ DetailedStatCard.swift,\ TextProcessor.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ArticleCompletionRecord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationErrorHandler.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/WordMorphologyProcessor.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestedWord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Coordinators/AppCoordinator.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordReviewRecord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/CryptoExtensions.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/AppViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/ErrorHandling/ErrorModule.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/WordTestCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestSessionService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/UnifiedInputManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/PerformanceConfig.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/VocabularyTestService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Tests/InputManagementTests.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DetailedWordDefinition.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/DetailedStatCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/TextProcessor.swift (in target 'en01' from project 'en01')
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ArticleCompletionRecord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationErrorHandler.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/WordMorphologyProcessor.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestedWord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Coordinators/AppCoordinator.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordReviewRecord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/CryptoExtensions.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/AppViewModel.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/ErrorHandling/ErrorModule.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/WordTestCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestSessionService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/UnifiedInputManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/PerformanceConfig.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/VocabularyTestService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Tests/InputManagementTests.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DetailedWordDefinition.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/DetailedStatCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/TextProcessor.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ TestResultExportService.swift,\ UserProgressService.swift,\ DictionaryService.swift,\ DataType.swift,\ ChartView.swift,\ ErrorHandler.swift,\ StatItem.swift,\ WordClickRecord.swift,\ IntelligentRankingService.swift,\ PersonalDictionaryManager.swift,\ NotificationNames.swift,\ ContextAnalyzer.swift,\ InteractiveTextView.swift,\ StatisticsService.swift,\ TranslationTestView.swift,\ ArticleService.swift,\ IconCache.swift,\ ModernWordDefinitionCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestResultExportService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/UserProgressService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DictionaryService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DataType.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ChartView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/ErrorHandling/ErrorHandler.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/StatItem.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordClickRecord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/IntelligentRankingService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/PersonalDictionaryManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/NotificationNames.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/ContextAnalyzer.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/InteractiveTextView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/StatisticsService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TranslationTestView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/ArticleService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/IconCache.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ModernWordDefinitionCard.swift (in target 'en01' from project 'en01')
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestResultExportService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/UserProgressService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DictionaryService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DataType.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ChartView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/ErrorHandling/ErrorHandler.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/StatItem.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordClickRecord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/IntelligentRankingService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/PersonalDictionaryManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/NotificationNames.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/ContextAnalyzer.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/InteractiveTextView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/StatisticsService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TranslationTestView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/ArticleService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/IconCache.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ModernWordDefinitionCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ en01 (in target 'en01' from project 'en01')
+
+EmitSwiftModule normal arm64 (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ VocabularyTestMode.swift,\ OnlineTranslationProvider.swift,\ TranslationTestService.swift,\ ReadingView.swift,\ en01App.swift,\ DatabaseActor.swift,\ AchievementProgress.swift,\ LearningBehaviorAnalyzer.swift,\ TestModeCard.swift,\ SoloArticleService.swift,\ ServiceContainer.swift,\ StatisticsModels.swift,\ ProgressViewModel.swift,\ UserProgress.swift,\ KeyboardManager.swift,\ LocalTranslationEngine.swift,\ QuestionTestCard.swift,\ GeneratedAssetSymbols.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/VocabularyTestMode.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/OnlineTranslationProvider.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationTestService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ReadingView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/en01App.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Database/DatabaseActor.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/AchievementProgress.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/LearningBehaviorAnalyzer.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestModeCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/SoloArticleService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/DependencyInjection/ServiceContainer.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/StatisticsModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/ProgressViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/UserProgress.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/KeyboardManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/LocalTranslationEngine.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/QuestionTestCard.swift /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'en01' from project 'en01')
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/VocabularyTestMode.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/OnlineTranslationProvider.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationTestService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ReadingView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/en01App.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Database/DatabaseActor.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/AchievementProgress.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/LearningBehaviorAnalyzer.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestModeCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/SoloArticleService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/DependencyInjection/ServiceContainer.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/StatisticsModels.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/ProgressViewModel.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/UserProgress.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/KeyboardManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/LocalTranslationEngine.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/QuestionTestCard.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ PerformanceMonitorView.swift,\ ReadingProgressRecord.swift,\ TestProgress.swift,\ ReadingViewModel.swift,\ RetestModeView.swift,\ KaoyanDictionaryStatusView.swift,\ ExportDocument.swift,\ ArticleInteraction.swift,\ DictionaryModeSortSection.swift,\ StartupProgressManager.swift,\ KaoyanDictionary.swift,\ HomeView.swift,\ Item.swift,\ TranslationService.swift,\ YoudaoDictionaryParser.swift,\ LearningBehavior.swift,\ UnifiedErrorHandler.swift,\ WordInteractionProtocol.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PerformanceMonitorView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ReadingProgressRecord.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestProgress.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/ReadingViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/RetestModeView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/KaoyanDictionaryStatusView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ExportDocument.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ArticleInteraction.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionaryModeSortSection.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/StartupProgressManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/KaoyanDictionary.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/HomeView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Item.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/YoudaoDictionaryParser.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/LearningBehavior.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/ErrorHandling/UnifiedErrorHandler.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Protocols/WordInteractionProtocol.swift (in target 'en01' from project 'en01')
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PerformanceMonitorView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ReadingProgressRecord.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestProgress.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/ReadingViewModel.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/RetestModeView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/KaoyanDictionaryStatusView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ExportDocument.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ArticleInteraction.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionaryModeSortSection.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/StartupProgressManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/KaoyanDictionary.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/HomeView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Item.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/YoudaoDictionaryParser.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/LearningBehavior.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/ErrorHandling/UnifiedErrorHandler.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Protocols/WordInteractionProtocol.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ WordTestResult.swift,\ DetailedWordDefinitionView.swift,\ PerformanceTestRunner.swift,\ StagedRankingView.swift,\ ArticleReaderView.swift,\ NormalModeSortSection.swift,\ TranslationCache.swift,\ WordMasteryService.swift,\ ConditionalWordCoordinator.swift,\ DictionaryInfo.swift,\ ExportFormat.swift,\ ContentView.swift,\ WordLookupStats.swift,\ InputManagementDemoView.swift,\ ProgressData.swift,\ CacheManager.swift,\ ReviewStatItem.swift,\ VocabularyView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordTestResult.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DetailedWordDefinitionView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/PerformanceTestRunner.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StagedRankingView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ArticleReaderView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/NormalModeSortSection.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationCache.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/WordMasteryService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Modifiers/ConditionalWordCoordinator.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DictionaryInfo.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ExportFormat.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ContentView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordLookupStats.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/InputManagementDemoView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ProgressData.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Cache/CacheManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ReviewStatItem.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/VocabularyView.swift (in target 'en01' from project 'en01')
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordTestResult.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DetailedWordDefinitionView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/PerformanceTestRunner.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StagedRankingView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/ArticleReaderView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/NormalModeSortSection.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TranslationCache.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/WordMasteryService.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Modifiers/ConditionalWordCoordinator.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DictionaryInfo.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ExportFormat.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ContentView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/WordLookupStats.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/InputManagementDemoView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ProgressData.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Cache/CacheManager.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/ReviewStatItem.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/VocabularyView.swift (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    
+
+SwiftCompile normal arm64 Compiling\ ServiceProtocols.swift,\ LearningStatisticsView.swift,\ CompositeRankingViewModel.swift,\ StatisticsExportView.swift,\ LearningAnalytics.swift,\ VocabularyTestViewModel.swift,\ DictionarySelectionView.swift,\ PDFReaderView.swift,\ CompositeRankingConfigSheet.swift,\ HomeViewModel.swift,\ ExportProgressManager.swift,\ RetestModeService.swift,\ SettingsViewModel.swift,\ IntelligentRankingView.swift,\ ReadingMode.swift,\ DictionaryImportView.swift,\ ResourcePathManager.swift,\ IntelligentRankingModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Protocols/ServiceProtocols.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/LearningStatisticsView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/CompositeRankingViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StatisticsExportView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/LearningAnalytics.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyTestViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionarySelectionView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PDFReaderView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/CompositeRankingConfigSheet.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/HomeViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ExportProgressManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/RetestModeService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/SettingsViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/IntelligentRankingView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ReadingMode.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionaryImportView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ResourcePathManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/IntelligentRankingModels.swift (in target 'en01' from project 'en01')
+Command SwiftCompile failed with a nonzero exit code
+
+** BUILD FAILED **
+
+
+The following build commands failed:
+	SwiftCompile normal arm64 Compiling\ TestHistoryListView.swift,\ AchievementBadgeView.swift,\ WordDefinitionViewModel.swift,\ Settings.swift,\ Translation.swift,\ PersonalDictionaryCard.swift,\ ServiceResult.swift,\ TestResultManager.swift,\ RetestModeViewModel.swift,\ StructuredTextView.swift,\ CompositeRankingModels.swift,\ ArticleRanking.swift,\ RetestModels.swift,\ TestResultHistory.swift,\ PerformanceTestApp.swift,\ AdaptiveLearningService.swift,\ ConstraintConflictResolver.swift,\ DictionaryTestState.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/TestHistoryListView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/Components/AchievementBadgeView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/WordDefinitionViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Settings.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/Translation.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PersonalDictionaryCard.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Services/ServiceResult.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/TestResultManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/RetestModeViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StructuredTextView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/CompositeRankingModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ArticleRanking.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/RetestModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/TestResultHistory.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PerformanceTestApp.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/AdaptiveLearningService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/InputManagement/ConstraintConflictResolver.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/DictionaryTestState.swift (in target 'en01' from project 'en01')
+	SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/RetestModeViewModel.swift (in target 'en01' from project 'en01')
+	SwiftCompile normal arm64 Compiling\ ServiceProtocols.swift,\ LearningStatisticsView.swift,\ CompositeRankingViewModel.swift,\ StatisticsExportView.swift,\ LearningAnalytics.swift,\ VocabularyTestViewModel.swift,\ DictionarySelectionView.swift,\ PDFReaderView.swift,\ CompositeRankingConfigSheet.swift,\ HomeViewModel.swift,\ ExportProgressManager.swift,\ RetestModeService.swift,\ SettingsViewModel.swift,\ IntelligentRankingView.swift,\ ReadingMode.swift,\ DictionaryImportView.swift,\ ResourcePathManager.swift,\ IntelligentRankingModels.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/Protocols/ServiceProtocols.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/LearningStatisticsView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/CompositeRankingViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StatisticsExportView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/LearningAnalytics.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyTestViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionarySelectionView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PDFReaderView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/CompositeRankingConfigSheet.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/HomeViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ExportProgressManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/RetestModeService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/SettingsViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/IntelligentRankingView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/ReadingMode.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionaryImportView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Utils/ResourcePathManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Models/IntelligentRankingModels.swift (in target 'en01' from project 'en01')
+	Building project en01 with scheme en01
+(4 failures)

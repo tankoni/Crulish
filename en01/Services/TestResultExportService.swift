@@ -851,16 +851,24 @@ class TestResultExportService: TestResultExportServiceProtocol {
             
             var allTestedWords: [ExportableWord] = []
             var failedLookups: [String] = []
+            var processedCount = 0
+            
+            print("🔄 开始处理 \(testedWords.count) 个测试记录...")
             
             for testedWord in testedWords {
+                processedCount += 1
+                
+                // 每处理100个单词输出一次进度
+                if processedCount % 100 == 0 {
+                    print("   - 已处理: \(processedCount)/\(testedWords.count)")
+                }
+                
                 // 根据词典类型选择合适的查找方法
                 var dictionaryWord: DictionaryWord?
                 
                 if dictionaryName.contains("考研") || dictionaryName.contains("kaoyan") || dictionaryName.contains("KaoYan") {
                     // 使用考研词典查找
-                    print("🔍 查找考研词典单词: \(testedWord.word)")
                     if let kaoyanDetails = dictionaryService.getKaoyanWordDetails(testedWord.word) {
-                        print("✅ 找到考研词典单词: \(testedWord.word)")
                         let definitions = kaoyanDetails.translations.map { translation in
                             WordDefinition(
                                 partOfSpeech: PartOfSpeech.fromString(translation.pos) ?? .noun,
@@ -879,8 +887,6 @@ class TestResultExportService: TestResultExportServiceProtocol {
                             difficulty: .medium,
                             tags: []
                         )
-                    } else {
-                        print("❌ 考研词典中未找到单词: \(testedWord.word)")
                     }
                 } else {
                     // 使用基础词典查找
@@ -893,15 +899,20 @@ class TestResultExportService: TestResultExportServiceProtocol {
                         dictionaryWord: dictionaryWord
                     )
                     allTestedWords.append(exportableWord)
-                    print("✅ 成功创建可导出单词: \(testedWord.word)")
                 } else {
                     failedLookups.append(testedWord.word)
-                    print("⚠️ 未找到单词释义: \(testedWord.word)")
                 }
             }
             
+            print("✅ 单词处理完成")
+            print("   - 成功处理: \(allTestedWords.count) 个")
             if !failedLookups.isEmpty {
-                print("⚠️ 有 \(failedLookups.count) 个单词未找到释义: \(failedLookups.prefix(5).joined(separator: ", "))")
+                print("   - 查找失败: \(failedLookups.count) 个")
+                if failedLookups.count <= 10 {
+                    print("   - 失败单词: \(failedLookups.joined(separator: ", "))")
+                } else {
+                    print("   - 失败单词示例: \(failedLookups.prefix(10).joined(separator: ", "))...")
+                }
             }
 
             // 分离已知和未知单词 - 使用正确的掌握度映射

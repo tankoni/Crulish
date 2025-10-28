@@ -921,7 +921,7 @@ struct MasteryLevelRow: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                Text(masteryLevel.description)
+                Text(masteryLevel.displayName)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

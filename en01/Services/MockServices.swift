@@ -581,39 +581,20 @@ class MockDictionaryService: DictionaryServiceProtocol, @unchecked Sendable {
                 )
             }
             
-            let userRecords = self.vocabulary
-            
-            let totalWords = userRecords.count
-            let unfamiliarWords = userRecords.filter { $0.masteryLevel == .unfamiliar }.count
-            let familiarWords = userRecords.filter { $0.masteryLevel == .familiar }.count
-            let masteredWords = userRecords.filter { $0.masteryLevel == .mastered }.count
-            
-            // 今日查词数
-            let today = Calendar.current.startOfDay(for: Date())
-            let todayLookups = userRecords.filter {
-                Calendar.current.isDate($0.lastLookupDate, inSameDayAs: today)
-            }.count
-            
-            // 本周查词数
-            let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
-            let weeklyLookups = userRecords.filter { $0.lastLookupDate >= weekAgo }.count
-            
-            // 平均每日查词数
-            let studyDays = userRecords.isEmpty ? 1 : max(1, Calendar.current.dateComponents([.day], from: userRecords.last?.firstLookupDate ?? Date(), to: Date()).day!)
-            let averageLookupPerDay = Double(totalWords) / Double(studyDays)
-            
-            // 最常查询的单词
-            let mostLookedUpWords = userRecords.sorted { $0.lookupCount > $1.lookupCount }.prefix(10)
+            let totalWords = vocabulary.count
+            let unfamiliarWords = vocabulary.filter { $0.masteryLevel == .unfamiliar }.count
+            let familiarWords = vocabulary.filter { $0.masteryLevel == .familiar }.count
+            let masteredWords = vocabulary.filter { $0.masteryLevel == .mastered }.count
             
             return VocabularyStats(
                 totalWords: totalWords,
                 unfamiliarWords: unfamiliarWords,
                 familiarWords: familiarWords,
                 masteredWords: masteredWords,
-                todayLookups: todayLookups,
-                weeklyLookups: weeklyLookups,
-                averageLookupPerDay: averageLookupPerDay,
-                mostLookedUpWords: Array(mostLookedUpWords)
+                todayLookups: 0,
+                weeklyLookups: 0,
+                averageLookupPerDay: 0,
+                mostLookedUpWords: []
             )
         }
     }
@@ -975,6 +956,200 @@ class MockUserProgressService: UserProgressServiceProtocol {
     }
 }
 
+// MARK: - Mock TestDataService
+class MockTestDataService: TestDataService {
+    private var testedWords: [String: [TestedWord]] = [:]
+    private var testHistory: [VocabularyTest] = []
+    
+    init() {
+        // 先构造依赖并调用父类初始化器
+        let modelContainer = try! ModelContainer(for: VocabularyTest.self, TestedWord.self)
+        let modelContext = ModelContext(modelContainer)
+        let cacheManager = MockCacheManager()
+        let errorHandler = MockErrorHandler()
+        super.init(
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: errorHandler,
+            subsystem: "com.en01.services",
+            category: "MockTestDataService"
+        )
+        
+        // 初始化一些模拟数据
+        setupMockData()
+    }
+    
+    private func setupMockData() {
+        // 创建一些模拟的已测试单词
+        let mockTestedWords = [
+            TestedWord(
+                word: "test",
+                dictionaryName: "考研核心词汇",
+                dictionaryFileName: "KaoYan_1.json",
+                masteryLevel: MasteryLevel.familiar,
+                testSessionId: UUID(),
+                difficulty: "medium"
+            ),
+            TestedWord(
+                word: "example",
+                dictionaryName: "考研核心词汇", 
+                dictionaryFileName: "KaoYan_1.json",
+                masteryLevel: MasteryLevel.mastered,
+                testSessionId: UUID(),
+                difficulty: "easy"
+            )
+        ]
+        
+        testedWords["KaoYan_1.json"] = mockTestedWords
+        
+        // 创建一些模拟的测试历史（使用简化构造函数）
+        let mockTest = VocabularyTest(
+            dictionaryName: "考研核心词汇"
+        )
+        testHistory.append(mockTest)
+    }
+    
+    // MARK: - Test History Management
+    override func getTestHistory(limit: Int = 20) -> AnyPublisher<[VocabularyTest], Error> {
+        let limitedHistory = Array(testHistory.prefix(limit))
+        return Just(limitedHistory)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    override func getTestHistory(for dictionaryId: UUID) -> AnyPublisher<[VocabularyTest], Error> {
+        let filteredHistory = testHistory.filter { $0.dictionaryId == dictionaryId }
+        return Just(filteredHistory)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    override func getLatestTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error> {
+        let latestTest = testHistory.filter { $0.dictionaryId == dictionaryId }.last
+        return Just(latestTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    override func getLatestTest() -> AnyPublisher<VocabularyTest?, Error> {
+        return Just(testHistory.last)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    override func getIncompleteTest(for dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error> {
+        let incompleteTest = testHistory.first { test in
+            test.dictionaryFileName == dictionaryFileName && !test.isCompleted
+        }
+        return Just(incompleteTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    override func deleteTestRecord(_ test: VocabularyTest) -> AnyPublisher<Void, Error> {
+        testHistory.removeAll { $0.id == test.id }
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    // MARK: - Tested Words Management
+    override func saveTestedWord(_ word: DictionaryWord, mastery: MasteryLevel, dictionaryName: String, dictionaryFileName: String, testSessionId: UUID?) -> AnyPublisher<Void, Error> {
+        let testedWord = TestedWord(
+            word: word.word,
+            dictionaryName: dictionaryName,
+            dictionaryFileName: dictionaryFileName,
+            masteryLevel: mastery,
+            testSessionId: testSessionId
+        )
+        
+        if testedWords[dictionaryFileName] == nil {
+            testedWords[dictionaryFileName] = []
+        }
+        testedWords[dictionaryFileName]?.append(testedWord)
+        
+        return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    override func getTestedWords(for dictionaryFileName: String) -> AnyPublisher<[TestedWord], Error> {
+        let words = testedWords[dictionaryFileName] ?? []
+        return Just(words)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getUntestedWords(from dictionary: DictionaryInfo) -> AnyPublisher<[DictionaryWord], Error> {
+        // 返回一些模拟的未测试单词
+        let mockWords = [
+            DictionaryWord(
+                word: "untested1",
+                phonetic: "/ʌnˈtestɪd/",
+                definitions: [
+                    WordDefinition(
+                        partOfSpeech: .adjective,
+                        meaning: "未测试的",
+                        englishMeaning: "not tested",
+                        examples: ["This is an untested word."],
+                        contextKeywords: ["test", "new"]
+                    )
+                ],
+                frequency: 50,
+                difficulty: .medium,
+                tags: ["mock"]
+            )
+        ]
+        
+        return Just(mockWords)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    // MARK: - Test Progress and Statistics
+    override func getTestProgress(for dictionaryFileName: String) -> AnyPublisher<TestProgress, Error> {
+        let testedWordsCount = testedWords[dictionaryFileName]?.count ?? 0
+        let progress = TestProgress(
+            dictionaryFileName: dictionaryFileName,
+            dictionaryName: dictionaryFileName.replacingOccurrences(of: ".json", with: ""),
+            totalWords: 1000,
+            testedWords: testedWordsCount,
+            untestedWords: max(0, 1000 - testedWordsCount),
+            masteredWords: testedWordsCount / 3,
+            familiarWords: testedWordsCount / 3,
+            unfamiliarWords: testedWordsCount / 3,
+            currentIndex: testedWordsCount
+        )
+        
+        return Just(progress)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    override func getDictionaryTestResults(for dictionaryFileName: String) -> AnyPublisher<DictionaryTestResults, Error> {
+        let testedWordsCount = testedWords[dictionaryFileName]?.count ?? 0
+        let results = DictionaryTestResults(
+            dictionaryFileName: dictionaryFileName,
+            totalTestedWords: testedWordsCount,
+            masteredWords: testedWordsCount / 3,
+            familiarWords: testedWordsCount / 3,
+            unfamiliarWords: testedWordsCount / 3,
+            masteryRate: 0.67,
+            lastTestDate: Date()
+        )
+        
+        return Just(results)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    // MARK: - Cache Management
+    override func clearCacheForDictionary(_ dictionaryFileName: String) {
+        // Mock implementation
+        print("MockTestDataService: clearCacheForDictionary(\(dictionaryFileName)) called")
+    }
+}
+
 // MARK: - Mock VocabularyTestService
 class MockVocabularyTestService: VocabularyTestServiceProtocol {
     private let dictionaryService: MockDictionaryService
@@ -1178,6 +1353,21 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
             .eraseToAnyPublisher()
     }
     
+    func getLatestTest() -> AnyPublisher<VocabularyTest?, Error> {
+        return Just(testHistory.last)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getIncompleteTest(for dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error> {
+        let incompleteTest = testHistory.first { test in
+            test.dictionaryFileName == dictionaryFileName && !test.isCompleted
+        }
+        return Just(incompleteTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
     func deleteTestRecord(_ test: VocabularyTest) -> AnyPublisher<Void, Error> {
         testHistory.removeAll { $0.id == test.id }
         return Just(())
@@ -1275,22 +1465,6 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
             currentIndex: 50
         )
         return Just(progress)
-            .setFailureType(to: Error.self)
-            .eraseToAnyPublisher()
-    }
-    
-    func getIncompleteTest(for dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error> {
-        let incompleteTest = activeTests.values.first { test in
-            test.dictionaryFileName == dictionaryFileName && !test.isCompleted
-        }
-        
-        return Just(incompleteTest)
-            .setFailureType(to: Error.self)
-            .eraseToAnyPublisher()
-    }
-    
-    func getLatestTest() -> AnyPublisher<VocabularyTest?, Error> {
-        return Just(testHistory.last)
             .setFailureType(to: Error.self)
             .eraseToAnyPublisher()
     }

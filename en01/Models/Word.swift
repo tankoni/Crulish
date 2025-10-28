@@ -333,6 +333,14 @@ enum MasteryLevel: String, CaseIterable, Codable, Comparable {
         }
     }
     
+    var iconName: String {
+        switch self {
+        case .unfamiliar: return "questionmark"
+        case .familiar: return "eye"
+        case .mastered: return "checkmark"
+        }
+    }
+
     var nextReviewInterval: TimeInterval {
         switch self {
         case .unfamiliar: return 24 * 60 * 60 // 1天

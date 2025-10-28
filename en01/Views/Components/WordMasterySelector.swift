@@ -132,7 +132,7 @@ struct WordMasterySelector: View {
             }
         } message: {
             if let mastery = selectedMastery {
-                Text("将单词 \"\(word)\" 的掌握程度设置为 \"\(mastery.displayName)\"？")
+                Text("将单词 \"\(word)\" 的掌握程度设置为 \"\(mastery.masteryDisplayName)\"？")
             }
         }
     }
@@ -149,18 +149,18 @@ struct MasteryOptionCard: View {
         Button(action: onTap) {
             HStack(spacing: 16) {
                 // 图标
-                Image(systemName: level.iconName)
+                Image(systemName: level.masteryIconName)
                     .font(.title2)
-                    .foregroundColor(level.color)
+                    .foregroundColor(level.masteryColor)
                     .frame(width: 30)
                 
                 // 文本信息
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(level.displayName)
+                    Text(level.masteryDisplayName)
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Text(level.description)
+                    Text(level.masteryDescription)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
@@ -182,10 +182,10 @@ struct MasteryOptionCard: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? level.color.opacity(0.1) : Color(.systemGray6))
+                    .fill(isSelected ? level.masteryColor.opacity(0.1) : Color(.systemGray6))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? level.color : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? level.masteryColor : Color.clear, lineWidth: 2)
                     )
             )
         }
@@ -207,7 +207,7 @@ extension MasteryLevel {
         }
     }
     
-    var description: String {
+    var masteryDescription: String {
         switch self {
         case .unfamiliar:
             return "完全不认识这个单词"
@@ -218,7 +218,7 @@ extension MasteryLevel {
         }
     }
     
-    var iconName: String {
+    var masteryIconName: String {
         switch self {
         case .unfamiliar:
             return "questionmark.circle"
