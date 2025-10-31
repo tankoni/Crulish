@@ -17,6 +17,8 @@ struct SettingsView: View {
     @State private var isShowingResetAlert = false
     @State private var isShowingExportSheet = false
     @State private var isShowingImportSheet = false
+    @State private var isShowingDictionaryImportSheet = false
+    @State private var isShowingDictionaryExportSheet = false
     @State private var isShowingAbout = false
     @State private var settings: AppSettings?
     @State private var exportData: Data?
@@ -59,6 +61,12 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $isShowingImportSheet) {
             ImportDataView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $isShowingDictionaryExportSheet) {
+            DictionarySpecificExportView()
+        }
+        .sheet(isPresented: $isShowingDictionaryImportSheet) {
+            DictionarySpecificImportView()
         }
         .sheet(isPresented: $isShowingAbout) {
             AboutView()
@@ -326,11 +334,27 @@ struct SettingsView: View {
                 Label("导出数据", systemImage: "square.and.arrow.up")
             }
             
+            // 词典专属导出
+            Button {
+                isShowingDictionaryExportSheet = true
+            } label: {
+                Label("词典专属导出", systemImage: "book.closed.fill")
+                    .foregroundColor(.blue)
+            }
+            
             // 导入数据
             Button {
                 isShowingImportSheet = true
             } label: {
                 Label("导入数据", systemImage: "square.and.arrow.down")
+            }
+            
+            // 词典专属导入
+            Button {
+                isShowingDictionaryImportSheet = true
+            } label: {
+                Label("词典专属导入", systemImage: "book.closed.fill")
+                    .foregroundColor(.green)
             }
             
             // 自动备份

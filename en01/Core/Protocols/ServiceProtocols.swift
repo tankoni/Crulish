@@ -81,6 +81,9 @@ protocol DictionaryServiceProtocol {
     
     // 考研词典查询
     func getKaoyanWordDetails(_ word: String) -> KaoyanWordDetails?
+    
+    // 模型上下文管理
+    func setModelContext(_ context: ModelContext)
 }
 
 // MARK: - User Progress Service Protocol

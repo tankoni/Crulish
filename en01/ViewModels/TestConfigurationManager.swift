@@ -127,8 +127,52 @@ class TestConfigurationManager: ObservableObject {
     
     // MARK: - Initialization
     
-    init(dictionaryService: DictionaryService) {
+    init(dictionaryService: DictionaryService, isRetestMode: Bool = false, retestConfig: RetestConfig? = nil) {
         self.dictionaryService = dictionaryService
+        
+        print("✅ [TestConfigurationManager] 初始化完成 - 重测模式: \(isRetestMode)")
+        
+        // 如果是重测模式，应用重测配置
+        if isRetestMode, let config = retestConfig {
+            applyRetestConfiguration(config)
+        }
+        
+        // 异步加载词典
+        Task {
+            await loadAvailableDictionaries()
+        }
+    }
+    
+    // MARK: - Retest Configuration
+    
+    /// 应用重测配置
+    private func applyRetestConfiguration(_ config: RetestConfig) {
+        // 根据重测配置设置测试参数
+        if let testSize = config.testSize {
+            self.testSize = testSize
+        } else if let wordCount = config.wordCount {
+            // 根据单词数量设置测试大小
+            switch wordCount {
+            case 0..<20:
+                self.testSize = .small
+            case 20..<50:
+                self.testSize = .medium
+            case 50..<100:
+                self.testSize = .large
+            default:
+                self.testSize = .custom(wordCount)
+            }
+        }
+        
+        if let includeTestedWords = config.includeTestedWords {
+            self.includeTestedWords = includeTestedWords
+        }
+        
+        if let randomOrder = config.randomOrder {
+            self.randomOrder = randomOrder
+        }
+        
+        print("📝 [TestConfigurationManager] 应用重测配置: 测试大小(\(testSize)), 包含已测试单词(\(includeTestedWords)), 随机顺序(\(randomOrder))")
     }
     
     // MARK: - Dictionary Management

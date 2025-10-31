@@ -23,19 +23,29 @@ struct VocabularyTestView: View {
     @State private var loadingRotation: Double = 0
     @State private var progressBarAnimation: Bool = false
     
+    // MARK: - Retest Mode Support
+    let isRetestMode: Bool
+    let retestConfig: RetestConfig?
+    
     init(
         vocabularyTestService: VocabularyTestServiceProtocol,
         dictionaryService: DictionaryServiceProtocol,
         errorHandler: ErrorHandlerProtocol,
         testResultExportService: TestResultExportService,
-        appCoordinator: AppCoordinator
+        appCoordinator: AppCoordinator,
+        isRetestMode: Bool = false,
+        retestConfig: RetestConfig? = nil
     ) {
+        self.isRetestMode = isRetestMode
+        self.retestConfig = retestConfig
         self._viewModel = StateObject(wrappedValue: VocabularyTestViewModel(
             vocabularyTestService: vocabularyTestService,
             dictionaryService: dictionaryService,
             errorHandler: errorHandler,
             testResultExportService: testResultExportService,
-            appCoordinator: appCoordinator
+            appCoordinator: appCoordinator,
+            isRetestMode: isRetestMode,
+            retestConfig: retestConfig
         ))
     }
     
@@ -57,7 +67,7 @@ struct VocabularyTestView: View {
                     testPreparationView
                 }
             }
-            .navigationTitle("词汇量测试")
+            .navigationTitle(isRetestMode ? "重测模式" : "词汇量测试")
             .navigationBarTitleDisplayMode(.large)
         }
         .alert("错误", isPresented: .constant(viewModel.errorMessage != nil)) {

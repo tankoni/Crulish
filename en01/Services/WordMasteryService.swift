@@ -364,8 +364,17 @@ class WordMasteryService: BaseService {
     }
 }
 
+// MARK: - Public Extensions
+extension WordMasteryService {
+    
+    /// 设置模型上下文
+    func setModelContext(_ context: ModelContext) {
+        self.modelContext = context
+    }
+}
+
 // MARK: - Private Methods
-private extension WordMasteryService {
+extension WordMasteryService {
     
     /// 同步加载词典单词
     func loadDictionaryWordsSync(from dictionary: DictionaryInfo) async throws -> [DictionaryWord] {
@@ -390,14 +399,66 @@ private extension WordMasteryService {
     func getTestedWordsSync(for dictionaryFileName: String) async throws -> [TestedWord] {
         let context = modelContext
         
+        // 获取所有相关的已测试单词
         let descriptor = FetchDescriptor<TestedWord>(
             predicate: #Predicate<TestedWord> { testedWord in
-                testedWord.dictionaryFileName == dictionaryFileName
+                testedWord.dictionaryFileName == dictionaryFileName && testedWord.testSessionId != nil
             },
             sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
         )
         
-        return try context.fetch(descriptor)
+        let allTestedWords = try context.fetch(descriptor)
+        
+        // 获取词典专属测试记录
+        let dictionarySpecificTestDescriptor = FetchDescriptor<VocabularyTest>(
+            predicate: #Predicate<VocabularyTest> { test in
+                test.dictionaryFileName == dictionaryFileName && test.isDictionarySpecific == true
+            }
+        )
+        let dictionarySpecificTests = try context.fetch(dictionarySpecificTestDescriptor)
+        let dictionarySpecificTestIds = Set(dictionarySpecificTests.map { $0.id })
+        
+        // 获取总记录测试
+        let generalTestDescriptor = FetchDescriptor<VocabularyTest>(
+            predicate: #Predicate<VocabularyTest> { test in
+                test.isDictionarySpecific == false
+            }
+        )
+        let generalTests = try context.fetch(generalTestDescriptor)
+        let generalTestIds = Set(generalTests.map { $0.id })
+        
+        // 分离词典专属记录和总记录
+        let dictionarySpecificWords = allTestedWords.filter { testedWord in
+            guard let testSessionId = testedWord.testSessionId else { return false }
+            return dictionarySpecificTestIds.contains(testSessionId)
+        }
+        
+        let generalWords = allTestedWords.filter { testedWord in
+            guard let testSessionId = testedWord.testSessionId else { return false }
+            return generalTestIds.contains(testSessionId)
+        }
+        
+        // 合并逻辑：词典专属记录优先，然后是总记录中不重复的单词
+        var resultWords: [String: TestedWord] = [:]
+        
+        // 首先添加词典专属记录
+        for word in dictionarySpecificWords {
+            resultWords[word.word.lowercased()] = word
+        }
+        
+        // 然后添加总记录中不重复的单词
+        for word in generalWords {
+            let key = word.word.lowercased()
+            if resultWords[key] == nil {
+                resultWords[key] = word
+            }
+        }
+        
+        print("✅ [WordMasteryService] 词典 \(dictionaryFileName) 获取到 \(dictionarySpecificWords.count) 个专属记录，\(generalWords.count) 个总记录，合并后 \(resultWords.count) 个单词")
+        
+        return Array(resultWords.values).sorted { 
+            ($0.lastTestedDate ?? Date.distantPast) > ($1.lastTestedDate ?? Date.distantPast) 
+        }
     }
     
     /// 计算简单改进率

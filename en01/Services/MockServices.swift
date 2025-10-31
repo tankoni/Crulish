@@ -324,6 +324,12 @@ class MockDictionaryService: DictionaryServiceProtocol, @unchecked Sendable {
         clearAllData()
     }
     
+    // MARK: - Protocol Requirements
+    func setModelContext(_ context: ModelContext) {
+        // Mock implementation - no actual context needed for mock service
+        print("MockDictionaryService: setModelContext called")
+    }
+    
     func setupMockWords(count: Int = 1000) {
         queue.async { [weak self] in
             self?.mockWords = self?.createMockWords(count: min(count, 5000)) ?? [] // 限制最大数量
@@ -1346,6 +1352,14 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
             .eraseToAnyPublisher()
     }
     
+    func getTestHistory(for dictionaryFileName: String, limit: Int) -> AnyPublisher<[VocabularyTest], Error> {
+        let filteredHistory = testHistory.filter { $0.dictionaryFileName == dictionaryFileName }
+        let limitedHistory = Array(filteredHistory.prefix(limit))
+        return Just(limitedHistory)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
     func getLatestTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error> {
         let latestTest = testHistory.filter { $0.dictionaryId == dictionaryId }.last
         return Just(latestTest)
@@ -1564,6 +1578,121 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
     
     func updateTestInDatabase(_ test: VocabularyTest) -> AnyPublisher<Void, Error> {
         return Just(())
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    // MARK: - Retest Methods
+    
+    func loadWordsForRetest(dictionary: DictionaryInfo, masteryLevels: [MasteryLevel], sampleSize: Int) -> AnyPublisher<[DictionaryWord], Error> {
+        // 模拟从指定掌握程度中获取单词
+        let allWords = dictionaryService.getAllWords()
+        let retestWords = allWords.shuffled().prefix(sampleSize)
+        
+        return Just(Array(retestWords))
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func startRetestVocabularyTest(dictionary: DictionaryInfo, masteryLevels: [MasteryLevel], sampleSize: Int) -> AnyPublisher<VocabularyTest, Error> {
+        let test = VocabularyTest(
+            id: UUID(),
+            dictionaryId: dictionary.id,
+            dictionaryName: dictionary.displayName,
+            dictionaryFileName: dictionary.fileName,
+            totalWords: sampleSize,
+            masteredCount: 0,
+            familiarCount: 0,
+            unfamiliarCount: 0,
+            currentWordIndex: 0,
+            isCompleted: false,
+            isPaused: false,
+            createdAt: Date(),
+            completedAt: nil,
+            estimatedVocabularySize: 0,
+            accuracyPercentage: 0.0
+        )
+        
+        currentTest = test
+        activeTests[test.id] = test
+        testHistory.append(test)
+        
+        return Just(test)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    // MARK: - 缺少的协议方法
+    
+    func getDictionarySpecificTestHistory(for dictionaryId: UUID, limit: Int) -> AnyPublisher<[VocabularyTest], Error> {
+        let filteredTests = testHistory
+            .filter { $0.dictionaryId == dictionaryId }
+            .prefix(limit)
+        return Just(Array(filteredTests))
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getGeneralTestHistory(limit: Int) -> AnyPublisher<[VocabularyTest], Error> {
+        let generalTests = testHistory.prefix(limit)
+        return Just(Array(generalTests))
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func startDictionarySpecificTest(dictionary: DictionaryInfo, sampleSize: Int) -> AnyPublisher<VocabularyTest, Error> {
+        // 创建一个模拟的词典特定测试，使用简化构造函数
+        let test = VocabularyTest(
+            dictionaryName: dictionary.displayName,
+            sampleSize: sampleSize,
+            difficultyRange: "1-4",
+            isDictionarySpecific: true
+        )
+        
+        currentTest = test
+        activeTests[test.id] = test
+        testHistory.append(test)
+        
+        return Just(test)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func startGeneralTest(dictionary: DictionaryInfo, sampleSize: Int) -> AnyPublisher<VocabularyTest, Error> {
+        // 创建一个模拟的通用测试，使用简化构造函数
+        let test = VocabularyTest(
+            dictionaryName: "General Test",
+            sampleSize: sampleSize,
+            difficultyRange: "1-4",
+            isDictionarySpecific: false
+        )
+        
+        currentTest = test
+        activeTests[test.id] = test
+        testHistory.append(test)
+        
+        return Just(test)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getLatestDictionarySpecificTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error> {
+        let latestTest = testHistory.filter { $0.dictionaryId == dictionaryId }.last
+        return Just(latestTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getLatestGeneralTest() -> AnyPublisher<VocabularyTest?, Error> {
+        let latestGeneralTest = testHistory.filter { !$0.isDictionarySpecific }.last
+        return Just(latestGeneralTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func getTestHistoryGroupedByDictionary() -> AnyPublisher<[UUID: [VocabularyTest]], Error> {
+        let groupedTests = Dictionary(grouping: testHistory) { $0.dictionaryId ?? UUID() }
+        return Just(groupedTests)
             .setFailureType(to: Error.self)
             .eraseToAnyPublisher()
     }

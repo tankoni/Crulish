@@ -54,9 +54,11 @@ import SwiftData
                         print("🔄 [TestSessionService] 删除词典 \(dictionary.name) 的现有测试记录")
                     }
                     
-                    // 加载词典单词
-                    let words = try await self.loadDictionaryWordsSync(from: dictionary)
-                    let testWords = self.selectTestWords(from: words, count: sampleSize)
+                    // 获取未测试单词（实现去重功能）
+                    let untestedWords = try await self.getUntestedWordsSync(from: dictionary)
+                    let testWords = self.selectTestWords(from: untestedWords, count: sampleSize)
+                    
+                    print("✅ [TestSessionService] 词典 \(dictionary.name) 共有 \(untestedWords.count) 个未测试单词，选择 \(testWords.count) 个进行测试")
                     
                     // 创建测试实例
                     let test = VocabularyTest(
@@ -66,6 +68,7 @@ import SwiftData
                     test.dictionaryId = dictionary.id
                     test.dictionaryFileName = dictionary.fileName
                     test.totalWords = testWords.count
+                    test.isDictionarySpecific = true  // 设置为词典专属测试
                     
                     // 保存到活跃测试
                     await MainActor.run {
@@ -336,21 +339,53 @@ import SwiftData
 // MARK: - Private Methods
 private extension TestSessionService {
     
-    /// 同步加载词典单词
-    func loadDictionaryWordsSync(from dictionary: DictionaryInfo) async throws -> [DictionaryWord] {
+    /// 获取未测试单词（同步版本）
+    func getUntestedWordsSync(from dictionary: DictionaryInfo) async throws -> [DictionaryWord] {
+        // 创建WordMasteryService实例，使用继承自BaseService的属性
+        let wordMasteryService = WordMasteryService(
+            dictionaryService: dictionaryService,
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: errorHandler
+        )
+        
+        // 直接使用async/await，避免continuation泄漏
         return try await withCheckedThrowingContinuation { continuation in
-            dictionaryService.loadDictionary(fileName: dictionary.fileName)
+            var hasResumed = false
+            var cancellable: AnyCancellable?
+            
+            // 设置超时机制（30秒）
+            let timeoutTask = Task {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                if !hasResumed {
+                    hasResumed = true
+                    cancellable?.cancel()
+                    continuation.resume(throwing: TestSessionError.timeout)
+                }
+            }
+            
+            cancellable = wordMasteryService.getUntestedWords(from: dictionary)
                 .sink(
                     receiveCompletion: { completion in
-                        if case .failure(let error) = completion {
+                        guard !hasResumed else { return }
+                        hasResumed = true
+                        timeoutTask.cancel()
+                        
+                        switch completion {
+                        case .finished:
+                            // 如果没有收到值就完成了，返回空数组
+                            continuation.resume(returning: [])
+                        case .failure(let error):
                             continuation.resume(throwing: error)
                         }
                     },
                     receiveValue: { words in
+                        guard !hasResumed else { return }
+                        hasResumed = true
+                        timeoutTask.cancel()
                         continuation.resume(returning: words)
                     }
                 )
-                .store(in: &cancellables)
         }
     }
     

@@ -31,6 +31,184 @@ class TestResultExportService: TestResultExportServiceProtocol {
         print("🔧 TestResultExportService 初始化完成")
     }
     
+    // MARK: - 额外的导出格式支持
+    
+    private func exportToText(_ data: ExportableTestResult) async throws -> URL {
+        let content = generateTextContent(data)
+        let fileName = generateFileName(for: data, format: .text)
+        let url = try getDocumentsURL().appendingPathComponent(fileName)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+    
+    private func exportToCSV(_ data: ExportableTestResult) async throws -> URL {
+        let content = generateCSVContent(data)
+        let fileName = generateFileName(for: data, format: .csv)
+        let url = try getDocumentsURL().appendingPathComponent(fileName)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+    
+    private func exportToJSON(_ data: ExportableTestResult) async throws -> URL {
+        let content = generateJSONContent(data)
+        let fileName = generateFileName(for: data, format: .json)
+        let url = try getDocumentsURL().appendingPathComponent(fileName)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+    
+    private func exportVocabularyTestToText(_ data: VocabularyTestExportData) async throws -> URL {
+        let content = generateVocabularyTestTextContent(data)
+        let fileName = generateVocabularyTestFileName(for: data, format: .text)
+        let url = try getDocumentsURL().appendingPathComponent(fileName)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+    
+    private func exportVocabularyTestToCSV(_ data: VocabularyTestExportData) async throws -> URL {
+        let content = generateVocabularyTestCSVContent(data)
+        let fileName = generateVocabularyTestFileName(for: data, format: .csv)
+        let url = try getDocumentsURL().appendingPathComponent(fileName)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+    
+    private func exportVocabularyTestToJSON(_ data: VocabularyTestExportData) async throws -> URL {
+        let content = generateVocabularyTestJSONContent(data)
+        let fileName = generateVocabularyTestFileName(for: data, format: .json)
+        let url = try getDocumentsURL().appendingPathComponent(fileName)
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+    
+    // MARK: - 内容生成方法
+    
+    private func generateTextContent(_ data: ExportableTestResult) -> String {
+        var content = "词汇量测试结果\n"
+        content += "================\n\n"
+        content += "词典: \(data.dictionaryName)\n"
+        content += "测试时间: \(DateFormatter.localizedString(from: data.testDate, dateStyle: .medium, timeStyle: .short))\n"
+        content += "总词汇量: \(data.totalWords)\n"
+        content += "认识单词: \(data.knownWords.count)\n"
+        content += "不认识单词: \(data.unknownWords.count)\n\n"
+        
+        if !data.knownWords.isEmpty {
+            content += "认识的单词:\n"
+            content += "----------\n"
+            for word in data.knownWords {
+                content += "• \(word.word)\n"
+            }
+            content += "\n"
+        }
+        
+        if !data.unknownWords.isEmpty {
+            content += "不认识的单词:\n"
+            content += "------------\n"
+            for word in data.unknownWords {
+                content += "• \(word.word)\n"
+            }
+        }
+        
+        return content
+    }
+    
+    private func generateCSVContent(_ data: ExportableTestResult) -> String {
+        var content = "单词,状态,词性,释义\n"
+        
+        for word in data.knownWords {
+            let meaning = word.meanings.first ?? ""
+            let partOfSpeech = ""  // ExportableWord没有partOfSpeech属性，使用空字符串
+            content += "\"\(word.word)\",\"认识\",\"\(partOfSpeech)\",\"\(meaning)\"\n"
+        }
+        
+        for word in data.unknownWords {
+            let meaning = word.meanings.first ?? ""
+            let partOfSpeech = ""  // ExportableWord没有partOfSpeech属性，使用空字符串
+            content += "\"\(word.word)\",\"不认识\",\"\(partOfSpeech)\",\"\(meaning)\"\n"
+        }
+        
+        return content
+    }
+    
+    private func generateJSONContent(_ data: ExportableTestResult) -> String {
+        let jsonData: [String: Any] = [
+            "dictionaryName": data.dictionaryName,
+            "testDate": ISO8601DateFormatter().string(from: data.testDate),
+            "totalWords": data.totalWords,
+            "knownWordsCount": data.knownWords.count,
+            "unknownWordsCount": data.unknownWords.count,
+            "knownWords": data.knownWords.map { word in
+                [
+                    "word": word.word,
+                    "meanings": word.meanings.map { ["meaning": $0] }  // meanings是String数组，不是对象数组
+                ]
+            },
+            "unknownWords": data.unknownWords.map { word in
+                [
+                    "word": word.word,
+                    "meanings": word.meanings.map { ["meaning": $0] }  // meanings是String数组，不是对象数组
+                ]
+            }
+        ]
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: jsonData, options: .prettyPrinted)
+            return String(data: jsonData, encoding: .utf8) ?? "{}"
+        } catch {
+            return "{\"error\": \"JSON序列化失败\"}"
+        }
+    }
+    
+    private func generateVocabularyTestTextContent(_ data: VocabularyTestExportData) -> String {
+        var content = "词汇量测试单词详情\n"
+        content += "==================\n\n"
+        content += "词典: \(data.dictionaryName)\n"
+        content += "测试时间: \(DateFormatter.localizedString(from: data.testDate, dateStyle: .medium, timeStyle: .short))\n"
+        content += "总单词数: \(data.words.count)\n\n"
+        
+        for word in data.words {
+            content += "单词: \(word.word)\n"
+            content += "状态: \(word.masteryLevel)\n"  // 使用masteryLevel而不是isKnown
+            content += "释义: \(word.definition)\n"    // 使用definition而不是meanings
+            content += "\n"
+        }
+        
+        return content
+    }
+    
+    private func generateVocabularyTestCSVContent(_ data: VocabularyTestExportData) -> String {
+        var content = "单词,状态,释义\n"
+        
+        for word in data.words {
+            let definition = word.definition  // 使用definition而不是meanings
+            content += "\"\(word.word)\",\"\(word.masteryLevel)\",\"\(definition)\"\n"  // 使用masteryLevel而不是isKnown
+        }
+        
+        return content
+    }
+    
+    private func generateVocabularyTestJSONContent(_ data: VocabularyTestExportData) -> String {
+        let jsonData: [String: Any] = [
+            "dictionaryName": data.dictionaryName,
+            "testDate": ISO8601DateFormatter().string(from: data.testDate),
+            "totalWords": data.words.count,
+            "words": data.words.map { word in
+                [
+                    "word": word.word,
+                    "masteryLevel": word.masteryLevel,
+                    "definition": word.definition
+                ]
+            }
+        ]
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: jsonData, options: .prettyPrinted)
+            return String(data: jsonData, encoding: .utf8) ?? "{}"
+        } catch {
+            return "{\"error\": \"JSON序列化失败\"}"
+        }
+    }
+    
     // MARK: - Public Methods
     
     /// 导出测试结果
@@ -53,6 +231,15 @@ class TestResultExportService: TestResultExportServiceProtocol {
             case .pdf:
                 print("📄 开始PDF格式导出")
                 resultURL = try await exportToPDF(exportData)
+            case .text:
+                print("📄 开始Text格式导出")
+                resultURL = try await exportToText(exportData)
+            case .csv:
+                print("📊 开始CSV格式导出")
+                resultURL = try await exportToCSV(exportData)
+            case .json:
+                print("📋 开始JSON格式导出")
+                resultURL = try await exportToJSON(exportData)
             }
             
             print("🎉 导出完成！文件路径: \(resultURL.path)")
@@ -92,6 +279,15 @@ class TestResultExportService: TestResultExportServiceProtocol {
             case .pdf:
                 print("📄 开始PDF格式导出")
                 resultURL = try await exportVocabularyTestToPDF(exportData)
+            case .text:
+                print("📄 开始Text格式导出")
+                resultURL = try await exportVocabularyTestToText(exportData)
+            case .csv:
+                print("📊 开始CSV格式导出")
+                resultURL = try await exportVocabularyTestToCSV(exportData)
+            case .json:
+                print("📋 开始JSON格式导出")
+                resultURL = try await exportVocabularyTestToJSON(exportData)
             }
             
             print("🎉 词汇量测试导出完成！文件路径: \(resultURL.path)")
@@ -295,6 +491,7 @@ class TestResultExportService: TestResultExportServiceProtocol {
             
             let result = VocabularyTestExportData(
                 dictionaryName: dictionaryName,
+                testDate: Date(), // 使用当前时间作为测试时间
                 exportDate: Date(),
                 masteredWords: masteredWords,
                 familiarWords: familiarWords,
@@ -926,6 +1123,7 @@ class TestResultExportService: TestResultExportServiceProtocol {
             
             let result = ExportableTestResult(
                 dictionaryName: dictionaryName,
+                testDate: Date(), // 使用当前时间作为测试时间
                 exportDate: Date(),
                 knownWords: knownWords,
                 unknownWords: unknownWords

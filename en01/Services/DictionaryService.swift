@@ -638,6 +638,228 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
         } ?? []
     }
     
+    // MARK: - 词典专属记录管理
+    
+    /// 获取词典专属的用户词汇记录
+    func getDictionarySpecificUserWordRecords(for dictionaryId: UUID) -> [UserWord] {
+        return self.performSafeOperation("获取词典专属用户词汇记录") {
+            // 获取查词记录的UserWord
+            let userWordDescriptor = FetchDescriptor<UserWord>(
+                sortBy: [SortDescriptor(\UserWord.lastLookupDate, order: .reverse)]
+            )
+            let userWords = self.safeFetch(userWordDescriptor, operation: "获取用户词汇列表")
+            
+            // 获取词典专属测试记录的TestedWord
+            let testedWordDescriptor = FetchDescriptor<TestedWord>(
+                predicate: #Predicate { testedWord in
+                    testedWord.testSessionId != nil
+                },
+                sortBy: [SortDescriptor(\TestedWord.testedAt, order: .reverse)]
+            )
+            let allTestedWords = self.safeFetch(testedWordDescriptor, operation: "获取测试词汇列表")
+            
+            // 通过testSessionId查找对应的VocabularyTest，筛选词典专属记录
+            let vocabularyTestDescriptor = FetchDescriptor<VocabularyTest>(
+                predicate: #Predicate { test in
+                    test.dictionaryId == dictionaryId && test.isDictionarySpecific == true
+                }
+            )
+            let dictionaryTests = self.safeFetch(vocabularyTestDescriptor, operation: "获取词典专属测试")
+            let dictionaryTestIds = Set(dictionaryTests.map { $0.id })
+            
+            // 筛选属于该词典的测试记录
+            let dictionaryTestedWords = allTestedWords.filter { testedWord in
+                guard let testSessionId = testedWord.testSessionId else { return false }
+                return dictionaryTestIds.contains(testSessionId)
+            }
+            
+            print("✅ [DictionaryService] 获取到 \(userWords.count) 个查词记录")
+            print("✅ [DictionaryService] 获取到 \(dictionaryTestedWords.count) 个词典专属测试记录")
+            
+            // 创建词汇映射表
+            var wordMap: [String: UserWord] = [:]
+            
+            // 添加查词记录
+            for userWord in userWords {
+                wordMap[userWord.word.lowercased()] = userWord
+            }
+            
+            // 处理词典专属测试记录
+            var newWordsFromTest = 0
+            var updatedExistingWords = 0
+            
+            for testedWord in dictionaryTestedWords {
+                let wordKey = testedWord.word.lowercased()
+                
+                if let existingWord = wordMap[wordKey] {
+                    // 更新现有单词的测试信息
+                    existingWord.isFromTest = true
+                    existingWord.testID = testedWord.testSessionId?.uuidString
+                    existingWord.testSource = testedWord.dictionaryName
+                    
+                    // 如果测试时间更新，更新掌握程度
+                    if testedWord.testedAt > existingWord.lastLookupDate {
+                        existingWord.masteryLevel = testedWord.masteryLevelEnum
+                    }
+                    
+                    // 补充释义（如果缺失）
+                    if existingWord.selectedDefinition == nil {
+                        if let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试") {
+                            existingWord.selectedDefinition = dictWord.definitions.first
+                        }
+                    }
+                    updatedExistingWords += 1
+                } else {
+                    // 创建新的UserWord（来自词典专属测试）
+                    let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试")
+                    let definition = dictWord?.definitions.first ?? WordDefinition(
+                        partOfSpeech: .noun,
+                        meaning: testedWord.dictionaryName.isEmpty ? "测试词条" : "来自\(testedWord.dictionaryName)的测试词条"
+                    )
+                    
+                    let userWord = UserWord(
+                        word: testedWord.word,
+                        context: "词汇量测试",
+                        sentence: "来自词汇量测试的单词",
+                        selectedDefinition: definition
+                    )
+                    
+                    // 设置测试相关属性
+                    userWord.masteryLevel = testedWord.masteryLevelEnum
+                    userWord.firstLookupDate = testedWord.testedAt
+                    userWord.lastLookupDate = testedWord.testedAt
+                    userWord.isFromTest = true
+                    userWord.testID = testedWord.testSessionId?.uuidString
+                    userWord.testSource = testedWord.dictionaryName
+                    
+                    wordMap[wordKey] = userWord
+                    newWordsFromTest += 1
+                }
+            }
+            
+            print("✅ [DictionaryService] 从词典专属测试记录新增 \(newWordsFromTest) 个单词")
+            print("✅ [DictionaryService] 更新了 \(updatedExistingWords) 个现有单词的测试信息")
+            
+            // 转换为数组并排序
+            let allWords = Array(wordMap.values).sorted { word1, word2 in
+                return word1.lastLookupDate > word2.lastLookupDate
+            }
+            
+            print("✅ [DictionaryService] 最终返回 \(allWords.count) 个词典专属词汇记录")
+            return allWords
+        } ?? []
+    }
+    
+    /// 获取总记录（非词典专属）的用户词汇记录
+    func getGeneralUserWordRecords() -> [UserWord] {
+        return self.performSafeOperation("获取总用户词汇记录") {
+            // 获取查词记录的UserWord
+            let userWordDescriptor = FetchDescriptor<UserWord>(
+                sortBy: [SortDescriptor(\UserWord.lastLookupDate, order: .reverse)]
+            )
+            let userWords = self.safeFetch(userWordDescriptor, operation: "获取用户词汇列表")
+            
+            // 获取总测试记录的TestedWord
+            let testedWordDescriptor = FetchDescriptor<TestedWord>(
+                predicate: #Predicate { testedWord in
+                    testedWord.testSessionId != nil
+                },
+                sortBy: [SortDescriptor(\TestedWord.testedAt, order: .reverse)]
+            )
+            let allTestedWords = self.safeFetch(testedWordDescriptor, operation: "获取测试词汇列表")
+            
+            // 通过testSessionId查找对应的VocabularyTest，筛选总记录
+            let vocabularyTestDescriptor = FetchDescriptor<VocabularyTest>(
+                predicate: #Predicate { test in
+                    test.isDictionarySpecific == false
+                }
+            )
+            let generalTests = self.safeFetch(vocabularyTestDescriptor, operation: "获取总测试记录")
+            let generalTestIds = Set(generalTests.map { $0.id })
+            
+            // 筛选属于总记录的测试记录
+            let generalTestedWords = allTestedWords.filter { testedWord in
+                guard let testSessionId = testedWord.testSessionId else { return false }
+                return generalTestIds.contains(testSessionId)
+            }
+            
+            print("✅ [DictionaryService] 获取到 \(userWords.count) 个查词记录")
+            print("✅ [DictionaryService] 获取到 \(generalTestedWords.count) 个总测试记录")
+            
+            // 创建词汇映射表
+            var wordMap: [String: UserWord] = [:]
+            
+            // 添加查词记录
+            for userWord in userWords {
+                wordMap[userWord.word.lowercased()] = userWord
+            }
+            
+            // 处理总测试记录
+            var newWordsFromTest = 0
+            var updatedExistingWords = 0
+            
+            for testedWord in generalTestedWords {
+                let wordKey = testedWord.word.lowercased()
+                
+                if let existingWord = wordMap[wordKey] {
+                    // 更新现有单词的测试信息
+                    existingWord.isFromTest = true
+                    existingWord.testID = testedWord.testSessionId?.uuidString
+                    existingWord.testSource = testedWord.dictionaryName
+                    
+                    // 如果测试时间更新，更新掌握程度
+                    if testedWord.testedAt > existingWord.lastLookupDate {
+                        existingWord.masteryLevel = testedWord.masteryLevelEnum
+                    }
+                    
+                    // 补充释义（如果缺失）
+                    if existingWord.selectedDefinition == nil {
+                        if let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试") {
+                            existingWord.selectedDefinition = dictWord.definitions.first
+                        }
+                    }
+                    updatedExistingWords += 1
+                } else {
+                    // 创建新的UserWord（来自总测试）
+                    let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试")
+                    let definition = dictWord?.definitions.first ?? WordDefinition(
+                        partOfSpeech: .noun,
+                        meaning: testedWord.dictionaryName.isEmpty ? "测试词条" : "来自\(testedWord.dictionaryName)的测试词条"
+                    )
+                    
+                    let userWord = UserWord(
+                        word: testedWord.word,
+                        context: "词汇量测试",
+                        sentence: "来自词汇量测试的单词",
+                        selectedDefinition: definition
+                    )
+                    
+                    // 设置测试相关属性
+                    userWord.masteryLevel = testedWord.masteryLevelEnum
+                    userWord.firstLookupDate = testedWord.testedAt
+                    userWord.lastLookupDate = testedWord.testedAt
+                    userWord.isFromTest = true
+                    userWord.testID = testedWord.testSessionId?.uuidString
+                    userWord.testSource = testedWord.dictionaryName
+                    
+                    wordMap[wordKey] = userWord
+                    newWordsFromTest += 1
+                }
+            }
+            
+            print("✅ [DictionaryService] 从总测试记录新增 \(newWordsFromTest) 个单词")
+            print("✅ [DictionaryService] 更新了 \(updatedExistingWords) 个现有单词的测试信息")
+            
+            // 转换为数组并排序
+            let allWords = Array(wordMap.values).sorted { word1, word2 in
+                return word1.lastLookupDate > word2.lastLookupDate
+            }
+            
+            print("✅ [DictionaryService] 最终返回 \(allWords.count) 个总词汇记录")
+            return allWords
+        } ?? []
+    }
+    
     // 获取需要复习的单词
     func getWordsForReview() -> [UserWord] {
         let allRecords = getUserWordRecords()
@@ -956,6 +1178,11 @@ struct WordDefinitionData: Codable {
 // MARK: - 扩展
 
 extension DictionaryService {
+    
+    // 设置模型上下文
+    func setModelContext(_ context: ModelContext) {
+        self.modelContext = context
+    }
     
     // 获取词典大小
     var dictionarySize: Int {

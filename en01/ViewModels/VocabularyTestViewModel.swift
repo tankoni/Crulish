@@ -36,6 +36,14 @@ class VocabularyTestViewModel: ObservableObject {
     /// 测试结果管理器
     @Published var resultManager: TestResultManager
     
+    // MARK: - Retest Mode Support
+    
+    /// 是否为重测模式
+    let isRetestMode: Bool
+    
+    /// 重测配置
+    let retestConfig: RetestConfig?
+    
     // MARK: - Core Published Properties
     
     /// 是否正在加载
@@ -280,7 +288,15 @@ class VocabularyTestViewModel: ObservableObject {
     
     /// 是否可以开始测试
     var canStartTest: Bool {
-        return configurationManager.canStartTest && !testStateManager.isTestActive
+        let baseCanStart = configurationManager.canStartTest && !testStateManager.isTestActive
+        
+        // 重测模式额外检查
+        if isRetestMode {
+            guard let retestConfig = retestConfig else { return false }
+            return baseCanStart && !retestConfig.masteryLevels.isEmpty
+        }
+        
+        return baseCanStart
     }
     
     /// 测试进度
@@ -332,7 +348,9 @@ class VocabularyTestViewModel: ObservableObject {
         errorHandler: ErrorHandlerProtocol,
         learningTrackingService: LearningTrackingService? = nil,
         testResultExportService: TestResultExportService,
-        appCoordinator: AppCoordinator? = nil
+        appCoordinator: AppCoordinator? = nil,
+        isRetestMode: Bool = false,
+        retestConfig: RetestConfig? = nil
     ) {
         print("🚀 [VocabularyTestViewModel] 开始初始化")
         
@@ -343,14 +361,23 @@ class VocabularyTestViewModel: ObservableObject {
         self.distractorGenerator = DistractorGenerator(dictionaryService: dictionaryService)
         self._exportService = testResultExportService
         
+        // 重测模式支持
+        self.isRetestMode = isRetestMode
+        self.retestConfig = retestConfig
+        
         // 初始化管理器
         self.testStateManager = TestStateManager()
-        self.configurationManager = TestConfigurationManager(dictionaryService: dictionaryService as! DictionaryService)
+        self.configurationManager = TestConfigurationManager(
+            dictionaryService: dictionaryService as! DictionaryService,
+            isRetestMode: isRetestMode,
+            retestConfig: retestConfig
+        )
         self.resultManager = TestResultManager(
             vocabularyTestService: vocabularyTestService as! VocabularyTestService,
             learningTrackingService: learningTrackingService ?? appCoordinator?.getLearningTrackingService() ?? Self.createDefaultLearningTrackingService(),
             exportService: testResultExportService,
-            modelContext: (vocabularyTestService as! VocabularyTestService).modelContext
+            modelContext: (vocabularyTestService as! VocabularyTestService).modelContext,
+            isRetestMode: isRetestMode
         )
         
         // 设置初始数据
@@ -532,6 +559,28 @@ class VocabularyTestViewModel: ObservableObject {
             throw TestError.noDictionarySelected
         }
         
+        // 重测模式：创建重测实例
+        if isRetestMode, let retestConfig = retestConfig {
+            return try await withCheckedThrowingContinuation { continuation in
+                vocabularyTestService.startRetestVocabularyTest(
+                    dictionary: dictionary,
+                    masteryLevels: Array(retestConfig.masteryLevels),
+                    sampleSize: configurationManager.testSize.wordCount
+                )
+                .sink(
+                    receiveCompletion: { completion in
+                        if case .failure(let error) = completion {
+                            continuation.resume(throwing: error)
+                        }
+                    },
+                    receiveValue: { test in
+                        continuation.resume(returning: test)
+                    }
+                )
+                .store(in: &cancellables)
+            }
+        }
+        
         return try await withCheckedThrowingContinuation { continuation in
             vocabularyTestService.startVocabularyTest(dictionary: dictionary, sampleSize: configurationManager.testSize.wordCount)
                 .sink(
@@ -554,8 +603,41 @@ class VocabularyTestViewModel: ObservableObject {
             throw TestError.noDictionarySelected
         }
         
+        // 重测模式：只加载指定掌握度的单词
+        if isRetestMode, let retestConfig = retestConfig {
+            return try await loadRetestWords(dictionary: dictionary, masteryLevels: retestConfig.masteryLevels)
+        }
+        
         return try await withCheckedThrowingContinuation { continuation in
             vocabularyTestService.loadDictionaryWords(from: dictionary)
+                .sink(
+                    receiveCompletion: { completion in
+                        if case .failure(let error) = completion {
+                            continuation.resume(throwing: error)
+                        }
+                    },
+                    receiveValue: { words in
+                        let testWords = words.map { word in
+                            TestWord(
+                                word: word.word,
+                                pronunciation: word.phonetic,
+                                definitions: word.definitions.map { $0.meaning },
+                                examples: word.definitions.flatMap { $0.examples },
+                                difficulty: word.difficulty,
+                                frequency: word.frequency
+                            )
+                        }
+                        continuation.resume(returning: testWords)
+                    }
+                )
+                .store(in: &cancellables)
+        }
+    }
+    
+    /// 加载重测单词
+    private func loadRetestWords(dictionary: DictionaryInfo, masteryLevels: Set<MasteryLevel>) async throws -> [TestWord] {
+        return try await withCheckedThrowingContinuation { continuation in
+            vocabularyTestService.loadWordsForRetest(dictionary: dictionary, masteryLevels: Array(masteryLevels), sampleSize: 100)
                 .sink(
                     receiveCompletion: { completion in
                         if case .failure(let error) = completion {
@@ -953,7 +1035,13 @@ class VocabularyTestViewModel: ObservableObject {
     func selectDictionary(_ dictionary: DictionaryInfo) {
         isLoading = true
         Task {
+            // 词典切换时重置所有测试相关状态
+            await resetTestStateForDictionarySwitch()
+            
             await configurationManager.selectDictionary(dictionary)
+            
+            // 为新词典加载专属的测试历史记录
+            await loadTestHistoryForDictionary(dictionary.fileName)
             
             // 检查是否存在未完成的测试
             checkForIncompleteTest(dictionaryFileName: dictionary.fileName)
@@ -962,6 +1050,41 @@ class VocabularyTestViewModel: ObservableObject {
                 self.isLoading = false
                 self.logger.info("✅ [VocabularyTestViewModel] 词典选择完成: \(dictionary.name), 分组 \(self.availableGroups.count) 个")
             }
+        }
+    }
+    
+    /// 词典切换时重置测试状态
+    private func resetTestStateForDictionarySwitch() async {
+        await MainActor.run {
+            // 停止当前测试
+            if testStateManager.isTestActive {
+                testStateManager.stopTest()
+            }
+            
+            // 重置测试状态
+            testStateManager.reset()
+            
+            // 清除当前问题和答案
+            currentQuestion = nil
+            selectedAnswer = nil
+            showResult = false
+            
+            // 重置未完成测试状态
+            hasIncompleteTest = false
+            incompleteTest = nil
+            
+            // 清除错误消息
+            errorMessage = nil
+            
+            logger.info("🔄 [VocabularyTestViewModel] 词典切换时已重置测试状态")
+        }
+    }
+    
+    /// 为指定词典加载专属的测试历史记录
+    private func loadTestHistoryForDictionary(_ dictionaryFileName: String) async {
+        await resultManager.loadTestHistory(for: dictionaryFileName)
+        await MainActor.run {
+            logger.info("✅ [VocabularyTestViewModel] 已加载词典 \(dictionaryFileName) 的测试历史记录: \(self.testHistory.count) 条")
         }
     }
     
@@ -1212,12 +1335,39 @@ class VocabularyTestViewModel: ObservableObject {
 
 // MARK: - Supporting Types
 
+/// 重测配置
+struct RetestConfig {
+    let masteryLevels: Set<MasteryLevel>
+    let selectedDictionaries: Set<String>?
+    let wordCount: Int?
+    let randomOrder: Bool?
+    let testSize: TestSize?
+    let includeTestedWords: Bool?
+    
+    init(
+        masteryLevels: Set<MasteryLevel>,
+        selectedDictionaries: Set<String>? = nil,
+        wordCount: Int? = nil,
+        randomOrder: Bool? = nil,
+        testSize: TestSize? = nil,
+        includeTestedWords: Bool? = nil
+    ) {
+        self.masteryLevels = masteryLevels
+        self.selectedDictionaries = selectedDictionaries
+        self.wordCount = wordCount
+        self.randomOrder = randomOrder
+        self.testSize = testSize
+        self.includeTestedWords = includeTestedWords
+    }
+}
+
 /// 测试错误
 enum TestError: LocalizedError {
     case noDictionarySelected
     case invalidConfiguration(String)
     case noWordsAvailable
     case testAlreadyActive
+    case retestConfigurationError(String)
     
     var errorDescription: String? {
         switch self {
@@ -1229,6 +1379,8 @@ enum TestError: LocalizedError {
             return "没有可用的测试单词"
         case .testAlreadyActive:
             return "测试已经在进行中"
+        case .retestConfigurationError(let message):
+            return "重测配置错误: \(message)"
         }
     }
 }

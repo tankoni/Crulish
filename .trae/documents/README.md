@@ -404,6 +404,321 @@ gantt
 
 * [ ] **在线词典**: 云端词典服务 (规划中 📋)
 
+## 词典历史记录以及排序功能的优化
+
+## 📋 词典专属测试记录系统开发计划
+
+### 🎯 项目目标
+实现每本词典的专属测试记录系统，同时维护总的用户词汇历史记录，优化词典切换体验和智能排序功能。
+
+### 🏗️ 系统架构设计
+
+#### 核心概念
+- **总记录系统**：维护用户所有词汇的历史记录，跨词典统计
+- **词典专属记录**：每本词典独立的测试记录，支持词典间数据隔离
+- **智能数据同步**：总记录与词典记录的双向同步机制
+
+#### 数据结构设计
+```swift
+// 扩展后的VocabularyTest模型
+@Model
+class VocabularyTest {
+    var dictionaryId: String?           // 词典标识符
+    var isDictionarySpecific: Bool      // 是否为词典专属记录
+    // ... 现有字段
+}
+```
+
+### 📝 详细开发步骤
+
+#### 步骤1：扩展VocabularyTest模型 🔧
+**目标**：为VocabularyTest模型添加词典专属测试记录支持
+
+**实现要点**：
+- 添加 `dictionaryId: String?` 字段，标识所属词典
+- 添加 `isDictionarySpecific: Bool` 字段，区分总记录和词典专属记录
+- 更新SwiftData模型迁移策略
+- 确保向后兼容性，现有记录默认为总记录
+
+**验证标准**：
+- [ ] 模型编译无错误
+- [ ] 数据迁移测试通过
+- [ ] 现有数据完整性保持
+
+#### 步骤2：重构VocabularyTestService 🔄
+**目标**：实现词典专属测试记录的管理和查询
+
+**实现要点**：
+- 新增按词典分组的查询方法：`getTestsByDictionary(dictionaryId:)`
+- 实现词典专属记录创建：`createDictionarySpecificTest()`
+- 添加总记录与词典记录的同步逻辑
+- 优化缓存机制，支持按词典缓存
+
+**核心方法**：
+```swift
+// 获取词典专属测试记录
+func getDictionaryTests(dictionaryId: String) -> [VocabularyTest]
+
+// 创建词典专属记录
+func createDictionaryTest(word: String, dictionaryId: String) -> VocabularyTest
+
+// 同步总记录到词典记录
+func syncToTotalRecords(dictionaryTest: VocabularyTest)
+```
+
+**验证标准**：
+- [ ] 词典专属查询功能正常
+- [ ] 数据同步逻辑正确
+- [ ] 缓存机制有效
+
+#### 步骤3：修改DictionaryService 📚
+**目标**：明确区分总记录和词典专属记录的获取逻辑
+
+**实现要点**：
+- 分离 `getUserWordRecords()` 方法：
+  - `getTotalUserWordRecords()` - 获取总记录
+  - `getDictionaryUserWordRecords(dictionaryId:)` - 获取词典专属记录
+- 实现词典专属的词汇状态查询
+- 优化词典切换时的数据加载性能
+
+**验证标准**：
+- [ ] 总记录和词典记录正确分离
+- [ ] 词典切换数据加载正常
+- [ ] 性能测试通过
+
+#### 步骤3.5：词典专属导入导出功能 📥📤
+**目标**：支持单词文件直接录入到对应词典记录
+
+**导入功能架构**：
+```swift
+// 新增VocabularyImportService
+class VocabularyImportService {
+    func importToDict(file: URL, dictionaryId: String) async throws
+    func validateImportFile(file: URL) -> ImportValidationResult
+    func processImportData(data: Data, format: ImportFormat) -> [ImportWord]
+}
+```
+
+**支持格式**：
+- **TXT格式**：每行一个单词，支持单词+释义格式
+- **CSV格式**：结构化数据，支持多列信息
+- **JSON格式**：完整的词汇数据结构
+
+**导入流程**：
+1. 文件格式识别和验证
+2. 数据解析和清洗
+3. 词典匹配和验证
+4. 批量创建词典专属记录
+5. 同步到总记录系统
+
+**导出功能扩展**：
+- 扩展现有 `StatisticsExportService`
+- 支持按词典导出测试记录
+- 提供词典专属的统计报告
+
+**验证标准**：
+- [ ] 多种文件格式导入正常
+- [ ] 词典专属记录创建正确
+- [ ] 导出功能完整可用
+
+#### 步骤4：完善VocabularyTestViewModel词典切换逻辑 🔄
+**目标**：确保词典切换时状态正确切换和数据隔离
+
+**实现要点**：
+- 实现词典切换时的数据清理和重新加载
+- 添加词典专属的状态管理
+- 优化切换动画和用户体验
+- 实现词典切换的防抖处理
+
+**核心逻辑**：
+```swift
+// 词典切换主方法
+func switchToDictionary(_ dictionaryId: String) async {
+    // 1. 保存当前状态
+    // 2. 清理缓存
+    // 3. 加载新词典数据
+    // 4. 更新UI状态
+}
+```
+
+**验证标准**：
+- [ ] 词典切换流畅无卡顿
+- [ ] 数据隔离正确
+- [ ] 状态管理准确
+
+#### 步骤5：重测和查重逻辑优化 🔍
+**目标**：实现总记录与词典记录的正确交集和查重逻辑
+
+**实现要点**：
+- **重测逻辑**：基于总记录筛选，在当前词典中重新测试
+- **查重逻辑**：词典专属查重，避免跨词典干扰
+- **智能推荐**：基于总记录的掌握情况，推荐词典中的薄弱词汇
+
+**核心算法**：
+```swift
+// 获取重测词汇（总记录与当前词典的交集）
+func getRetestWords(dictionaryId: String, masteryLevel: MasteryLevel) -> [String]
+
+// 词典专属查重
+func checkDuplicatesInDictionary(words: [String], dictionaryId: String) -> [String]
+```
+
+**验证标准**：
+- [ ] 重测词汇筛选准确
+- [ ] 查重逻辑正确
+- [ ] 推荐算法有效
+
+#### 步骤5.5：重构智能排序功能适配 🧠
+**目标**：更新智能排序功能以适配词典专属测试记录系统
+
+**核心更新**：
+
+1. **TestDataService.getArticleWordMasteryDistribution()** 方法重构：
+```swift
+// 支持按dictionaryId查询
+func getArticleWordMasteryDistribution(
+    articleId: String, 
+    dictionaryId: String? = nil
+) async -> WordMasteryDistribution
+```
+
+2. **IntelligentRankingService** 核心方法更新：
+```swift
+// 基于词典专属记录的文章排序
+func rankArticlesByDictionaryTestResults(
+    articles: [Article], 
+    dictionaryId: String
+) async -> [ArticleRankingResult]
+
+// 分阶段排序适配
+func performStagedRanking(
+    articles: [Article], 
+    dictionaryId: String
+) async -> StagedRankingResult
+```
+
+3. **缓存机制优化**：
+- 按词典ID分别缓存排序结果
+- 词典切换时正确清理和更新缓存
+- 支持词典专属的排序偏好设置
+
+**数据流更新**：
+- `VocabularyTestService` → 提供词典专属的测试数据
+- `TestDataService` → 按词典查询掌握度分布
+- `IntelligentRankingService` → 基于词典专属数据排序
+- `IntelligentRankingViewModel` → 管理词典切换状态
+
+**验证标准**：
+- [ ] 智能排序结果准确反映词典专属数据
+- [ ] 词典切换时排序结果正确更新
+- [ ] 分阶段排序功能正常
+- [ ] 缓存机制有效工作
+
+#### 步骤6：UI层面更新 🎨
+**目标**：更新词典切换状态显示和相关功能界面
+
+**主要更新界面**：
+
+1. **VocabularyTestView**：
+   - 添加词典选择器
+   - 显示当前词典的测试进度
+   - 词典专属的统计信息
+
+2. **StatisticsView**：
+   - 支持按词典查看统计
+   - 总记录与词典记录的对比视图
+   - 词典专属的导入导出按钮
+
+3. **IntelligentRankingView**：
+   - 词典选择器集成
+   - 词典专属的排序结果显示
+   - 分阶段排序的词典适配
+
+4. **导入导出界面**：
+   - 新增词典选择功能
+   - 导入文件的词典关联设置
+   - 词典专属导出选项
+
+**UI组件设计**：
+```swift
+// 词典选择器组件
+struct DictionarySelector: View {
+    @Binding var selectedDictionaryId: String?
+    let availableDictionaries: [DictionaryInfo]
+}
+
+// 词典状态指示器
+struct DictionaryStatusIndicator: View {
+    let dictionaryId: String
+    let testProgress: TestProgress
+}
+```
+
+**验证标准**：
+- [ ] 词典切换UI响应流畅
+- [ ] 状态显示准确
+- [ ] 导入导出界面完整
+
+#### 步骤7：全面测试验证 🧪
+**目标**：验证整个词典专属记录系统的正确性和稳定性
+
+**测试范围**：
+
+1. **单元测试**：
+   - VocabularyTest模型测试
+   - VocabularyTestService方法测试
+   - DictionaryService功能测试
+   - 导入导出功能测试
+   - 智能排序功能测试
+
+2. **集成测试**：
+   - 词典切换完整流程
+   - 数据同步机制验证
+   - 导入导出端到端测试
+   - 智能排序集成测试
+
+3. **性能测试**：
+   - 大量数据下的切换性能
+   - 导入大文件的处理能力
+   - 智能排序的响应时间
+   - 内存使用优化验证
+
+4. **用户体验测试**：
+   - 词典切换流畅度
+   - 数据一致性验证
+   - 错误处理和恢复
+   - 界面响应性测试
+
+**测试数据准备**：
+- 多词典测试环境
+- 大量历史记录数据
+- 各种格式的导入文件
+- 复杂的排序场景
+
+**验证标准**：
+- [ ] 所有单元测试通过
+- [ ] 集成测试无错误
+- [ ] 性能指标达标
+- [ ] 用户体验良好
+
+### 🎯 预期成果
+
+完成后的系统将具备：
+- ✅ 每本词典独立的测试记录和进度跟踪
+- ✅ 总记录系统的完整性和一致性
+- ✅ 流畅的词典切换体验
+- ✅ 智能的导入导出功能
+- ✅ 优化的智能排序算法
+- ✅ 完善的数据同步机制
+
+### 🔄 后续优化方向
+- 词典间的学习进度对比分析
+- 基于词典专属数据的个性化推荐
+- 词典学习路径的智能规划
+- 跨词典的词汇关联分析
+
+---
+
 ### 🎯 下一阶段开发计划
 
 #### 📅 第一阶段 (2024年12月20日 - 2025年1月5日)
@@ -481,6 +796,8 @@ gantt
    * 语音朗读功能
 
    * 笔记系统基础版
+
+
 
 ## 🚀 快速开始
 

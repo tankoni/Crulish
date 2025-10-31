@@ -52,6 +52,7 @@ protocol VocabularyTestServiceProtocol {
     // 测试历史
     func getTestHistory(limit: Int) -> AnyPublisher<[VocabularyTest], Error>
     func getTestHistory(for dictionaryId: UUID) -> AnyPublisher<[VocabularyTest], Error>
+    func getTestHistory(for dictionaryFileName: String, limit: Int) -> AnyPublisher<[VocabularyTest], Error>
     func getLatestTest() -> AnyPublisher<VocabularyTest?, Error>
     func getLatestTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error>
     func getIncompleteTest(for dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error>
@@ -75,9 +76,36 @@ protocol VocabularyTestServiceProtocol {
     // 批量掌握度更新
     func batchUpdateWordMastery(words: [String], mastery: MasteryLevel, dictionaryName: String, dictionaryFileName: String) -> AnyPublisher<Void, Error>
     
+    // 重测功能
+    func loadWordsForRetest(dictionary: DictionaryInfo, masteryLevels: [MasteryLevel], sampleSize: Int) -> AnyPublisher<[DictionaryWord], Error>
+    func startRetestVocabularyTest(dictionary: DictionaryInfo, masteryLevels: [MasteryLevel], sampleSize: Int) -> AnyPublisher<VocabularyTest, Error>
+    
     // 缓存管理
     func clearCache()
     func clearCacheForDictionary(_ dictionaryFileName: String)
+    
+    // MARK: - 词典专属测试记录管理
+    
+    /// 获取词典专属测试历史记录
+    func getDictionarySpecificTestHistory(for dictionaryId: UUID, limit: Int) -> AnyPublisher<[VocabularyTest], Error>
+    
+    /// 获取总测试历史记录（非词典专属）
+    func getGeneralTestHistory(limit: Int) -> AnyPublisher<[VocabularyTest], Error>
+    
+    /// 获取词典的最新专属测试记录
+    func getLatestDictionarySpecificTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error>
+    
+    /// 获取最新总测试记录
+    func getLatestGeneralTest() -> AnyPublisher<VocabularyTest?, Error>
+    
+    /// 创建词典专属测试
+    func startDictionarySpecificTest(dictionary: DictionaryInfo, sampleSize: Int) -> AnyPublisher<VocabularyTest, Error>
+    
+    /// 创建总测试
+    func startGeneralTest(dictionary: DictionaryInfo, sampleSize: Int) -> AnyPublisher<VocabularyTest, Error>
+    
+    /// 按词典分组获取测试记录
+    func getTestHistoryGroupedByDictionary() -> AnyPublisher<[UUID: [VocabularyTest]], Error>
 }
 
 // MARK: - WordStatistics Model
@@ -256,6 +284,10 @@ struct WordStatistics {
         return testDataService.getTestHistory(for: dictionaryId)
     }
     
+    func getTestHistory(for dictionaryFileName: String, limit: Int = 20) -> AnyPublisher<[VocabularyTest], Error> {
+        return testDataService.getTestHistory(for: dictionaryFileName, limit: limit)
+    }
+    
     func getLatestTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error> {
         return testDataService.getLatestTest(for: dictionaryId)
     }
@@ -401,6 +433,100 @@ struct WordStatistics {
         .eraseToAnyPublisher()
     }
     
+    // MARK: - Retest Methods
+    
+    func loadWordsForRetest(dictionary: DictionaryInfo, masteryLevels: [MasteryLevel], sampleSize: Int) -> AnyPublisher<[DictionaryWord], Error> {
+        Future<[DictionaryWord], Error> { promise in
+            Task {
+                do {
+                    // 获取指定掌握程度的已测试单词
+                    var retestWords: [DictionaryWord] = []
+                    
+                    for masteryLevel in masteryLevels {
+                        let wordsForMastery = try await withCheckedThrowingContinuation { continuation in
+                            self.getWordsByMastery(
+                                dictionaryFileName: dictionary.fileName,
+                                mastery: masteryLevel
+                            )
+                            .sink(
+                                receiveCompletion: { completion in
+                                    if case .failure(let error) = completion {
+                                        continuation.resume(throwing: error)
+                                    }
+                                },
+                                receiveValue: { words in
+                                    continuation.resume(returning: words)
+                                }
+                            )
+                            .store(in: &self.cancellables)
+                        }
+                        retestWords.append(contentsOf: wordsForMastery)
+                    }
+                    
+                    // 随机打乱并限制数量
+                    let shuffledWords = retestWords.shuffled()
+                    let limitedWords = Array(shuffledWords.prefix(sampleSize))
+                    
+                    promise(.success(limitedWords))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    func startRetestVocabularyTest(dictionary: DictionaryInfo, masteryLevels: [MasteryLevel], sampleSize: Int) -> AnyPublisher<VocabularyTest, Error> {
+        Future<VocabularyTest, Error> { promise in
+            Task {
+                do {
+                    // 加载重测单词
+                    let retestWords = try await withCheckedThrowingContinuation { continuation in
+                        self.loadWordsForRetest(
+                            dictionary: dictionary,
+                            masteryLevels: masteryLevels,
+                            sampleSize: sampleSize
+                        )
+                        .sink(
+                            receiveCompletion: { completion in
+                                if case .failure(let error) = completion {
+                                    continuation.resume(throwing: error)
+                                }
+                            },
+                            receiveValue: { words in
+                                continuation.resume(returning: words)
+                            }
+                        )
+                        .store(in: &self.cancellables)
+                    }
+                    
+                    // 创建重测实例
+                    let test = VocabularyTest(
+                        dictionaryName: dictionary.name,
+                        sampleSize: retestWords.count
+                    )
+                    
+                    // 设置词典相关信息
+                    test.dictionaryId = dictionary.id
+                    test.dictionaryFileName = dictionary.fileName
+                    test.totalWords = retestWords.count
+                    test.isDictionarySpecific = true  // 设置为词典专属测试
+                    
+                    // 保存测试实例
+                    _ = try await self.saveTestResult(test).values.first(where: { _ in true })
+                    
+                    // 设置当前测试ID
+                    self.currentTestId = test.id
+                    
+                    promise(.success(test))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
     // MARK: - Cache Management
     
     func clearCache() {
@@ -411,6 +537,94 @@ struct WordStatistics {
     func clearCacheForDictionary(_ dictionaryFileName: String) {
         testDataService.clearCacheForDictionary(dictionaryFileName)
         wordMasteryService.clearCacheForDictionary(dictionaryFileName)
+    }
+    
+    // MARK: - 词典专属测试记录管理
+    
+    /// 获取词典专属测试历史记录
+    func getDictionarySpecificTestHistory(for dictionaryId: UUID, limit: Int = 20) -> AnyPublisher<[VocabularyTest], Error> {
+        return testDataService.getDictionarySpecificTestHistory(for: dictionaryId, limit: limit)
+    }
+    
+    /// 获取总测试历史记录（非词典专属）
+    func getGeneralTestHistory(limit: Int = 20) -> AnyPublisher<[VocabularyTest], Error> {
+        return testDataService.getGeneralTestHistory(limit: limit)
+    }
+    
+    /// 获取词典的最新专属测试记录
+    func getLatestDictionarySpecificTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error> {
+        return testDataService.getLatestDictionarySpecificTest(for: dictionaryId)
+    }
+    
+    /// 获取最新总测试记录
+    func getLatestGeneralTest() -> AnyPublisher<VocabularyTest?, Error> {
+        return testDataService.getLatestGeneralTest()
+    }
+    
+    /// 创建词典专属测试
+    func startDictionarySpecificTest(dictionary: DictionaryInfo, sampleSize: Int = 100) -> AnyPublisher<VocabularyTest, Error> {
+        return Future { [weak self] promise in
+            guard let self = self else {
+                promise(.failure(VocabularyTestError.serviceUnavailable))
+                return
+            }
+            
+            Task {
+                do {
+                    let test = VocabularyTest.createDictionarySpecificRecord(
+                        dictionaryId: dictionary.id,
+                        dictionaryName: dictionary.name,
+                        sampleSize: sampleSize
+                    )
+                    
+                    try await self.testSessionService.saveTestToDatabase(test)
+                    await MainActor.run {
+                        self.currentTestId = test.id
+                        promise(.success(test))
+                    }
+                } catch {
+                    await MainActor.run {
+                        promise(.failure(error))
+                    }
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /// 创建总测试
+    func startGeneralTest(dictionary: DictionaryInfo, sampleSize: Int = 100) -> AnyPublisher<VocabularyTest, Error> {
+        return Future { [weak self] promise in
+            guard let self = self else {
+                promise(.failure(VocabularyTestError.serviceUnavailable))
+                return
+            }
+            
+            Task {
+                do {
+                    let test = VocabularyTest.createGeneralRecord(
+                        dictionaryName: dictionary.name,
+                        sampleSize: sampleSize
+                    )
+                    
+                    try await self.testSessionService.saveTestToDatabase(test)
+                    await MainActor.run {
+                        self.currentTestId = test.id
+                        promise(.success(test))
+                    }
+                } catch {
+                    await MainActor.run {
+                        promise(.failure(error))
+                    }
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /// 按词典分组获取测试记录
+    func getTestHistoryGroupedByDictionary() -> AnyPublisher<[UUID: [VocabularyTest]], Error> {
+        return testDataService.getTestRecordsByDictionary()
     }
 }
 

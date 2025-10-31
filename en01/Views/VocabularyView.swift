@@ -50,6 +50,12 @@ struct VocabularyView: View {
     // 重测模式相关状态
     @State private var isShowingRetestMode = false // 控制重测模式界面显示
     @State private var retestModeService: RetestModeService? // 重测模式服务
+    @State private var quickRetestConfig: RetestConfig? // 快速重测配置
+    
+    // 词典专属导入导出相关状态
+    @State private var isShowingDictionarySpecificImport = false // 控制词典专属导入界面显示
+    @State private var isShowingDictionarySpecificExport = false // 控制词典专属导出界面显示
+    @State private var selectedDictionaryForImportExport: PersonalDictionary? // 选中的词典
     
     var body: some View {
         NavigationView {
@@ -93,8 +99,14 @@ struct VocabularyView: View {
                 dictionaryService: dictionaryService,
                 errorHandler: errorHandler,
                 testResultExportService: appCoordinator.getTestResultExportService(),
-                appCoordinator: appCoordinator
+                appCoordinator: appCoordinator,
+                isRetestMode: quickRetestConfig != nil,
+                retestConfig: quickRetestConfig
             )
+            .onDisappear {
+                // 清除快速重测配置
+                quickRetestConfig = nil
+            }
         }
         .sheet(isPresented: $isShowingRetestMode) {
             if let retestService = retestModeService {
@@ -119,6 +131,16 @@ struct VocabularyView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartVocabularyTest"))) { _ in
             isShowingVocabularyTest = true
+        }
+        .sheet(isPresented: $isShowingDictionarySpecificImport) {
+            DictionarySpecificImportView()
+                .environmentObject(dictionaryService)
+                .environment(errorHandler)
+        }
+        .sheet(isPresented: $isShowingDictionarySpecificExport) {
+            DictionarySpecificExportView()
+                .environmentObject(dictionaryService)
+                .environment(errorHandler)
         }
     }
     
@@ -393,6 +415,45 @@ struct VocabularyView: View {
                                     .foregroundColor(.secondary)
                                 
                                 Spacer()
+                                
+                                // 词典专属导入导出按钮
+                                HStack(spacing: 8) {
+                                    Button {
+                                        selectedDictionaryForImportExport = dictionary
+                                        isShowingDictionarySpecificImport = true
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "square.and.arrow.down")
+                                                .font(.caption)
+                                            Text("导入")
+                                                .font(.caption)
+                                        }
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.blue.opacity(0.1))
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    
+                                    Button {
+                                        selectedDictionaryForImportExport = dictionary
+                                        isShowingDictionarySpecificExport = true
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "square.and.arrow.up")
+                                                .font(.caption)
+                                            Text("导出")
+                                                .font(.caption)
+                                        }
+                                        .foregroundColor(.green)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.green.opacity(0.1))
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
                             }
                         }
                         .padding(.vertical, 4)
@@ -402,8 +463,16 @@ struct VocabularyView: View {
         }
         .navigationTitle("个人词典")
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("导入") {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button("批量导入") {
+                    isShowingDictionarySpecificImport = true
+                }
+                
+                Button("批量导出") {
+                    isShowingDictionarySpecificExport = true
+                }
+                
+                Button("导入词典") {
                     isShowingDictionaryImport = true
                 }
             }
@@ -436,6 +505,41 @@ struct VocabularyView: View {
         return formatter
     }
     
+    // MARK: - 重测模式卡片
+    
+    private var retestModeCard: some View {
+        Button {
+            isShowingRetestMode = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("重测模式")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                    
+                    Text("重新测试已学单词")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     // MARK: - 词汇量测试卡片
     
     private var vocabularyTestCard: some View {
@@ -689,6 +793,11 @@ struct VocabularyView: View {
                     .padding(.horizontal)
                     .padding(.top, 16)
                 
+                // 重测模式入口按钮
+                retestModeCard
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+                
                 // 掌握程度分类按钮
                 masteryLevelButtons
                 
@@ -748,30 +857,42 @@ struct VocabularyView: View {
                 title: "已掌握",
                 count: getMasteredWordsCount(),
                 color: .green,
-                isSelected: selectedMastery == .mastered
-            ) {
-                selectedMastery = selectedMastery == .mastered ? nil : .mastered
-            }
+                isSelected: selectedMastery == .mastered,
+                action: {
+                    selectedMastery = selectedMastery == .mastered ? nil : .mastered
+                },
+                onQuickRetest: {
+                    startQuickRetest(for: .mastered)
+                }
+            )
             
             // 熟悉按钮
             MasteryLevelButton(
                 title: "熟悉",
                 count: getFamiliarWordsCount(),
                 color: .orange,
-                isSelected: selectedMastery == .familiar
-            ) {
-                selectedMastery = selectedMastery == .familiar ? nil : .familiar
-            }
+                isSelected: selectedMastery == .familiar,
+                action: {
+                    selectedMastery = selectedMastery == .familiar ? nil : .familiar
+                },
+                onQuickRetest: {
+                    startQuickRetest(for: .familiar)
+                }
+            )
             
             // 不熟悉按钮
             MasteryLevelButton(
                 title: "不熟悉",
                 count: getUnfamiliarWordsCount(),
                 color: .red,
-                isSelected: selectedMastery == .unfamiliar
-            ) {
-                selectedMastery = selectedMastery == .unfamiliar ? nil : .unfamiliar
-            }
+                isSelected: selectedMastery == .unfamiliar,
+                action: {
+                    selectedMastery = selectedMastery == .unfamiliar ? nil : .unfamiliar
+                },
+                onQuickRetest: {
+                    startQuickRetest(for: .unfamiliar)
+                }
+            )
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
@@ -1375,6 +1496,57 @@ extension VocabularyView {
         retestModeService = appCoordinator.getRetestModeService()
         print("✅ [VocabularyView] 重测模式服务初始化成功")
     }
+    
+    // MARK: - 快速重测功能
+    
+    private func startQuickRetest(for masteryLevel: MasteryLevel) {
+        Task {
+            do {
+                guard let retestService = retestModeService else {
+                    print("❌ [VocabularyView] 重测服务未初始化")
+                    return
+                }
+                
+                // 获取可用词典
+                let availableDictionaries = try await retestService.getAvailableDictionaries()
+                
+                // 创建重测配置
+                let retestConfig = RetestConfig(
+                    masteryLevels: [masteryLevel],
+                    selectedDictionaries: Set(availableDictionaries.map { $0.id.uuidString }),
+                    wordCount: 50, // 默认50个单词
+                    randomOrder: true
+                )
+                
+                // 筛选单词
+                // 将 RetestConfig 转换为 RetestWordFilters
+                        let filters = RetestWordFilters(
+                            dictionaryIds: Set(availableDictionaries.map { $0.id }),
+                            masteryLevels: retestConfig.masteryLevels,
+                            excludeRecentlyTested: false,
+                            recentTestThreshold: 24 * 60 * 60
+                        )
+                        let filteredWords = try await retestService.getFilteredWords(filters: filters)
+                
+                if filteredWords.isEmpty {
+                    print("⚠️ [VocabularyView] 没有找到符合条件的单词")
+                    return
+                }
+                
+                print("✅ [VocabularyView] 快速重测：找到 \(filteredWords.count) 个\(masteryLevel.displayName)单词")
+                
+                // 使用统一的VocabularyTestView进行重测
+                await MainActor.run {
+                    // 设置重测配置并显示测试界面
+                    self.quickRetestConfig = retestConfig
+                    isShowingVocabularyTest = true
+                }
+                
+            } catch {
+                print("❌ [VocabularyView] 快速重测失败: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 // MARK: - 掌握程度按钮组件
@@ -1384,6 +1556,7 @@ struct MasteryLevelButton: View {
     let color: Color
     let isSelected: Bool
     let action: () -> Void
+    let onQuickRetest: (() -> Void)? // 新增快速重测回调
     
     var body: some View {
         Button(action: action) {
@@ -1396,6 +1569,28 @@ struct MasteryLevelButton: View {
                 Text(title)
                     .font(.caption)
                     .foregroundColor(isSelected ? .white : .secondary)
+                
+                // 快速重测按钮
+                if let onQuickRetest = onQuickRetest, count > 0 {
+                    Button {
+                        onQuickRetest()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption2)
+                            Text("重测")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : color.opacity(0.8))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(isSelected ? Color.white.opacity(0.2) : color.opacity(0.1))
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)

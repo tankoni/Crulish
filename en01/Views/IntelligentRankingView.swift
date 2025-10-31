@@ -765,6 +765,9 @@ struct IntelligentRankingView: View {
             await exportPDFArticles(topArticles)
         case .markdown:
             await exportMarkdownArticles(topArticles)
+        case .text, .csv, .json:
+            // 暂不支持这些格式的导出
+            print("暂不支持 \(format.rawValue) 格式的导出")
         }
     }
     

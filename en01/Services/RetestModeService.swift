@@ -14,6 +14,7 @@ import Combine
 protocol RetestModeServiceProtocol {
     func getAvailableDictionaries() async throws -> [DictionaryInfo]
     func getTestedWordsForDictionaries(_ dictionaryIds: [UUID], masteryLevels: [MasteryLevel]) async throws -> [RetestWordItem]
+    func getFilteredWords(filters: RetestWordFilters) async throws -> [RetestWordItem]
     func createRetestSession(configuration: RetestConfiguration, words: [RetestWordItem]) async throws -> RetestSession
     func updateTestResult(sessionId: UUID, wordId: UUID, isCorrect: Bool, responseTime: TimeInterval) async throws
     func completeRetestSession(_ sessionId: UUID, overwriteMode: ResultOverwriteMode) async throws -> RetestStatistics
@@ -54,6 +55,39 @@ class RetestModeService: RetestModeServiceProtocol {
                     }
                 )
                 .store(in: &self.cancellables)
+        }
+    }
+    
+    /// 获取掌握程度统计信息
+    func getMasteryStats() async -> [MasteryLevel: Int] {
+        do {
+            // 获取所有已测试的单词
+            let descriptor = FetchDescriptor<TestedWord>(
+                sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
+            )
+            let testedWords = try modelContext.fetch(descriptor)
+            
+            var stats: [MasteryLevel: Int] = [
+                .mastered: 0,
+                .familiar: 0,
+                .unfamiliar: 0
+            ]
+            
+            // 统计各掌握程度的单词数量
+            for testedWord in testedWords {
+                let masteryLevel = determineMasteryLevel(testedWord)
+                stats[masteryLevel, default: 0] += 1
+            }
+            
+            print("✅ [RetestModeService] 掌握程度统计: \(stats)")
+            return stats
+        } catch {
+            print("❌ [RetestModeService] 获取掌握程度统计失败: \(error.localizedDescription)")
+            return [
+                .mastered: 0,
+                .familiar: 0,
+                .unfamiliar: 0
+            ]
         }
     }
     
@@ -108,6 +142,46 @@ class RetestModeService: RetestModeServiceProtocol {
         }
     }
     
+    // MARK: - 根据过滤器获取单词
+    func getFilteredWords(filters: RetestWordFilters) async throws -> [RetestWordItem] {
+        // 检查过滤器是否有效
+        guard !filters.isEmpty else {
+            throw RetestError.invalidConfiguration
+        }
+        
+        do {
+            // 获取基础单词列表
+            let words = try await getTestedWordsForDictionaries(
+                Array(filters.dictionaryIds),
+                masteryLevels: Array(filters.masteryLevels)
+            )
+            
+            // 应用额外的过滤条件
+            var filteredWords = words
+            
+            // 排除最近测试的单词（使用显式循环避免 filter 与 SwiftData 的 Predicate 解析冲突）
+            if filters.excludeRecentlyTested {
+                let cutoffDate = Date().addingTimeInterval(-filters.recentTestThreshold)
+                var result: [RetestWordItem] = []
+                for item in Swift.Array(filteredWords) {
+                    if let last = item.lastTestDate {
+                        if last < cutoffDate { result.append(item) }
+                    } else {
+                        // 没有最近测试日期则保留
+                        result.append(item)
+                    }
+                }
+                filteredWords = result
+            }
+            
+            print("✅ 过滤后获得 \(filteredWords.count) 个单词")
+            return filteredWords
+        } catch {
+            print("❌ 根据过滤器获取单词失败: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
     private func getTestedWordsForDictionary(_ dictionaryId: UUID, masteryLevels: [MasteryLevel]) async throws -> [RetestWordItem] {
         // 获取词典信息
         let dictionaries = try await getAvailableDictionaries()
@@ -115,26 +189,15 @@ class RetestModeService: RetestModeServiceProtocol {
             throw RetestError.dictionaryNotFound
         }
         
-        // 获取测试记录
-        let testDescriptor = FetchDescriptor<VocabularyTest>(
-            predicate: #Predicate<VocabularyTest> { test in
-                test.dictionaryId == dictionaryId
-            }
+        // 使用WordMasteryService获取已测试单词，确保正确处理词典专属记录
+        let wordMasteryService = WordMasteryService(
+            dictionaryService: dictionaryService,
+            modelContext: modelContext,
+            cacheManager: CacheManager(),
+            errorHandler: ErrorHandler()
         )
-        let tests = try modelContext.fetch(testDescriptor)
         
-        guard let latestTest = tests.max(by: { $0.testDate < $1.testDate }) else {
-            return []
-        }
-        
-        // 获取测试过的单词
-        let testSessionId = latestTest.id
-        let testedWordDescriptor = FetchDescriptor<TestedWord>(
-            predicate: #Predicate<TestedWord> { testedWord in
-                testedWord.testSessionId == testSessionId
-            }
-        )
-        let testedWords = try modelContext.fetch(testedWordDescriptor)
+        let testedWords = try await wordMasteryService.getTestedWordsSync(for: dictionary.fileName)
         
         // 加载词典单词
             let words = try await withCheckedThrowingContinuation { continuation in
@@ -156,7 +219,14 @@ class RetestModeService: RetestModeServiceProtocol {
                     .store(in: &self.cancellables)
             }
             
-            let wordDict = Dictionary<String, DictionaryWord>(uniqueKeysWithValues: words.map { ($0.word, $0) })
+   // 创建单词字典以便快速查找，处理重复键的情况
+        var wordDict = [String: DictionaryWord]()
+        for word in words {
+            // 如果存在重复键，保留第一个出现的单词
+            if wordDict[word.word] == nil {
+                wordDict[word.word] = word
+            }
+        }
         
         var retestWords: [RetestWordItem] = []
         
@@ -561,6 +631,10 @@ class MockRetestModeService: RetestModeServiceProtocol {
     }
     
     func getTestedWordsForDictionaries(_ dictionaryIds: [UUID], masteryLevels: [MasteryLevel]) async throws -> [RetestWordItem] {
+        return []
+    }
+    
+    func getFilteredWords(filters: RetestWordFilters) async throws -> [RetestWordItem] {
         return []
     }
     

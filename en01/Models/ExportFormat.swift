@@ -6,14 +6,24 @@
 //
 
 import Foundation
+import SwiftData
 
 /// 导出格式枚举
 enum ExportFormat: String, CaseIterable {
+    case text = "txt"
+    case csv = "csv"
+    case json = "json"
     case markdown = "md"
     case pdf = "pdf"
     
     var displayName: String {
         switch self {
+        case .text:
+            return "Text"
+        case .csv:
+            return "CSV"
+        case .json:
+            return "JSON"
         case .markdown:
             return "Markdown"
         case .pdf:
@@ -27,6 +37,12 @@ enum ExportFormat: String, CaseIterable {
     
     var mimeType: String {
         switch self {
+        case .text:
+            return "text/plain"
+        case .csv:
+            return "text/csv"
+        case .json:
+            return "application/json"
         case .markdown:
             return "text/markdown"
         case .pdf:
@@ -36,8 +52,9 @@ enum ExportFormat: String, CaseIterable {
 }
 
 /// 可导出的测试结果数据结构
-struct ExportableTestResult {
+struct ExportableTestResult: Codable {
     let dictionaryName: String
+    let testDate: Date
     let exportDate: Date
     let knownWords: [ExportableWord]
     let unknownWords: [ExportableWord]
@@ -56,9 +73,10 @@ struct ExportableTestResult {
 }
 
 /// 可导出的单词数据结构
-struct ExportableWord {
+struct ExportableWord: Codable {
     let word: String
     let definition: String
+    let meanings: [String]
     let example: String?
     let testDate: Date
     let responseTime: TimeInterval
@@ -72,9 +90,11 @@ struct ExportableWord {
         if let dictionaryWord = dictionaryWord,
            let firstDefinition = dictionaryWord.definitions.first {
             self.definition = firstDefinition.meaning
+            self.meanings = dictionaryWord.definitions.map { $0.meaning }
             self.example = firstDefinition.examples.first
         } else {
             self.definition = "暂无定义"
+            self.meanings = ["暂无定义"]
             self.example = nil
         }
         
@@ -100,22 +120,26 @@ struct ExportConfiguration {
     )
 }
 
-
 /// 词汇量测试导出数据结构
-struct VocabularyTestExportData {
+struct VocabularyTestExportData: Codable {
     let dictionaryName: String
+    let testDate: Date
     let exportDate: Date
     let masteredWords: [VocabularyTestWord]
     let familiarWords: [VocabularyTestWord]
     let unfamiliarWords: [VocabularyTestWord]
     
+    var words: [VocabularyTestWord] {
+        return masteredWords + familiarWords + unfamiliarWords
+    }
+    
     var totalWords: Int {
-        masteredWords.count + familiarWords.count + unfamiliarWords.count
+        return masteredWords.count + familiarWords.count + unfamiliarWords.count
     }
 }
 
 /// 词汇量测试单词数据结构
-struct VocabularyTestWord {
+struct VocabularyTestWord: Codable {
     let word: String
     let definition: String
     let example: String?

@@ -227,7 +227,7 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     private func performStemming(_ word: String) -> String {
         // 使用NLTagger进行词干提取
         tagger.string = word
-        let range = word.startIndex..<word.endIndex
+        let _ = word.startIndex..<word.endIndex
         
         if let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue {
             return lemma.lowercased()

@@ -14,6 +14,7 @@ import SwiftUI
 final class VocabularyTest: @unchecked Sendable {
     var id: UUID
     var dictionaryId: UUID? // 词典ID，与DictionaryInfo.id关联（可选以支持旧数据迁移）
+    var isDictionarySpecific: Bool = false // 是否为词典专属记录（true=词典专属，false=总记录）
     var dictionaryName: String // 使用的词典名称
     var dictionaryFileName: String // 词典文件名
     var testDate: Date // 测试日期
@@ -48,9 +49,10 @@ final class VocabularyTest: @unchecked Sendable {
     private var testResultsData: Data? // 存储序列化的测试结果详情
     
     // 简化构造函数
-    init(dictionaryName: String, sampleSize: Int = 100, difficultyRange: String = "1-4") {
+    init(dictionaryName: String, sampleSize: Int = 100, difficultyRange: String = "1-4", isDictionarySpecific: Bool = false) {
         self.id = UUID()
         self.dictionaryId = nil // 默认为 nil，实际使用时应设置正确的词典ID
+        self.isDictionarySpecific = isDictionarySpecific // 默认为总记录
         self.dictionaryName = dictionaryName
         self.dictionaryFileName = ""
         self.testDate = Date()
@@ -86,6 +88,7 @@ final class VocabularyTest: @unchecked Sendable {
     init(
         id: UUID,
         dictionaryId: UUID?,
+        isDictionarySpecific: Bool = false,
         dictionaryName: String,
         dictionaryFileName: String,
         totalWords: Int,
@@ -102,6 +105,7 @@ final class VocabularyTest: @unchecked Sendable {
     ) {
         self.id = id
         self.dictionaryId = dictionaryId
+        self.isDictionarySpecific = isDictionarySpecific
         self.dictionaryName = dictionaryName
         self.dictionaryFileName = dictionaryFileName
         self.testDate = createdAt
@@ -167,6 +171,46 @@ enum VocabularyTestStatus: String, CaseIterable {
 }
 
 extension VocabularyTest {
+    // MARK: - 词典专属记录便利方法
+    
+    /// 是否为总记录（非词典专属）
+    var isGeneralRecord: Bool {
+        return !isDictionarySpecific
+    }
+    
+    /// 创建词典专属记录
+    static func createDictionarySpecificRecord(
+        dictionaryId: UUID,
+        dictionaryName: String,
+        sampleSize: Int = 100,
+        difficultyRange: String = "1-4"
+    ) -> VocabularyTest {
+        let test = VocabularyTest(
+            dictionaryName: dictionaryName,
+            sampleSize: sampleSize,
+            difficultyRange: difficultyRange,
+            isDictionarySpecific: true
+        )
+        test.dictionaryId = dictionaryId
+        return test
+    }
+    
+    /// 创建总记录
+    static func createGeneralRecord(
+        dictionaryName: String,
+        sampleSize: Int = 100,
+        difficultyRange: String = "1-4"
+    ) -> VocabularyTest {
+        return VocabularyTest(
+            dictionaryName: dictionaryName,
+            sampleSize: sampleSize,
+            difficultyRange: difficultyRange,
+            isDictionarySpecific: false
+        )
+    }
+    
+    // MARK: - 原有方法
+    
     // 计算词汇量估算
     func calculateEstimatedVocabulary(totalDictionaryWords: Int) {
         guard totalWords > 0 else { 

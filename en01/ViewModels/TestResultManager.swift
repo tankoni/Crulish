@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 import Foundation
 import Combine
+import CryptoKit
 
 /// 测试结果管理器 - 专门管理词汇量测试的结果和统计
 @MainActor
@@ -191,7 +192,9 @@ class TestResultManager: ObservableObject {
         vocabularyTestService: VocabularyTestServiceProtocol,
         learningTrackingService: LearningTrackingService,
         exportService: TestResultExportService,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        isRetestMode: Bool = false,
+        retestConfig: RetestConfig? = nil
     ) {
         self.vocabularyTestService = vocabularyTestService
         self.learningTrackingService = learningTrackingService
@@ -201,7 +204,7 @@ class TestResultManager: ObservableObject {
         // 初始化统计数据
         refreshStatistics()
         
-        print("✅ [TestResultManager] 初始化完成")
+        print("✅ [TestResultManager] 初始化完成 - 重测模式: \(isRetestMode)")
     }
     
     // MARK: - Result Management
@@ -315,7 +318,7 @@ class TestResultManager: ObservableObject {
             mutableTest.saveTestResults(vocabularyTestResults)
             
             // 保存到服务层
-            _ = try await withCheckedThrowingContinuation { continuation in
+            _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 vocabularyTestService.saveTestResult(mutableTest)
                     .sink(
                         receiveCompletion: { completion in
@@ -413,15 +416,15 @@ class TestResultManager: ObservableObject {
     
     // MARK: - Test History Management
     
-    /// 加载测试历史
+    /// 加载测试历史（总记录）
     func loadTestHistory() async {
         await MainActor.run {
             isLoadingHistory = true
         }
         
         do {
-            let history = try await withCheckedThrowingContinuation { continuation in
-                vocabularyTestService.getTestHistory(limit: 100)
+            let history = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[VocabularyTest], Error>) in
+                vocabularyTestService.getGeneralTestHistory(limit: 100)
                     .sink(
                         receiveCompletion: { completion in
                             switch completion {
@@ -442,13 +445,81 @@ class TestResultManager: ObservableObject {
                 self.testHistory = history
                 self.isLoadingHistory = false
             }
-            print("✅ [TestResultManager] 加载测试历史成功: \(history.count) 条记录")
+            print("✅ [TestResultManager] 加载总测试历史成功: \(history.count) 条记录")
         } catch {
             await MainActor.run {
                 self.isLoadingHistory = false
             }
-            print("❌ [TestResultManager] 加载测试历史失败: \(error)")
+            print("❌ [TestResultManager] 加载总测试历史失败: \(error)")
         }
+    }
+    
+    /// 加载指定词典的专属测试历史
+    func loadTestHistory(for dictionaryFileName: String) async {
+        await MainActor.run {
+            isLoadingHistory = true
+        }
+        
+        do {
+            // 将文件名转换为稳定的UUID
+            let dictionaryId = generateStableID(fileName: dictionaryFileName)
+            let history = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[VocabularyTest], Error>) in
+                var cancellable: AnyCancellable?
+                cancellable = vocabularyTestService.getDictionarySpecificTestHistory(for: dictionaryId, limit: 100)
+                    .sink(
+                        receiveCompletion: { completion in
+                            switch completion {
+                            case .finished:
+                                break
+                            case .failure(let error):
+                                continuation.resume(throwing: error)
+                            }
+                            cancellable?.cancel()
+                        },
+                        receiveValue: { history in
+                            continuation.resume(returning: history)
+                            cancellable?.cancel()
+                        }
+                    )
+            }
+            
+            await MainActor.run {
+                self.testHistory = history
+                self.isLoadingHistory = false
+            }
+            print("✅ [TestResultManager] 加载词典 \(dictionaryFileName) 的专属测试历史成功: \(history.count) 条记录")
+        } catch {
+            await MainActor.run {
+                self.isLoadingHistory = false
+            }
+            print("❌ [TestResultManager] 加载词典 \(dictionaryFileName) 的专属测试历史失败: \(error)")
+        }
+    }
+    
+    /// 基于文件名生成稳定的UUID（与DictionaryInfo保持一致）
+    private func generateStableID(fileName: String) -> UUID {
+        // 使用与DictionaryInfo相同的ID生成逻辑
+        let data = fileName.data(using: .utf8) ?? Data()
+        let hash = Insecure.SHA1.hash(data: data)
+        
+        // 将哈希值转换为UUID格式
+        let hashBytes = Array(hash)
+        
+        // 构造UUID字节数组（16字节）
+        var uuidBytes: [UInt8] = Array(hashBytes.prefix(16))
+        
+        // 设置版本号为5（基于名称的UUID）
+        uuidBytes[6] = (uuidBytes[6] & 0x0F) | 0x50
+        // 设置变体位
+        uuidBytes[8] = (uuidBytes[8] & 0x3F) | 0x80
+        
+        // 创建UUID
+        return UUID(uuid: (
+            uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+            uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+            uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+            uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+        ))
     }
     
     /// 选择测试继续
@@ -471,7 +542,7 @@ class TestResultManager: ObservableObject {
     
     /// 删除测试历史
     func deleteTestHistory(_ test: VocabularyTest) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             vocabularyTestService.deleteTestRecord(test)
                 .sink(
                     receiveCompletion: { completion in

@@ -80,6 +80,33 @@ class TestDataService: BaseService {
         .eraseToAnyPublisher()
     }
     
+    /// 获取特定词典文件名的测试历史
+    func getTestHistory(for dictionaryFileName: String, limit: Int = 20) -> AnyPublisher<[VocabularyTest], Error> {
+        return Future { [weak self] promise in
+            guard let self = self else {
+                promise(.failure(TestDataError.serviceUnavailable))
+                return
+            }
+            
+            Task { @MainActor in
+                do {
+                    var descriptor = FetchDescriptor<VocabularyTest>(
+                        predicate: #Predicate { $0.dictionaryFileName == dictionaryFileName },
+                        sortBy: [SortDescriptor(\.testDate, order: .reverse)]
+                    )
+                    descriptor.fetchLimit = limit
+                    
+                    let tests = try self.modelContext.fetch(descriptor)
+                    promise(.success(tests))
+                } catch {
+                    self.errorHandler.handle(error, context: "获取词典文件测试历史")
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
     /// 基于文件名的备用查询机制
     /// 用于处理ID变更后的数据迁移
     @MainActor
@@ -560,6 +587,109 @@ class TestDataService: BaseService {
         testedWordsCache.removeValue(forKey: dictionaryFileName)
         untestedWordsCache.removeValue(forKey: dictionaryFileName)
         loadingStates.removeValue(forKey: dictionaryFileName)
+    }
+    
+    // MARK: - 词典专属测试记录管理
+    
+    /// 获取词典专属测试历史记录
+    func getDictionarySpecificTestHistory(for dictionaryId: UUID, limit: Int = 20) -> AnyPublisher<[VocabularyTest], Error> {
+        return Future { [weak self] promise in
+            Task { @MainActor in
+                guard let self = self else {
+                    promise(.failure(TestDataError.serviceUnavailable))
+                    return
+                }
+                
+                do {
+                    var descriptor = FetchDescriptor<VocabularyTest>(
+                        predicate: #Predicate { test in
+                            test.dictionaryId == dictionaryId && test.isDictionarySpecific == true
+                        },
+                        sortBy: [SortDescriptor(\.testDate, order: .reverse)]
+                    )
+                    descriptor.fetchLimit = limit
+                    
+                    let tests = try self.modelContext.fetch(descriptor)
+                    promise(.success(tests))
+                } catch {
+                    print("❌ 获取词典专属测试历史失败: \(error.localizedDescription)")
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /// 获取总测试历史记录
+    func getGeneralTestHistory(limit: Int = 20) -> AnyPublisher<[VocabularyTest], Error> {
+        return Future { [weak self] promise in
+            Task { @MainActor in
+                guard let self = self else {
+                    promise(.failure(TestDataError.serviceUnavailable))
+                    return
+                }
+                
+                do {
+                    var descriptor = FetchDescriptor<VocabularyTest>(
+                        predicate: #Predicate { test in
+                            test.isDictionarySpecific == false
+                        },
+                        sortBy: [SortDescriptor(\.testDate, order: .reverse)]
+                    )
+                    descriptor.fetchLimit = limit
+                    
+                    let tests = try self.modelContext.fetch(descriptor)
+                    promise(.success(tests))
+                } catch {
+                    print("❌ 获取总测试历史失败: \(error.localizedDescription)")
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /// 获取最新的词典专属测试记录
+    func getLatestDictionarySpecificTest(for dictionaryId: UUID) -> AnyPublisher<VocabularyTest?, Error> {
+        return getDictionarySpecificTestHistory(for: dictionaryId, limit: 1)
+            .map { $0.first }
+            .eraseToAnyPublisher()
+    }
+    
+    /// 获取最新的总测试记录
+    func getLatestGeneralTest() -> AnyPublisher<VocabularyTest?, Error> {
+        return getGeneralTestHistory(limit: 1)
+            .map { $0.first }
+            .eraseToAnyPublisher()
+    }
+    
+    /// 按词典分组获取测试记录
+    func getTestRecordsByDictionary() -> AnyPublisher<[UUID: [VocabularyTest]], Error> {
+        return Future { [weak self] promise in
+            Task { @MainActor in
+                guard let self = self else {
+                    promise(.failure(TestDataError.serviceUnavailable))
+                    return
+                }
+                
+                do {
+                    let descriptor = FetchDescriptor<VocabularyTest>(
+                        sortBy: [SortDescriptor(\.testDate, order: .reverse)]
+                    )
+                    
+                    let allTests = try self.modelContext.fetch(descriptor)
+                    // 过滤掉dictionaryId为nil的测试记录
+                    let validTests = allTests.filter { $0.dictionaryId != nil }
+                    let groupedTests = Dictionary(grouping: validTests) { $0.dictionaryId! }
+                    
+                    promise(.success(groupedTests))
+                } catch {
+                    print("❌ 按词典分组获取测试记录失败: \(error.localizedDescription)")
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
     }
 }
 
