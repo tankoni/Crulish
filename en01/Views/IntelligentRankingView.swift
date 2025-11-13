@@ -16,7 +16,6 @@ struct IntelligentRankingView: View {
     @EnvironmentObject private var viewModel: IntelligentRankingViewModel
     @State private var selectedBasicSortOption: BasicSortOption = .unknownWords
     @State private var selectedKeywordSortOption: KeywordSortOption = .reading
-    @State private var availableDictionaries: [DictionaryInfo] = []
     @State private var isLoading: Bool = false
     @State private var showSortOptions: Bool = false
     @State private var showDictionarySelector: Bool = false
@@ -117,7 +116,9 @@ struct IntelligentRankingView: View {
                 }
             }
             .onAppear {
-                loadAvailableDictionaries()
+                Task {
+                    await viewModel.loadDictionaryTestStates()
+                }
                 loadRankedArticles()
             }
             .onChange(of: viewModel.selectedDictionary) { _, _ in
@@ -301,10 +302,10 @@ struct IntelligentRankingView: View {
     private var dictionarySelectorSheet: some View {
         NavigationStack {
             List {
-                ForEach(availableDictionaries, id: \.id) { dictionary in
+                ForEach(viewModel.availableDictionaries, id: \.id) { dictionary in
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(dictionary.name)
+                            Text(dictionary.displayName)
                                 .font(.headline)
                             
                             Text("\(dictionary.totalWords) 词汇")
@@ -321,9 +322,21 @@ struct IntelligentRankingView: View {
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        viewModel.selectedDictionary = dictionary
+                        viewModel.selectDictionary(dictionary)
                         showDictionarySelector = false
                     }
+                }
+                Section {
+                    Button {
+                        viewModel.resetDictionarySelection()
+                        showDictionarySelector = false
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.uturn.left")
+                            Text("返回普通排序")
+                        }
+                    }
+                    .foregroundColor(.red)
                 }
             }
             .navigationTitle("选择词典")
@@ -690,20 +703,7 @@ struct IntelligentRankingView: View {
     
     // MARK: - 私有函数
     
-    private func loadAvailableDictionaries() {
-        Task {
-            do {
-                let dictionaryService = ServiceContainer.shared.getDictionaryService()
-                let dictionaries = try await dictionaryService.getAvailableDictionaries().values.first(where: { _ in true }) ?? []
-                await MainActor.run {
-                    self.availableDictionaries = dictionaries
-                    print("✅ 加载词典列表成功: \(dictionaries.count) 个词典")
-                }
-            } catch {
-                print("❌ 加载词典列表失败: \(error.localizedDescription)")
-            }
-        }
-    }
+    
     
     private func loadRankedArticles() {
         isLoading = true
@@ -964,7 +964,7 @@ struct DictionaryTestStateRow: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(dictionary.name)
+                Text(dictionary.displayName)
                     .font(.headline)
                     .lineLimit(1)
 

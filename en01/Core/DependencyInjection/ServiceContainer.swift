@@ -46,6 +46,12 @@ class ServiceContainer {
     // 重测模式服务
     private var retestModeService: RetestModeService?
     
+    // MARK: - 数据同步服务（集成自ServiceManager）
+    private var dataSyncService: DataSyncService?
+    private var syncTriggerManager: SyncTriggerManager?
+    private var cacheSyncManager: CacheSyncManager?
+    private var wordMasteryService: WordMasteryService?
+    
     // MARK: - 模型上下文
     private var modelContext: ModelContext?
     
@@ -212,6 +218,29 @@ class ServiceContainer {
             modelContext: modelContext,
             testDataService: testDataService!,
             dictionaryService: dictionaryService!
+        )
+
+        // 初始化数据同步服务（集成自ServiceManager）
+        self.wordMasteryService = WordMasteryService(
+            dictionaryService: dictionaryService!,
+            modelContext: modelContext,
+            cacheManager: cacheManager,
+            errorHandler: unifiedErrorHandler
+        )
+        
+        self.cacheSyncManager = CacheSyncManager(
+            cacheManager: cacheManager
+        )
+        
+        self.dataSyncService = DataSyncService(
+            modelContext: modelContext,
+            errorHandler: ErrorHandler(),
+            cacheSyncManager: cacheSyncManager!
+        )
+        
+        self.syncTriggerManager = SyncTriggerManager(
+            dataSyncService: dataSyncService!,
+            errorHandler: ErrorHandler()
         )
 
         startupProgressManager.completeStage(.loadingOptionalServices)
@@ -563,6 +592,61 @@ class ServiceContainer {
             fatalError("RetestModeService not initialized. Call configure(with:) first.")
         }
         return service
+    }
+    
+    // MARK: - 数据同步服务获取方法
+    
+    /// 获取数据同步服务
+    func getDataSyncService() -> DataSyncService {
+        guard let service = dataSyncService else {
+            fatalError("DataSyncService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取同步触发管理器
+    func getSyncTriggerManager() -> SyncTriggerManager {
+        guard let service = syncTriggerManager else {
+            fatalError("SyncTriggerManager not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取缓存同步管理器
+    func getCacheSyncManager() -> CacheSyncManager {
+        guard let service = cacheSyncManager else {
+            fatalError("CacheSyncManager not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 获取词汇掌握服务
+    func getWordMasteryService() -> WordMasteryService {
+        guard let service = wordMasteryService else {
+            fatalError("WordMasteryService not initialized. Call configure(with:) first.")
+        }
+        return service
+    }
+    
+    /// 手动触发数据同步
+    func triggerDataSync() async {
+        await syncTriggerManager?.triggerManualFullSync()
+    }
+    
+    /// 应用启动时的数据同步
+    func onAppLaunch() async {
+        await syncTriggerManager?.triggerOnAppLaunch()
+    }
+    
+    /// 应用进入后台时的数据同步
+    func onAppBackground() async {
+        await syncTriggerManager?.triggerOnAppBackground()
+    }
+    
+    /// 应用进入前台时的数据同步
+    func onAppForeground() async {
+        // SyncTriggerManager没有onAppForeground方法，可以触发定时同步
+        await syncTriggerManager?.triggerScheduledSync()
     }
     
     /// 重置所有服务（主要用于测试）

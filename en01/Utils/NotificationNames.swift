@@ -19,4 +19,6 @@ extension Notification.Name {
     // 测试相关通知
     static let selectProgressTab = Notification.Name("SelectProgressTab")
     static let startVocabularyTest = Notification.Name("StartVocabularyTest")
+    // 重测相关通知
+    static let startRetestVocabularyTest = Notification.Name("StartRetestVocabularyTest")
 }

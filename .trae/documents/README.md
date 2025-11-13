@@ -719,6 +719,13 @@ struct DictionaryStatusIndicator: View {
 
 ---
 
+### 📝 更新记录
+- 2025-11-04：统一 IntelligentRanking 词典列表数据管道至 ViewModel。
+  - 移除视图层本地 `availableDictionaries` 状态，改用 `viewModel.availableDictionaries`。
+  - 将 `dictionarySelectorSheet` 的数据源切换为 `viewModel.availableDictionaries`，避免时序问题导致空白。
+  - 在 `IntelligentRankingViewModel.loadDictionaryTestStates()` 中同步更新 `availableDictionaries`，确保词典选择弹窗稳定显示。
+
+
 ### 🎯 下一阶段开发计划
 
 #### 📅 第一阶段 (2024年12月20日 - 2025年1月5日)
@@ -1097,4 +1104,3 @@ copies or substantial portions of the Software.
 **文档版本**: v1.0  
 **项目状态**: 🚀 积极开发中
 * <br />
-

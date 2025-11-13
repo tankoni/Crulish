@@ -175,10 +175,24 @@ class VocabularyTestViewModel: ObservableObject {
                     }
                 },
                 receiveValue: { [weak self] test in
-                    self?.incompleteTest = test
-                    self?.hasIncompleteTest = test != nil
-                    if let test = test {
-                        self?.logger.info("🔍 [VocabularyTestViewModel] 发现未完成测试: \(test.dictionaryFileName), 进度: \(test.currentWordIndex)/\(test.totalWords)")
+                    guard let self = self else { return }
+                    if let t = test {
+                        if t.totalWords <= 0 || t.currentWordIndex == 0 || self.isRetestMode {
+                            self.hasIncompleteTest = false
+                            self.incompleteTest = nil
+                            self.vocabularyTestService.deleteTestRecord(t)
+                                .sink(
+                                    receiveCompletion: { _ in },
+                                    receiveValue: { _ in }
+                                )
+                                .store(in: &self.cancellables)
+                            return
+                        }
+                        self.incompleteTest = t
+                        self.hasIncompleteTest = true
+                    } else {
+                        self.hasIncompleteTest = false
+                        self.incompleteTest = nil
                     }
                 }
             )
@@ -392,9 +406,12 @@ class VocabularyTestViewModel: ObservableObject {
     
     /// 设置初始数据
     private func setupInitialData() {
+        // 仅在尚未加载词典时触发加载，避免重复
         isLoading = true
         Task {
-            await configurationManager.loadAvailableDictionaries()
+            if self.availableDictionaries.isEmpty {
+                await configurationManager.loadAvailableDictionaries()
+            }
             await resultManager.loadTestHistory()
             await MainActor.run {
                 self.isLoading = false
@@ -439,6 +456,11 @@ class VocabularyTestViewModel: ObservableObject {
             return
         }
         
+        if isRetestMode {
+            startNewTestDirectly()
+            return
+        }
+
         // 先检查未完成的测试
         checkForIncompleteTest(dictionaryFileName: selectedDictionary.fileName)
         
@@ -1157,6 +1179,11 @@ class VocabularyTestViewModel: ObservableObject {
     
     /// 加载可用词典
     func loadAvailableDictionaries() {
+        // 幂等控制：如果已有数据则跳过，避免多处触发导致 UI 一直加载
+        if !availableDictionaries.isEmpty {
+            logger.info("↩️ [VocabularyTestViewModel] 跳过重复加载词典（已有数据）")
+            return
+        }
         isLoading = true
         Task {
             await configurationManager.loadAvailableDictionaries()
@@ -1176,8 +1203,7 @@ class VocabularyTestViewModel: ObservableObject {
     /// 选择测试模式
     func selectTestMode(_ mode: VocabularyTestMode) {
         selectedTestMode = mode
-        // 将VocabularyTestMode转换为TestMode
-        let testMode: TestMode = mode == .englishToChinese ? .sequential : .random
+        let testMode: TestMode = .sequential
         configurationManager.setTestMode(testMode)
     }
     

@@ -471,13 +471,13 @@ class TestResultExportService: TestResultExportServiceProtocol {
                 
                 let vocabularyTestWord = VocabularyTestWord(from: testedWord, dictionaryWord: dictionaryWord)
                 
-                // 根据掌握程度分类
-                switch testedWord.masteryLevel {
-                case "认识", "mastered":
+                // 根据掌握程度分类（统一使用枚举，避免字符串别名偏差）
+                switch testedWord.masteryLevelEnum {
+                case .mastered:
                     masteredWords.append(vocabularyTestWord)
-                case "熟悉", "familiar":
+                case .familiar:
                     familiarWords.append(vocabularyTestWord)
-                default:
+                case .unfamiliar:
                     unfamiliarWords.append(vocabularyTestWord)
                 }
             }

@@ -144,6 +144,33 @@ enum TabSelection: String, CaseIterable {
         return serviceContainer.getRetestModeService()
     }
     
+    // MARK: - 数据同步服务访问方法
+    
+    /// 获取数据同步服务
+    func getDataSyncService() -> DataSyncService {
+        return serviceContainer.getDataSyncService()
+    }
+    
+    /// 获取同步触发管理器
+    func getSyncTriggerManager() -> SyncTriggerManager {
+        return serviceContainer.getSyncTriggerManager()
+    }
+    
+    /// 获取缓存同步管理器
+    func getCacheSyncManager() -> CacheSyncManager {
+        return serviceContainer.getCacheSyncManager()
+    }
+    
+    /// 获取词汇掌握服务
+    func getWordMasteryService() -> WordMasteryService {
+        return serviceContainer.getWordMasteryService()
+    }
+    
+    /// 手动触发数据同步
+    func triggerDataSync() async {
+        await serviceContainer.triggerDataSync()
+    }
+    
     // MARK: - Initialization
     init(serviceContainer: ServiceContainer) {
         self.serviceContainer = serviceContainer
@@ -398,7 +425,14 @@ enum TabSelection: String, CaseIterable {
     func startVocabularyTest() {
         selectedTab = .vocabulary
         // 通过通知触发词汇量测试
-        NotificationCenter.default.post(name: NSNotification.Name("StartVocabularyTest"), object: nil)
+        NotificationCenter.default.post(name: .startVocabularyTest, object: nil)
+    }
+
+    /// 开始重测词汇量测试（传递重测配置）
+    func startRetestVocabularyTest(retestConfig: RetestConfig) {
+        selectedTab = .vocabulary
+        let userInfo: [AnyHashable: Any] = ["retestConfig": retestConfig]
+        NotificationCenter.default.post(name: .startRetestVocabularyTest, object: nil, userInfo: userInfo)
     }
     
     /// 完成词汇复习
@@ -531,6 +565,11 @@ enum TabSelection: String, CaseIterable {
     func onAppear() {
         // 应用启动时的初始化逻辑
         refreshAllData()
+        
+        // 触发应用启动时的数据同步
+        Task {
+            await serviceContainer.onAppLaunch()
+        }
     }
     
     func onDisappear() {
@@ -541,11 +580,19 @@ enum TabSelection: String, CaseIterable {
     func onBackground() {
         // 应用进入后台时的处理
         // 可以在这里保存状态或暂停某些操作
+        Task {
+            await serviceContainer.onAppBackground()
+        }
     }
     
     func onForeground() {
         // 应用回到前台时的处理
         refreshAllData()
+        
+        // 触发应用回到前台时的数据同步
+        Task {
+            await serviceContainer.onAppForeground()
+        }
     }
 }
 

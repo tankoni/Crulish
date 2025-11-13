@@ -74,7 +74,36 @@ final class TestedWord: @unchecked Sendable {
     
     /// 获取掌握程度枚举值
     var masteryLevelEnum: MasteryLevel {
-        return MasteryLevel(rawValue: masteryLevel) ?? .unfamiliar
+        // 优先使用当前中文原始值；兼容历史英文原始值（"mastered", "familiar", "unfamiliar"）
+        if let level = MasteryLevel(rawValue: masteryLevel) {
+            return level
+        }
+        // 兼容历史中文别名与英文值
+        let normalized = masteryLevel.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch normalized.lowercased() {
+        case "mastered":
+            return .mastered
+        case "familiar":
+            return .familiar
+        case "unfamiliar":
+            return .unfamiliar
+        case "known":
+            return .familiar
+        case "unknown":
+            return .unfamiliar
+        default:
+            // 非英文时按中文别名匹配
+            switch normalized {
+            case "已掌握":
+                return .mastered
+            case "不熟悉", "陌生", "不认识":
+                return .unfamiliar
+            case "熟悉", "认识":
+                return .familiar
+            default:
+                return .unfamiliar
+            }
+        }
     }
     
     /// 是否为已掌握

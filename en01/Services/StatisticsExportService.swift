@@ -209,9 +209,10 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
     // MARK: - Private Methods
     
     private func generateWordCategoryDetails(testedWords: [TestedWord]) async throws -> String {
-        let masteredWords = testedWords.filter { $0.masteryLevel == MasteryLevel.mastered.rawValue }
-        let familiarWords = testedWords.filter { $0.masteryLevel == MasteryLevel.familiar.rawValue }
-        let unfamiliarWords = testedWords.filter { $0.masteryLevel == MasteryLevel.unfamiliar.rawValue }
+        let unique = uniqueByWord(testedWords)
+        let masteredWords = unique.filter { $0.masteryLevel == MasteryLevel.mastered.rawValue }
+        let familiarWords = unique.filter { $0.masteryLevel == MasteryLevel.familiar.rawValue }
+        let unfamiliarWords = unique.filter { $0.masteryLevel == MasteryLevel.unfamiliar.rawValue }
         
         var details = """
         
@@ -224,10 +225,11 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
             details += "\n无\n"
         } else {
             details += "\n"
-            for word in masteredWords { // 移除数量限制，导出所有单词
-                let wordDetails = await getWordDetailsForExport(word.word)
-                details += "- **\(word.word)** \(wordDetails)\n"
-            }
+                for word in masteredWords {
+                    let clean = normalizeWordString(word.word)
+                    let wordDetails = await getWordDetailsForExport(clean)
+                    details += "- **\(clean)** \(wordDetails)\n"
+                }
         }
         
         details += """
@@ -239,10 +241,11 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
             details += "\n无\n"
         } else {
             details += "\n"
-            for word in familiarWords { // 移除数量限制，导出所有单词
-                let wordDetails = await getWordDetailsForExport(word.word)
-                details += "- **\(word.word)** \(wordDetails)\n"
-            }
+                for word in familiarWords {
+                    let clean = normalizeWordString(word.word)
+                    let wordDetails = await getWordDetailsForExport(clean)
+                    details += "- **\(clean)** \(wordDetails)\n"
+                }
         }
         
         details += """
@@ -254,10 +257,11 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
             details += "\n无\n"
         } else {
             details += "\n"
-            for word in unfamiliarWords { // 移除数量限制，导出所有单词
-                let wordDetails = await getWordDetailsForExport(word.word)
-                details += "- **\(word.word)** \(wordDetails)\n"
-            }
+                for word in unfamiliarWords {
+                    let clean = normalizeWordString(word.word)
+                    let wordDetails = await getWordDetailsForExport(clean)
+                    details += "- **\(clean)** \(wordDetails)\n"
+                }
         }
         
         // 统计分析
@@ -277,6 +281,56 @@ class StatisticsExportService: StatisticsExportServiceProtocol {
         }
         
         return details
+    }
+
+    private func normalizeWordString(_ text: String) -> String {
+        var s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while s.hasPrefix("- ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("* ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("• ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        var idx = s.startIndex
+        var digitsCount = 0
+        while idx < s.endIndex, s[idx].isNumber { digitsCount += 1; idx = s.index(after: idx) }
+        if digitsCount > 0, idx < s.endIndex, s[idx] == "." {
+            let nextIdx = s.index(after: idx)
+            if nextIdx < s.endIndex, s[nextIdx] == " " {
+                s = String(s[nextIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if let start = s.range(of: "**"), let end = s.range(of: "**", range: start.upperBound..<s.endIndex) {
+            s = String(s[start.upperBound..<end.lowerBound])
+        }
+        return s
+    }
+
+    private func uniqueByWord(_ words: [TestedWord]) -> [TestedWord] {
+        var map: [String: TestedWord] = [:]
+        for w in words {
+            let key = normalizeWordString(w.word).lowercased()
+            if let existing = map[key] {
+                let a = masteryRank(existing)
+                let b = masteryRank(w)
+                if b > a {
+                    map[key] = w
+                } else if b == a {
+                    let t1 = existing.lastTestedDate ?? existing.testedAt
+                    let t2 = w.lastTestedDate ?? w.testedAt
+                    if t2 > t1 { map[key] = w }
+                }
+            } else {
+                map[key] = w
+            }
+        }
+        return Array(map.values)
+    }
+
+    private func masteryRank(_ w: TestedWord) -> Int {
+        let level = MasteryLevel(rawValue: w.masteryLevel) ?? .unfamiliar
+        switch level {
+        case .mastered: return 2
+        case .familiar: return 1
+        case .unfamiliar: return 0
+        }
     }
     
     /// 获取单词的详细信息用于导出

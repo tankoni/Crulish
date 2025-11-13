@@ -368,7 +368,7 @@ struct DictionarySelectionRow: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(dictionary.name)
+                    Text(dictionary.displayName)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)

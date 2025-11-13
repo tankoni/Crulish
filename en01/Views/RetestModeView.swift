@@ -374,7 +374,7 @@ struct RetestDictionarySelectionCard: View {
                 
                 // 词典信息
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(dictionary.name)
+                    Text(dictionary.displayName)
                         .font(.headline)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)

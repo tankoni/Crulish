@@ -125,8 +125,26 @@ struct VocabularyTestView: View {
                 }
                 setupExportService()
                 viewModel.loadTestHistory()
-                viewModel.loadAvailableDictionaries()
                 isDataLoaded = true
+            }
+            if isRetestMode && !viewModel.isTestActive {
+                viewModel.selectTestMode(.chineseToEnglish)
+                Task {
+                    await viewModel.configurationManager.loadAvailableDictionaries()
+                    let dictionaries = viewModel.availableDictionaries
+                    var targetDictionary: DictionaryInfo?
+                    if let config = retestConfig, let selected = config.selectedDictionaries {
+                        targetDictionary = dictionaries.first { selected.contains($0.id.uuidString) }
+                    }
+                    if targetDictionary == nil {
+                        targetDictionary = dictionaries.first { $0.isVirtual && $0.name == "my_learning_records" } ?? dictionaries.first
+                    }
+                    if let dict = targetDictionary {
+                        await viewModel.configurationManager.selectDictionary(dict)
+                        viewModel.setTestSize(.all)
+                        viewModel.startTest()
+                    }
+                }
             }
         }
         .onDisappear {
@@ -883,7 +901,7 @@ struct TestDictionarySelectionCard: View {
                 
                 // 词典信息
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(dictionary.name)
+                    Text(dictionary.displayName)
                         .font(.headline)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)

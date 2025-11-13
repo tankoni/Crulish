@@ -60,6 +60,10 @@ protocol DictionaryServiceProtocol {
     // 用户词汇记录
     func recordWordLookup(word: String, context: String, sentence: String, article: Article) -> UserWord
     func getUserWordRecords() -> [UserWord]
+    /// 获取总记录（非词典专属）的用户词汇记录（查词 + 总测试合并去重）
+    func getGeneralUserWordRecords() -> [UserWord]
+    /// 获取词典专属的用户词汇记录（查词 + 该词典专属测试合并去重）
+    func getDictionarySpecificUserWordRecords(for dictionaryId: UUID) -> [UserWord]
     func getWordsByMastery(_ mastery: MasteryLevel) -> [UserWord]
     func getWordsForReview() -> [UserWord]
     

@@ -29,6 +29,7 @@ struct DictionaryInfo: Codable, Identifiable, Equatable {
     let checksum: String // 文件校验和
     let isEnabled: Bool // 是否启用
     let priority: Int // 优先级（用于排序）
+    let isVirtual: Bool // 是否为虚拟词典（如"我的学习记录"）
     
     // 词典统计信息
     let statistics: DictionaryStatistics
@@ -51,6 +52,7 @@ struct DictionaryInfo: Codable, Identifiable, Equatable {
         checksum: String = "",
         isEnabled: Bool = true,
         priority: Int = 0,
+        isVirtual: Bool = false,
         statistics: DictionaryStatistics? = nil,
         configuration: DictionaryConfiguration? = nil
     ) {
@@ -72,6 +74,7 @@ struct DictionaryInfo: Codable, Identifiable, Equatable {
         self.checksum = checksum
         self.isEnabled = isEnabled
         self.priority = priority
+        self.isVirtual = isVirtual
         
         // 初始化统计信息
         self.statistics = statistics ?? DictionaryStatistics()
@@ -208,6 +211,7 @@ struct DictionaryInfo: Codable, Identifiable, Equatable {
             checksum: checksum,
             isEnabled: isEnabled,
             priority: priority,
+            isVirtual: isVirtual,
             statistics: newStats,
             configuration: configuration
         )
@@ -230,6 +234,7 @@ struct DictionaryInfo: Codable, Identifiable, Equatable {
             checksum: checksum,
             isEnabled: isEnabled,
             priority: priority,
+            isVirtual: isVirtual,
             statistics: statistics,
             configuration: newConfig
         )
@@ -518,6 +523,27 @@ extension DictionaryInfo {
             checksum: "xyz789uvw012",
             isEnabled: true,
             priority: 0
+        )
+    }
+    
+    /// 创建"我的学习记录"虚拟词典
+    static func myLearningRecords(totalWords: Int = 0) -> DictionaryInfo {
+        return DictionaryInfo(
+            name: "my_learning_records",
+            displayName: "我的学习记录",
+            fileName: "virtual_my_learning_records",
+            filePath: "",
+            version: "1.0",
+            description: "包含所有学习过的单词记录，支持跨词典统计和复习",
+            language: "en",
+            totalWords: totalWords,
+            difficultyLevels: [1, 2, 3, 4, 5],
+            categories: ["个人", "学习记录", "总词典"],
+            fileSize: 0,
+            checksum: "",
+            isEnabled: true,
+            priority: -1, // 最高优先级，显示在列表顶部
+            isVirtual: true
         )
     }
 }

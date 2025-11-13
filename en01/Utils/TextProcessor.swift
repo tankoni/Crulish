@@ -22,9 +22,11 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     private let stemCacheQueue = DispatchQueue(label: "com.en01.textprocessor.stemCache", attributes: .concurrent)
     private let keywordCacheQueue = DispatchQueue(label: "com.en01.textprocessor.keywordCache", attributes: .concurrent)
     private let similarityCacheQueue = DispatchQueue(label: "com.en01.textprocessor.similarityCache", attributes: .concurrent)
-    
+
     private let maxCacheSize = 1000
-    private let memoryPressureThreshold = 50 * 1024 * 1024 // 50MB
+    // 使用进程内存用量阈值控制缓存清理；设置为 200MB，低于 MemoryManager 的 300MB 低内存阈值
+    private let memoryPressureThreshold = 200 * 1024 * 1024 // 200MB
+    private var lastValidationTime: Date = .distantPast
     
     // 初始化方法
     init() {
@@ -120,30 +122,27 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     /// - Returns: 关键词数组
     func extractKeywords(from text: String, limit: Int = 10) -> [String] {
         let cacheKey = "\(text.hashValue)_\(limit)"
-        
-        return keywordCacheQueue.sync {
-            // 检查缓存
-            if let cachedEntry = keywordCache[cacheKey] {
-                var entry = cachedEntry
-                entry.accessed()
-                keywordCache[cacheKey] = entry
-                return entry.value
-            }
-            
-            // 提取关键词
-            let result = performKeywordExtraction(text, limit: limit)
-            
-            // 缓存结果，使用安全的缓存操作
-            let newEntry = CacheEntry(value: result)
-            keywordCache[cacheKey] = newEntry
-            
-            // 安全检查内存压力
-            DispatchQueue.main.async { [weak self] in
-                self?.checkMemoryPressure()
-            }
-            
-            return result
+
+        // 先并发安全读取
+        if let cachedEntry: CacheEntry<[String]> = keywordCacheQueue.sync(execute: { keywordCache[cacheKey] }) {
+            var entry = cachedEntry
+            entry.accessed()
+            // 写回使用 barrier 保证排他访问
+            keywordCacheQueue.sync(flags: .barrier) { keywordCache[cacheKey] = entry }
+            return entry.value
         }
+
+        // 未命中则计算并写入（写入使用 barrier）
+        let result = performKeywordExtraction(text, limit: limit)
+        let newEntry = CacheEntry(value: result)
+        keywordCacheQueue.sync(flags: .barrier) { keywordCache[cacheKey] = newEntry }
+
+        // 安全检查内存压力
+        DispatchQueue.main.async { [weak self] in
+            self?.checkMemoryPressure()
+        }
+
+        return result
     }
     
     /// 执行实际的关键词提取
@@ -197,30 +196,27 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     /// - Returns: 词根或词干
     func stemWord(_ word: String) -> String {
         let lowercaseWord = word.lowercased()
-        
-        return stemCacheQueue.sync {
-            // 检查缓存
-            if let cachedEntry = stemCache[lowercaseWord] {
-                var entry = cachedEntry
-                entry.accessed()
-                stemCache[lowercaseWord] = entry
-                return entry.value
-            }
-            
-            // 计算词干
-            let result = performStemming(lowercaseWord)
-            
-            // 缓存结果，使用安全的缓存操作
-            let newEntry = CacheEntry(value: result)
-            stemCache[lowercaseWord] = newEntry
-            
-            // 安全检查内存压力
-            DispatchQueue.main.async { [weak self] in
-                self?.checkMemoryPressure()
-            }
-            
-            return result
+
+        // 先并发安全读取
+        if let cachedEntry: CacheEntry<String> = stemCacheQueue.sync(execute: { stemCache[lowercaseWord] }) {
+            var entry = cachedEntry
+            entry.accessed()
+            // 写回使用 barrier 保证排他访问
+            stemCacheQueue.sync(flags: .barrier) { stemCache[lowercaseWord] = entry }
+            return entry.value
         }
+
+        // 未命中则计算并写入（写入使用 barrier）
+        let result = performStemming(lowercaseWord)
+        let newEntry = CacheEntry(value: result)
+        stemCacheQueue.sync(flags: .barrier) { stemCache[lowercaseWord] = newEntry }
+
+        // 安全检查内存压力
+        DispatchQueue.main.async { [weak self] in
+            self?.checkMemoryPressure()
+        }
+
+        return result
     }
     
     /// 执行实际的词干提取
@@ -239,24 +235,22 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     
     /// 检查内存压力并清理缓存
     private func checkMemoryPressure() {
-        // 使用各自的并发队列同步读取缓存大小，避免并发读写造成崩溃
-        let stemCacheSize = getSafeCacheSize(stemCache, queue: stemCacheQueue)
-        let _ = getSafeCacheSize(keywordCache, queue: keywordCacheQueue)
-        let _ = getSafeCacheSize(similarityCache, queue: similarityCacheQueue)
-
-        if stemCacheSize > maxCacheSize {
+        // 改为基于实时内存用量判断，避免对缓存对象执行 count 导致崩溃
+        let currentUsage = MemoryManager.shared.getCurrentMemoryUsage()
+        if currentUsage > Int64(memoryPressureThreshold) {
             clearOldCache()
         }
 
-        // 定期验证缓存完整性
-        if stemCacheSize % 100 == 0 {
+        // 每 60 秒做一次校验与清理，控制缓存碎片化
+        if Date().timeIntervalSince(lastValidationTime) > 60 {
             validateAndCleanCache()
+            lastValidationTime = Date()
         }
     }
     
     /// 安全获取缓存大小（在线程安全的队列中读取），避免并发迭代
-    private func getSafeCacheSize<T>(_ cache: [String: CacheEntry<T>], queue: DispatchQueue) -> Int {
-        return queue.sync { cache.count }
+    private func getSafeCacheSize(queue: DispatchQueue, _ read: @escaping () -> Int) -> Int {
+        return queue.sync { read() }
     }
     
     /// 清理无效的缓存条目（使用队列屏障，保证并发安全）
@@ -344,6 +338,8 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     
     /// 验证并清理无效的缓存条目
     private func validateAndCleanCache() {
+        var totalInvalidKeys = 0
+        
         // 验证stemCache
         stemCacheQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
@@ -359,6 +355,7 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
             for key in invalidKeys {
                 self.stemCache.removeValue(forKey: key)
             }
+            totalInvalidKeys += invalidKeys.count
         }
         
         // 验证keywordCache
@@ -375,6 +372,7 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
             for key in invalidKeys {
                 self.keywordCache.removeValue(forKey: key)
             }
+            totalInvalidKeys += invalidKeys.count
         }
         
         // 验证similarityCache
@@ -391,8 +389,12 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
             for key in invalidKeys {
                 self.similarityCache.removeValue(forKey: key)
             }
+            totalInvalidKeys += invalidKeys.count
             
-            print("✅ [TextProcessor] 缓存验证完成，清理了 \(invalidKeys.count) 个无效条目")
+            // 只在实际清理了无效条目时才输出日志
+            if totalInvalidKeys > 0 {
+                print("✅ [TextProcessor] 缓存验证完成，清理了 \(totalInvalidKeys) 个无效条目")
+            }
         }
     }
     
@@ -575,30 +577,27 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     /// - Returns: 相似度（0-1之间）
     func calculateSimilarity(_ string1: String, _ string2: String) -> Double {
         let cacheKey = "\(string1)|\(string2)"
-        
-        return similarityCacheQueue.sync {
-            // 检查缓存
-            if let cachedEntry = similarityCache[cacheKey] {
-                var entry = cachedEntry
-                entry.accessed()
-                similarityCache[cacheKey] = entry
-                return entry.value
-            }
-            
-            // 计算相似度
-            let result = calculateLevenshteinSimilarity(string1, string2)
-            
-            // 缓存结果，使用安全的缓存操作
-            let newEntry = CacheEntry(value: result)
-            similarityCache[cacheKey] = newEntry
-            
-            // 安全检查内存压力
-            DispatchQueue.main.async { [weak self] in
-                self?.checkMemoryPressure()
-            }
-            
-            return result
+
+        // 先并发安全读取
+        if let cachedEntry: CacheEntry<Double> = similarityCacheQueue.sync(execute: { similarityCache[cacheKey] }) {
+            var entry = cachedEntry
+            entry.accessed()
+            // 写回使用 barrier 保证排他访问
+            similarityCacheQueue.sync(flags: .barrier) { similarityCache[cacheKey] = entry }
+            return entry.value
         }
+
+        // 未命中则计算并写入（写入使用 barrier）
+        let result = calculateLevenshteinSimilarity(string1, string2)
+        let newEntry = CacheEntry(value: result)
+        similarityCacheQueue.sync(flags: .barrier) { similarityCache[cacheKey] = newEntry }
+
+        // 安全检查内存压力
+        DispatchQueue.main.async { [weak self] in
+            self?.checkMemoryPressure()
+        }
+
+        return result
     }
     
     /// 计算Levenshtein相似度

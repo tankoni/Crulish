@@ -18,6 +18,9 @@ class WordMasteryService: BaseService {
     private let cacheValidityDuration: TimeInterval = 300 // 5分钟缓存有效期
     private var cancellables = Set<AnyCancellable>()
     
+    // 同步触发器管理器
+    private weak var syncTriggerManager: SyncTriggerManager?
+    
     // MARK: - Initialization
     init(
         dictionaryService: DictionaryServiceProtocol,
@@ -31,6 +34,12 @@ class WordMasteryService: BaseService {
             cacheManager: cacheManager,
             errorHandler: errorHandler
         )
+    }
+    
+    // MARK: - Dependency Injection
+    
+    func setSyncTriggerManager(_ manager: SyncTriggerManager) {
+        self.syncTriggerManager = manager
     }
     
     // MARK: - Word Mastery Recording
@@ -69,11 +78,9 @@ class WordMasteryService: BaseService {
                     let existingWords = allMatchingWords.filter { $0.dictionaryFileName == dictionaryFileName }
                     
                     if let existingWord = existingWords.first {
-                        // 更新现有记录
-                        existingWord.masteryLevel = masteryLevel.rawValue
-                        existingWord.lastTestedDate = Date()
-                        existingWord.testCount += 1
-                        existingWord.responseTime = (existingWord.responseTime * Double(existingWord.testCount - 1) + responseTime) / Double(existingWord.testCount)
+                        // 使用模型方法更新并重计算掌握度与分数
+                        existingWord.updateMasteryLevel(masteryLevel, fromDictionary: dictionaryFileName)
+                        existingWord.updateResponseTime(responseTime)
                         existingWord.testSessionId = testId
                     } else {
                         // 创建新记录
@@ -92,6 +99,25 @@ class WordMasteryService: BaseService {
                     
                     // 清除相关缓存
                     self.clearCacheForDictionary(test.dictionaryFileName)
+                    
+                    // 触发数据同步
+                    if !existingWords.isEmpty {
+                        self.syncTriggerManager?.triggerAfterMasteryUpdate(
+                            word: word,
+                            dictionaryFileName: test.dictionaryFileName,
+                            newMastery: masteryLevel
+                        )
+                    } else {
+                        // 新记录，触发测试记录同步
+                        let testedWord = allMatchingWords.first { $0.word == word && $0.dictionaryFileName == test.dictionaryFileName }
+                        if let newRecord = testedWord {
+                            self.syncTriggerManager?.triggerAfterTestRecord(
+                                word: word,
+                                dictionaryFileName: test.dictionaryFileName,
+                                testRecord: newRecord
+                            )
+                        }
+                    }
                     
                     promise(.success(()))
                 } catch {
@@ -378,6 +404,19 @@ extension WordMasteryService {
     
     /// 同步加载词典单词
     func loadDictionaryWordsSync(from dictionary: DictionaryInfo) async throws -> [DictionaryWord] {
+        if dictionary.isVirtual {
+            let records = dictionaryService.getGeneralUserWordRecords()
+            let processor = TextProcessor()
+            var map: [String: DictionaryWord] = [:]
+            for r in records {
+                let w = processor.cleanWord(r.word)
+                if w.isEmpty { continue }
+                if map[w] != nil { continue }
+                let def = WordDefinition(partOfSpeech: .noun, meaning: r.selectedDefinition?.meaning ?? "学习记录词条")
+                map[w] = DictionaryWord(word: w, phonetic: nil, definitions: [def], frequency: 0, difficulty: .medium, tags: [], categories: nil)
+            }
+            return Array(map.values)
+        }
         return try await withCheckedThrowingContinuation { continuation in
             dictionaryService.loadDictionary(fileName: dictionary.fileName)
                 .sink(
@@ -399,15 +438,22 @@ extension WordMasteryService {
     func getTestedWordsSync(for dictionaryFileName: String) async throws -> [TestedWord] {
         let context = modelContext
         
-        // 获取所有相关的已测试单词
-        let descriptor = FetchDescriptor<TestedWord>(
+        // 获取该词典下链接到测试会话的记录（词典专属）
+        let dictLinkedDescriptor = FetchDescriptor<TestedWord>(
             predicate: #Predicate<TestedWord> { testedWord in
                 testedWord.dictionaryFileName == dictionaryFileName && testedWord.testSessionId != nil
             },
             sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
         )
-        
-        let allTestedWords = try context.fetch(descriptor)
+        let dictionaryLinkedRecords = try context.fetch(dictLinkedDescriptor)
+
+        // 兼容导入生成的“孤立记录”：没有 testSessionId，但 dictionaryFileName 匹配
+        let orphanDescriptor = FetchDescriptor<TestedWord>(
+            predicate: #Predicate<TestedWord> { record in
+                record.testSessionId == nil && record.dictionaryFileName == dictionaryFileName
+            }
+        )
+        let orphanRecords = try context.fetch(orphanDescriptor)
         
         // 获取词典专属测试记录
         let dictionarySpecificTestDescriptor = FetchDescriptor<VocabularyTest>(
@@ -427,13 +473,24 @@ extension WordMasteryService {
         let generalTests = try context.fetch(generalTestDescriptor)
         let generalTestIds = Set(generalTests.map { $0.id })
         
+        // 获取所有链接到测试会话的记录（跨词典），用于筛选总记录
+        let allLinkedDescriptor = FetchDescriptor<TestedWord>(
+            predicate: #Predicate<TestedWord> { record in
+                record.testSessionId != nil
+            },
+            sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
+        )
+        let allLinkedRecords = try context.fetch(allLinkedDescriptor)
+        
         // 分离词典专属记录和总记录
-        let dictionarySpecificWords = allTestedWords.filter { testedWord in
+        var dictionarySpecificWords = dictionaryLinkedRecords.filter { testedWord in
             guard let testSessionId = testedWord.testSessionId else { return false }
             return dictionarySpecificTestIds.contains(testSessionId)
         }
+        // 将孤立记录视为词典专属记录的一部分（来自词典导入）
+        dictionarySpecificWords.append(contentsOf: orphanRecords)
         
-        let generalWords = allTestedWords.filter { testedWord in
+        let generalWords = allLinkedRecords.filter { testedWord in
             guard let testSessionId = testedWord.testSessionId else { return false }
             return generalTestIds.contains(testSessionId)
         }
@@ -454,8 +511,8 @@ extension WordMasteryService {
             }
         }
         
-        print("✅ [WordMasteryService] 词典 \(dictionaryFileName) 获取到 \(dictionarySpecificWords.count) 个专属记录，\(generalWords.count) 个总记录，合并后 \(resultWords.count) 个单词")
-        
+        print("✅ [WordMasteryService] 词典 \(dictionaryFileName) 获取到 \(dictionaryLinkedRecords.count) 个链接专属记录，\(orphanRecords.count) 个孤立专属记录，\(generalWords.count) 个总记录，合并后 \(resultWords.count) 个单词")
+
         return Array(resultWords.values).sorted { 
             ($0.lastTestedDate ?? Date.distantPast) > ($1.lastTestedDate ?? Date.distantPast) 
         }

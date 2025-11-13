@@ -81,6 +81,17 @@ class VocabularyViewModel: ObservableObject {
             name: NSNotification.Name("VocabularyTestCompleted"),
             object: nil
         )
+        
+        // 监听导入完成通知
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("DictionaryImportCompleted"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.handleDictionaryImportCompleted(notification)
+            }
+        }
     }
     
     private func setupLearningProgressObserver() {
@@ -179,6 +190,24 @@ class VocabularyViewModel: ObservableObject {
         }
         
         errorHandler.logSuccess("实时更新词汇学习进度: \(updatedWord.word)")
+    }
+    
+    private func handleDictionaryImportCompleted(_ notification: Notification) {
+        guard let dictionaryFileName = notification.userInfo?["dictionaryFileName"] as? String else { return }
+        
+        // 清除所有缓存
+        vocabularyCache = nil
+        statsCache = nil
+        
+        // 重新加载词汇数据
+        Task {
+            await MainActor.run {
+                self.loadVocabulary()
+                self.loadStatistics()
+            }
+        }
+        
+        errorHandler.logSuccess("词典导入完成，已刷新词汇列表: \(dictionaryFileName)")
     }
     
     deinit {

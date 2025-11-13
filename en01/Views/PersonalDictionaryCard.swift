@@ -18,7 +18,7 @@ struct PersonalDictionaryCard: View {
             // 词典标题和操作按钮
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(dictionary.name)
+                    Text(dictionary.displayName)
                         .font(.headline)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
@@ -89,7 +89,7 @@ struct PersonalDictionaryCard: View {
                 onDelete()
             }
         } message: {
-            Text("确定要删除词典\"\(dictionary.name)\"吗？此操作无法撤销。")
+            Text("确定要删除词典\"\(dictionary.displayName)\"吗？此操作无法撤销。")
         }
     }
     

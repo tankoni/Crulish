@@ -62,7 +62,50 @@ class DictionarySpecificImportExportService: BaseService {
             )
         } else {
             // 临时初始化，稍后通过 setModelContext 设置
-            let tempContainer = try! ModelContainer(for: UserWord.self, TestedWord.self)
+            // 使用与主应用相同的完整schema以避免表缺失错误
+            let schema = Schema([
+                Article.self,
+                DictionaryWord.self,
+                WordDefinition.self,
+                UserWord.self,
+                UserProgress.self,
+                DailyStudyRecord.self,
+                // 词汇测试相关模型
+                TestedWord.self,
+                VocabularyTest.self,
+                TestResultHistory.self,
+                // 考研词典模型
+                KaoyanWord.self,
+                KaoyanTranslation.self,
+                KaoyanSentence.self,
+                KaoyanSynonym.self,
+                KaoyanPhrase.self,
+                KaoyanRelatedWord.self,
+                KaoyanExam.self,
+                KaoyanChoice.self,
+                // 统计和学习记录模型
+                LearningStatistics.self,
+                LearningGoal.self,
+                AchievementEntity.self,
+                Bookmark.self,
+                ReadingSession.self,
+                LearningRecord.self,
+                LearningSession.self,
+                // 翻译记录模型
+                TranslationRecord.self,
+                TranslationStatistics.self,
+                // 其他记录模型
+                WordReviewRecord.self,
+                ReviewSessionRecord.self,
+                ArticleCompletionRecord.self,
+                ReadingProgressRecord.self,
+                ArticleRanking.self,
+                WordClickRecord.self,
+                WordLookupRecord.self,
+                Item.self
+            ])
+            let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            let tempContainer = try! ModelContainer(for: schema, configurations: [modelConfiguration])
             let tempContext = ModelContext(tempContainer)
             
             let dictionaryService = DictionaryService(
@@ -154,6 +197,26 @@ class DictionarySpecificImportExportService: BaseService {
         )
         
         logger.info("[DictionarySpecificImportExportService] 导入完成: 成功 \(successCount), 重复 \(duplicateWords.count), 失败 \(failedWords.count)")
+        
+        // 发送导入完成通知
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DictionaryImportCompleted"),
+                object: nil,
+                userInfo: [
+                    "dictionaryFileName": dictionaryFileName,
+                    "importResult": result
+                ]
+            )
+        }
+        
+        // 触发数据导入后的同步
+        Task { @MainActor in
+            let syncTriggerManager = ServiceContainer.shared.getSyncTriggerManager()
+            syncTriggerManager.triggerAfterDataImport(affectedDictionaries: [dictionaryFileName])
+            logger.info("[DictionarySpecificImportExportService] 已触发导入后同步: \(dictionaryFileName)")
+        }
+        
         return result
     }
     
@@ -165,6 +228,29 @@ class DictionarySpecificImportExportService: BaseService {
     ) async throws -> ImportResult {
         logger.info("[DictionarySpecificImportExportService] 从文件导入单词: \(fileURL.lastPathComponent)")
         
+        let ext = fileURL.pathExtension.lowercased()
+        if ext == "md" || ext == "markdown" {
+            guard fileURL.startAccessingSecurityScopedResource() else { throw ImportExportError.fileAccessDenied }
+            defer { fileURL.stopAccessingSecurityScopedResource() }
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            let records = parseMarkdownTestRecords(content)
+            if !records.isEmpty {
+                return try await importTestRecords(records, dictionaryFileName: dictionaryFileName, importMode: importMode)
+            }
+        } else if ext == "json" {
+            guard fileURL.startAccessingSecurityScopedResource() else { throw ImportExportError.fileAccessDenied }
+            defer { fileURL.stopAccessingSecurityScopedResource() }
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            if let records = parseJSONTestRecords(content) {
+                return try await importTestRecords(records, dictionaryFileName: dictionaryFileName, importMode: importMode)
+            }
+            let words = try parseJSONFile(content)
+            return try await importWordsToSpecificDictionary(
+                words: words,
+                dictionaryFileName: dictionaryFileName,
+                importMode: importMode
+            )
+        }
         let words = try await parseWordsFromFile(fileURL)
         return try await importWordsToSpecificDictionary(
             words: words,
@@ -325,18 +411,63 @@ class DictionarySpecificImportExportService: BaseService {
     
     /// 创建单词测试记录
     private func createWordTestRecord(word: String, dictionaryFileName: String) async throws {
-        // 创建一个基础的测试记录，标记为未测试状态
-        let testedWord = TestedWord(
-            word: word,
-            dictionaryName: dictionaryFileName,
-            dictionaryFileName: dictionaryFileName,
-            masteryLevel: MasteryLevel.unfamiliar,
-            testSessionId: nil,
-            difficulty: "unknown",
-            responseTime: 0.0
+        let normalized = normalizeWordString(word)
+        // 检查是否为虚拟词典"我的学习记录"
+        if dictionaryFileName == "virtual_my_learning_records" {
+            // 对于虚拟词典，创建一个通用的学习记录
+            let testedWord = TestedWord(
+                word: normalized,
+                dictionaryName: "我的学习记录",
+                dictionaryFileName: dictionaryFileName,
+                masteryLevel: MasteryLevel.unfamiliar,
+                testSessionId: nil,
+                difficulty: "unknown",
+                responseTime: 0.0
+            )
+            
+            modelContext.insert(testedWord)
+            try modelContext.save()
+        } else {
+            // 创建一个基础的测试记录，标记为未测试状态
+            let testedWord = TestedWord(
+                word: normalized,
+                dictionaryName: dictionaryFileName,
+                dictionaryFileName: dictionaryFileName,
+                masteryLevel: MasteryLevel.unfamiliar,
+                testSessionId: nil,
+                difficulty: "unknown",
+                responseTime: 0.0
+            )
+            
+            modelContext.insert(testedWord)
+            try modelContext.save()
+        }
+    }
+
+    private func createWordTestRecord(word: String, dictionaryFileName: String, mastery: MasteryLevel) async throws {
+        let normalized = normalizeWordString(word)
+        let descriptor = FetchDescriptor<TestedWord>(
+            predicate: #Predicate<TestedWord> { testedWord in
+                testedWord.word == normalized && testedWord.dictionaryFileName == dictionaryFileName
+            }
         )
-        
-        modelContext.insert(testedWord)
+        let existing = try modelContext.fetch(descriptor)
+        if let existingWord = existing.first {
+            existingWord.updateMasteryLevel(mastery, fromDictionary: dictionaryFileName)
+        } else {
+            let dictName = dictionaryFileName == "virtual_my_learning_records" ? "我的学习记录" : dictionaryFileName
+            let testedWord = TestedWord(
+                word: normalized,
+                dictionaryName: dictName,
+                dictionaryFileName: dictionaryFileName,
+                masteryLevel: MasteryLevel.unfamiliar,
+                testSessionId: nil,
+                difficulty: "unknown",
+                responseTime: 0.0
+            )
+            testedWord.updateMasteryLevel(mastery, fromDictionary: dictionaryFileName)
+            modelContext.insert(testedWord)
+        }
         try modelContext.save()
     }
     
@@ -432,9 +563,76 @@ class DictionarySpecificImportExportService: BaseService {
         
         throw ImportExportError.invalidFileFormat
     }
+
+    private func parseMarkdownTestRecords(_ content: String) -> [ImportedTestRecord] {
+        var records: [ImportedTestRecord] = []
+        var currentMastery: MasteryLevel = .unfamiliar
+        let lines = content.components(separatedBy: .newlines)
+        for raw in lines {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") {
+                if line.contains("掌握") || line.contains("已掌握") {
+                    currentMastery = .mastered
+                    continue
+                }
+                if line.contains("熟悉") || line.contains("眼熟") || line.contains("已熟悉") {
+                    currentMastery = .familiar
+                    continue
+                }
+                if line.contains("生疏") || line.contains("陌生") || line.contains("不熟悉") {
+                    currentMastery = .unfamiliar
+                    continue
+                }
+            }
+            if line.hasPrefix("- ") {
+                var text = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                while text.hasPrefix("- ") { text = String(text.dropFirst(2)).trimmingCharacters(in: .whitespaces) }
+                var extracted: String?
+                if let start = text.range(of: "**"), let end = text.range(of: "**", range: start.upperBound..<text.endIndex) {
+                    extracted = String(text[start.upperBound..<end.lowerBound])
+                } else {
+                    extracted = text.split(separator: " ").first.map { String($0) }
+                }
+                if let w = extracted?.trimmingCharacters(in: .whitespacesAndNewlines), !w.isEmpty, w != "-" {
+                    records.append(ImportedTestRecord(word: w, mastery: currentMastery))
+                }
+            }
+        }
+        return records
+    }
+
+    private func parseJSONTestRecords(_ content: String) -> [ImportedTestRecord]? {
+        guard let data = content.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let exportables = try? decoder.decode([ExportableTestedWord].self, from: data) {
+            return exportables.map { e in
+                ImportedTestRecord(word: e.word, mastery: mapMasteryLevel(e.masteryLevel))
+            }
+        }
+        return nil
+    }
+
+    private func mapMasteryLevel(_ s: String) -> MasteryLevel {
+        let normalized = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let m = MasteryLevel(rawValue: normalized) { return m }
+        switch normalized.lowercased() {
+        case "mastered": return .mastered
+        case "familiar", "known": return .familiar
+        case "unfamiliar", "unknown": return .unfamiliar
+        default:
+            switch normalized {
+            case "已掌握": return .mastered
+            case "眼熟", "熟悉": return .familiar
+            case "陌生", "不熟悉": return .unfamiliar
+            default: return .unfamiliar
+            }
+        }
+    }
     
     /// 获取词典专属测试记录
     private func getDictionarySpecificTestedWords(_ dictionaryFileName: String) async throws -> [TestedWord] {
+        let _ = try await deduplicateAndNormalizeDictionaryRecords(dictionaryFileName: dictionaryFileName)
         return try await fetchTestedWords(for: dictionaryFileName)
     }
     
@@ -444,7 +642,64 @@ class DictionarySpecificImportExportService: BaseService {
         masteryLevel: MasteryLevel
     ) async throws -> [TestedWord] {
         let allWords = try await getDictionarySpecificTestedWords(dictionaryFileName)
-        return allWords.filter { $0.masteryLevel == masteryLevel.rawValue }
+        let filtered = allWords.filter { $0.masteryLevel == masteryLevel.rawValue }
+        return uniqueByWord(filtered)
+    }
+
+    private func importTestRecords(_ records: [ImportedTestRecord], dictionaryFileName: String, importMode: ImportMode) async throws -> ImportResult {
+        var successCount = 0
+        var failedWords: [String] = []
+        var duplicateWords: [String] = []
+        let existingWords = try await getExistingWordsForDictionary(dictionaryFileName)
+        var existingSet = existingWords
+        for record in records {
+            let cleanWord = normalizeWordString(record.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+            guard !cleanWord.isEmpty else { continue }
+            if existingSet.contains(cleanWord) {
+                switch importMode {
+                case .merge:
+                    duplicateWords.append(cleanWord)
+                    continue
+                case .overwrite:
+                    try await removeExistingWordRecord(cleanWord, dictionaryFileName: dictionaryFileName)
+                    existingSet.remove(cleanWord)
+                case .skip:
+                    duplicateWords.append(cleanWord)
+                    continue
+                }
+            }
+            do {
+                try await createWordTestRecord(word: cleanWord, dictionaryFileName: dictionaryFileName, mastery: record.mastery)
+                successCount += 1
+                existingSet.insert(cleanWord)
+            } catch {
+                failedWords.append(cleanWord)
+            }
+        }
+        let result = ImportResult(
+            totalWords: records.count,
+            successCount: successCount,
+            duplicateCount: duplicateWords.count,
+            failedCount: failedWords.count,
+            duplicateWords: duplicateWords,
+            failedWords: failedWords
+        )
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DictionaryImportCompleted"),
+                object: nil,
+                userInfo: [
+                    "dictionaryFileName": dictionaryFileName,
+                    "importResult": result
+                ]
+            )
+        }
+        Task { @MainActor in
+            let syncTriggerManager = ServiceContainer.shared.getSyncTriggerManager()
+            syncTriggerManager.triggerAfterDataImport(affectedDictionaries: [dictionaryFileName])
+            logger.info("[DictionarySpecificImportExportService] 已触发导入后同步: \(dictionaryFileName)")
+        }
+        return result
     }
     
     /// 生成导出数据
@@ -454,22 +709,23 @@ class DictionarySpecificImportExportService: BaseService {
         format: ExportFormat,
         includeTestResults: Bool
     ) async throws -> Data {
+        let unique = uniqueByWord(testedWords)
         switch format {
         case .text:
-            return try generateTextExport(testedWords: testedWords, includeTestResults: includeTestResults)
+            return try generateTextExport(testedWords: unique, includeTestResults: includeTestResults)
         case .csv:
-            return try generateCSVExport(testedWords: testedWords, includeTestResults: includeTestResults)
+            return try generateCSVExport(testedWords: unique, includeTestResults: includeTestResults)
         case .json:
-            return try generateJSONExport(testedWords: testedWords, includeTestResults: includeTestResults)
+            return try generateJSONExport(testedWords: unique, includeTestResults: includeTestResults)
         case .markdown:
             return try await generateMarkdownExport(
-                testedWords: testedWords,
+                testedWords: unique,
                 dictionaryFileName: dictionaryFileName,
                 includeTestResults: includeTestResults
             )
         case .pdf:
             return try await generatePDFExport(
-                testedWords: testedWords,
+                testedWords: unique,
                 dictionaryFileName: dictionaryFileName,
                 includeTestResults: includeTestResults
             )
@@ -486,12 +742,13 @@ class DictionarySpecificImportExportService: BaseService {
             content += "---\n"
             
             for word in testedWords.sorted(by: { $0.word < $1.word }) {
+                let clean = normalizeWordString(word.word)
                 let masteryLevel = MasteryLevel(rawValue: word.masteryLevel) ?? .unfamiliar
                 let lastTested = word.lastTestedDate.map { DateFormatter.shortDate.string(from: $0) } ?? "未测试"
-                content += "\(word.word)\t\(masteryLevel.displayName)\t\(word.correctCount)\t\(word.testCount)\t\(lastTested)\n"
+                content += "\(clean)\t\(masteryLevel.displayName)\t\(word.correctCount)\t\(word.testCount)\t\(lastTested)\n"
             }
         } else {
-            content = testedWords.map { $0.word }.sorted().joined(separator: "\n")
+            content = testedWords.map { normalizeWordString($0.word) }.sorted().joined(separator: "\n")
         }
         
         guard let data = content.data(using: .utf8) else {
@@ -508,14 +765,16 @@ class DictionarySpecificImportExportService: BaseService {
             csvContent += "单词,掌握程度,正确次数,测试次数,平均响应时间,最后测试时间\n"
             
             for word in testedWords.sorted(by: { $0.word < $1.word }) {
+                let clean = normalizeWordString(word.word)
                 let masteryLevel = MasteryLevel(rawValue: word.masteryLevel) ?? .unfamiliar
                 let lastTested = word.lastTestedDate.map { DateFormatter.iso8601.string(from: $0) } ?? "未测试"
-                csvContent += "\"\(word.word)\",\"\(masteryLevel.displayName)\",\(word.correctCount),\(word.testCount),\(word.responseTime),\"\(lastTested)\"\n"
+                csvContent += "\"\(clean)\",\"\(masteryLevel.displayName)\",\(word.correctCount),\(word.testCount),\(word.responseTime),\"\(lastTested)\"\n"
             }
         } else {
             csvContent += "单词\n"
             for word in testedWords.sorted(by: { $0.word < $1.word }) {
-                csvContent += "\"\(word.word)\"\n"
+                let clean = normalizeWordString(word.word)
+                csvContent += "\"\(clean)\"\n"
             }
         }
         
@@ -552,6 +811,56 @@ class DictionarySpecificImportExportService: BaseService {
             return try encoder.encode(words)
         }
     }
+
+    private func normalizeWordString(_ text: String) -> String {
+        var s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while s.hasPrefix("- ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("* ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("• ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        var idx = s.startIndex
+        var digitsCount = 0
+        while idx < s.endIndex, s[idx].isNumber { digitsCount += 1; idx = s.index(after: idx) }
+        if digitsCount > 0, idx < s.endIndex, s[idx] == "." {
+            let nextIdx = s.index(after: idx)
+            if nextIdx < s.endIndex, s[nextIdx] == " " {
+                s = String(s[nextIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if let start = s.range(of: "**"), let end = s.range(of: "**", range: start.upperBound..<s.endIndex) {
+            s = String(s[start.upperBound..<end.lowerBound])
+        }
+        return s
+    }
+
+    private func uniqueByWord(_ words: [TestedWord]) -> [TestedWord] {
+        var map: [String: TestedWord] = [:]
+        for w in words {
+            let key = normalizeWordString(w.word).lowercased()
+            if let existing = map[key] {
+                let a = masteryRank(existing)
+                let b = masteryRank(w)
+                if b > a {
+                    map[key] = w
+                } else if b == a {
+                    let t1 = existing.lastTestedDate ?? existing.testedAt
+                    let t2 = w.lastTestedDate ?? w.testedAt
+                    if t2 > t1 { map[key] = w }
+                }
+            } else {
+                map[key] = w
+            }
+        }
+        return Array(map.values)
+    }
+
+    private func masteryRank(_ w: TestedWord) -> Int {
+        let level = MasteryLevel(rawValue: w.masteryLevel) ?? .unfamiliar
+        switch level {
+        case .mastered: return 2
+        case .familiar: return 1
+        case .unfamiliar: return 0
+        }
+    }
     
     /// 生成Markdown格式导出
     private func generateMarkdownExport(
@@ -574,7 +883,8 @@ class DictionarySpecificImportExportService: BaseService {
                     content += "## \(masteryLevel.displayName) (\(words.count)个)\n\n"
                     
                     for word in words.sorted(by: { $0.word < $1.word }) {
-                        content += "- **\(word.word)** "
+                        let clean = normalizeWordString(word.word)
+                        content += "- **\(clean)** "
                         let incorrectCount = word.testCount - word.correctCount
                         let lastTested = word.lastTestedDate.map { DateFormatter.shortDate.string(from: $0) } ?? "未测试"
                         content += "(正确: \(word.correctCount), 错误: \(incorrectCount), "
@@ -586,7 +896,8 @@ class DictionarySpecificImportExportService: BaseService {
         } else {
             content += "## 单词列表\n\n"
             for word in testedWords.sorted(by: { $0.word < $1.word }) {
-                content += "- \(word.word)\n"
+                let clean = normalizeWordString(word.word)
+                content += "- \(clean)\n"
             }
         }
         
@@ -700,6 +1011,42 @@ class DictionarySpecificImportExportService: BaseService {
         print("✅ PDF生成完成，大小: \(pdfData.length) bytes")
         return pdfData as Data
     }
+
+    func deduplicateAndNormalizeDictionaryRecords(dictionaryFileName: String) async throws -> Int {
+        let descriptor = FetchDescriptor<TestedWord>(
+            predicate: #Predicate<TestedWord> { t in
+                t.dictionaryFileName == dictionaryFileName
+            }
+        )
+        let records = try modelContext.fetch(descriptor)
+        var groups: [String: [TestedWord]] = [:]
+        for r in records {
+            let normalizedWord = normalizeWordString(r.word)
+            if r.word != normalizedWord { r.word = normalizedWord }
+            let key = normalizedWord.lowercased()
+            groups[key, default: []].append(r)
+        }
+        var changes = 0
+        for (_, arr) in groups {
+            if arr.count <= 1 { continue }
+            let primary = arr.max { a, b in
+                let ra = masteryRank(a)
+                let rb = masteryRank(b)
+                if ra != rb { return ra < rb }
+                let ta = a.lastTestedDate ?? a.testedAt
+                let tb = b.lastTestedDate ?? b.testedAt
+                return ta < tb
+            }!
+            for dup in arr {
+                if dup.id == primary.id { continue }
+                primary.mergeTestResult(from: dup)
+                modelContext.delete(dup)
+                changes += 1
+            }
+        }
+        if changes > 0 { try modelContext.save() }
+        return changes
+    }
     
     // MARK: - PDF绘制辅助方法
     
@@ -807,6 +1154,11 @@ struct ImportResult {
     var successRate: Double {
         return totalWords > 0 ? Double(successCount) / Double(totalWords) : 0.0
     }
+}
+
+struct ImportedTestRecord {
+    let word: String
+    let mastery: MasteryLevel
 }
 
 /// 导出结果

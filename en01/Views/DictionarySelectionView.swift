@@ -201,7 +201,7 @@ struct DictionarySelectionView: View {
                 .disabled(isStartingTest)
                 .padding(.horizontal, 20)
                 
-                Text("测试 \(dictionary.name) (\(dictionary.totalWords) 个单词)")
+                Text("测试 \(dictionary.displayName) (\(dictionary.totalWords) 个单词)")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
@@ -350,7 +350,7 @@ struct DictionaryCard: View {
             // 头部信息
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(dictionary.name)
+                    Text(dictionary.displayName)
                         .font(.headline)
                         .fontWeight(.semibold)
                     

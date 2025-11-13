@@ -391,6 +391,8 @@ private extension TestSessionService {
     
     /// 选择测试单词
     func selectTestWords(from words: [DictionaryWord], count: Int) -> [DictionaryWord] {
+        // 支持 .all 映射为负数：当 count < 0 时返回全部单词
+        if count < 0 { return words }
         guard count > 0 else { return [] }
         
         if words.count <= count {

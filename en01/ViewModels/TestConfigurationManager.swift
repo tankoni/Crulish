@@ -70,6 +70,12 @@ class TestConfigurationManager: ObservableObject {
     
     /// 缓存时间戳
     private var cacheTimestamp: [String: Date] = [:]
+
+    /// 词典是否已加载（幂等控制）
+    private var hasLoadedDictionaries: Bool = false
+
+    /// 是否正在加载词典（防止并发重复触发）
+    private var isLoadingDictionaries: Bool = false
     
     // MARK: - Computed Properties
     
@@ -136,11 +142,6 @@ class TestConfigurationManager: ObservableObject {
         if isRetestMode, let config = retestConfig {
             applyRetestConfiguration(config)
         }
-        
-        // 异步加载词典
-        Task {
-            await loadAvailableDictionaries()
-        }
     }
     
     // MARK: - Retest Configuration
@@ -168,9 +169,8 @@ class TestConfigurationManager: ObservableObject {
             self.includeTestedWords = includeTestedWords
         }
         
-        if let randomOrder = config.randomOrder {
-            self.randomOrder = randomOrder
-        }
+        self.randomOrder = false
+        setTestMode(.sequential)
         
         print("📝 [TestConfigurationManager] 应用重测配置: 测试大小(\(testSize)), 包含已测试单词(\(includeTestedWords)), 随机顺序(\(randomOrder))")
     }
@@ -179,11 +179,25 @@ class TestConfigurationManager: ObservableObject {
     
     /// 加载可用词典
     func loadAvailableDictionaries() async {
+        // 幂等与并发保护：如果已经加载过或正在加载，则直接返回
+        if hasLoadedDictionaries && !availableDictionaries.isEmpty { 
+            logger.info("↩️ [TestConfigurationManager] 跳过重复加载词典（已加载）")
+            return 
+        }
+        if isLoadingDictionaries {
+            logger.info("⏳ [TestConfigurationManager] 跳过并发加载（正在进行中）")
+            return
+        }
+        
+        isLoadingDictionaries = true
+        defer { isLoadingDictionaries = false }
+        
         do {
             let dictionariesPublisher = dictionaryService.getAvailableDictionaries()
             let dictionaries = try await dictionariesPublisher.values.first(where: { _ in true }) ?? []
             await MainActor.run {
                 self.availableDictionaries = dictionaries
+                self.hasLoadedDictionaries = true
                 self.logger.info("✅ [TestConfigurationManager] 加载了 \(dictionaries.count) 个词典")
             }
         } catch {
@@ -212,6 +226,11 @@ class TestConfigurationManager: ObservableObject {
         }
         
         do {
+            if dictionary.isVirtual {
+                availableGroups = []
+                logger.info("✅ [TestConfigurationManager] 虚拟词典不提供分组，已跳过加载")
+                return
+            }
             let wordsPublisher = dictionaryService.loadDictionary(fileName: dictionary.fileName)
             let words = try await wordsPublisher.values.first(where: { _ in true }) ?? []
             let groups = Set(words.compactMap { word in word.categories }.flatMap { categories in categories })

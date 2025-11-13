@@ -16,6 +16,19 @@ struct PersonalDictionary {
     let wordCount: Int
     let importDate: Date
     let sourceType: DictionarySourceType
+    
+    /// 显示名称（中文）
+    var displayName: String {
+        let dictionaryMap = [
+            "kaoyan_1": "考研核心词汇 1",
+            "kaoyan_2": "考研核心词汇 2", 
+            "kaoyan_3": "考研核心词汇 3",
+            "kaoyan_luan_1": "考研乱序词汇 1",
+            "user_custom": "我的学习记录"
+        ]
+        
+        return dictionaryMap[id] ?? name
+    }
 }
 
 /// 词典来源类型
@@ -82,17 +95,16 @@ class PersonalDictionaryManager {
     
     /// 获取用户自定义词典（基于查词记录）
     private func getUserCustomDictionary() async throws -> PersonalDictionary? {
-        let descriptor = FetchDescriptor<UserWord>()
-        let userWords = try modelContext.fetch(descriptor)
-        
-        guard !userWords.isEmpty else { return nil }
-        
+        // 统一与导入视图的计数来源：使用总测试记录与查词记录的合并结果
+        let generalRecords = ServiceContainer.shared.getDictionaryService().getGeneralUserWordRecords()
+        guard !generalRecords.isEmpty else { return nil }
+
         return PersonalDictionary(
             id: "user_custom",
             name: "我的学习词汇",
-            description: "基于阅读记录的个人词汇库，共\(userWords.count)个单词",
-            wordCount: userWords.count,
-            importDate: userWords.map { $0.firstLookupDate }.min() ?? Date(),
+            description: "基于测试与查词合并的个人词汇库，共\(generalRecords.count)个单词",
+            wordCount: generalRecords.count,
+            importDate: generalRecords.map { $0.firstLookupDate }.min() ?? Date(),
             sourceType: .custom
         )
     }
@@ -112,9 +124,9 @@ class PersonalDictionaryManager {
     /// 获取特定词典的单词列表
     func getWordsFromDictionary(_ dictionaryId: String) async throws -> [Any] {
         if dictionaryId == "user_custom" {
-            // 返回用户自定义词汇
-            let descriptor = FetchDescriptor<UserWord>()
-            return try modelContext.fetch(descriptor)
+            // 返回与导入视图一致的“我的学习记录”数据：总测试记录+查词记录合并后的去重结果
+            let generalRecords = ServiceContainer.shared.getDictionaryService().getGeneralUserWordRecords()
+            return generalRecords.map { $0 as Any }
         } else {
             // 返回考研词典词汇
             let descriptor = FetchDescriptor<KaoyanWord>(
@@ -154,20 +166,20 @@ class PersonalDictionaryManager {
     
     /// 获取用户词典统计
     private func getUserDictionaryStats() async throws -> DictionaryStats {
-        let descriptor = FetchDescriptor<UserWord>()
-        let userWords = try modelContext.fetch(descriptor)
-        
-        let totalWords = userWords.count
-        let masteredWords = userWords.filter { $0.masteryLevel == .mastered }.count
-        let familiarWords = userWords.filter { $0.masteryLevel == .familiar }.count
-        let unfamiliarWords = userWords.filter { $0.masteryLevel == .unfamiliar }.count
-        
+        // 与导入视图及统计视图保持一致，使用总记录合并后的用户词汇
+        let records = ServiceContainer.shared.getDictionaryService().getGeneralUserWordRecords()
+
+        let totalWords = records.count
+        let masteredWords = records.filter { $0.masteryLevel == MasteryLevel.mastered }.count
+        let familiarWords = records.filter { $0.masteryLevel == MasteryLevel.familiar }.count
+        let unfamiliarWords = records.filter { $0.masteryLevel == MasteryLevel.unfamiliar }.count
+
         return DictionaryStats(
             totalWords: totalWords,
             masteredWords: masteredWords,
             familiarWords: familiarWords,
             unfamiliarWords: unfamiliarWords,
-            averageLookupCount: userWords.isEmpty ? 0 : Double(userWords.map { $0.lookupCount }.reduce(0, +)) / Double(totalWords)
+            averageLookupCount: records.isEmpty ? 0 : Double(records.map { $0.lookupCount }.reduce(0, +)) / Double(totalWords)
         )
     }
     

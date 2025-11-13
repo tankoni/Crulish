@@ -42,10 +42,11 @@ class IntelligentRankingService: ObservableObject {
     // 新增：自适应推荐引擎
     private var adaptiveRecommendationEngine: AdaptiveRecommendationEngine?
     
-    // 缓存机制
+    // 缓存机制 - 按词典分别缓存
     private var rankingCache: [String: (results: [ArticleMatchResult], timestamp: Date)] = [:]
+    private var cacheTimestamps: [String: Date] = [:]
     private let cacheValidityDuration: TimeInterval = 300 // 5分钟
-    private let maxCacheSize = 5 // 仅缓存最近5次结果
+    private let maxCacheSize = 10 // 增加缓存大小以支持多词典
     
     // 算法参数 - 基于用户确认的推荐度权重配置
     private struct AlgorithmParameters {
@@ -128,6 +129,13 @@ class IntelligentRankingService: ObservableObject {
         
         print("🎯 [词典排序] 开始基于词典重合度排序: \(dictionaryName)")
         
+        // 检查缓存
+        let cacheKey = generateCacheKey(articles: articles, vocabulary: userVocabulary, dictionaryName: dictionaryName)
+        if let cached = rankingCache[cacheKey], isCacheValid(for: cacheKey) {
+            print("✅ [词典排序] 使用缓存结果")
+            return cached.results
+        }
+        
         // 获取词典词汇
         guard let dictionaryWords = await getDictionaryVocabulary(dictionaryName: dictionaryName) else {
             print("❌ [词典排序] 获取词典词汇失败，回退到普通排序")
@@ -151,6 +159,9 @@ class IntelligentRankingService: ObservableObject {
             dictionaryWords: dictionaryWords,
             userMastery: userDictionaryMastery
         )
+        
+        // 缓存结果
+        cacheResults(key: cacheKey, results: results)
         
         print("✅ [词典排序] 排序完成，共 \(results.count) 篇文章")
         return results
@@ -181,7 +192,9 @@ class IntelligentRankingService: ObservableObject {
         print("🎯 [智能排序] 使用词典测试结果进行排序: \(dictionaryName)")
         
         // 预取词典词汇，用于计算词典覆盖率
-        let dictionaryWords: Set<String> = await getDictionaryVocabulary(dictionaryName: dictionaryName) ?? []
+        let dictionaries = try? await getAvailableDictionaries()
+        let resolvedFileName = dictionaries?.first(where: { $0.name == dictionaryName || $0.fileName == dictionaryName || $0.displayName == dictionaryName })?.fileName ?? dictionaryName
+        let dictionaryWords: Set<String> = await getDictionaryVocabulary(dictionaryName: resolvedFileName) ?? []
         let useCoverage = !dictionaryWords.isEmpty
 
         var results: [ArticleMatchResult] = []
@@ -196,7 +209,7 @@ class IntelligentRankingService: ObservableObject {
                 let distribution = try await withCheckedThrowingContinuation { continuation in
                     testService.getArticleWordMasteryDistribution(
                         words: articleWords, 
-                        dictionaryFileName: dictionaryName
+                        dictionaryFileName: resolvedFileName
                     )
                     .sink(
                         receiveCompletion: { completion in
@@ -301,40 +314,73 @@ class IntelligentRankingService: ObservableObject {
     
     /// 获取词典词汇集合
     private func getDictionaryVocabulary(dictionaryName: String) async -> Set<String>? {
-        // 检查缓存
         if let cached = dictionaryVocabularyCache[dictionaryName] {
             return cached
         }
-        
+
+        let dictionaries = try? await getAvailableDictionaries()
+        if let dictionary = dictionaries?.first(where: { $0.name == dictionaryName || $0.fileName == dictionaryName || $0.displayName == dictionaryName }) {
+            if dictionary.isVirtual {
+                let records = dictionaryService.getGeneralUserWordRecords()
+                let processor = TextProcessor()
+                let set = Set(records.map { processor.cleanWord($0.word).lowercased() }.filter { !$0.isEmpty })
+                dictionaryVocabularyCache[dictionaryName] = set
+                return set
+            }
+
+            return await withCheckedContinuation { continuation in
+                var hasResumed = false
+
+                dictionaryService.loadDictionary(fileName: dictionary.fileName)
+                    .first()
+                    .sink(
+                        receiveCompletion: { completion in
+                            guard !hasResumed else { return }
+                            hasResumed = true
+
+                            switch completion {
+                            case .failure:
+                                continuation.resume(returning: nil)
+                            case .finished:
+                                continuation.resume(returning: nil)
+                            }
+                        },
+                        receiveValue: { dictionaryWords in
+                            guard !hasResumed else { return }
+                            hasResumed = true
+
+                            let wordSet = Set(dictionaryWords.map { $0.word.lowercased() })
+                            self.dictionaryVocabularyCache[dictionaryName] = wordSet
+                            continuation.resume(returning: wordSet)
+                        }
+                    )
+                    .store(in: &self.cancellables)
+            }
+        }
+
         return await withCheckedContinuation { continuation in
             var hasResumed = false
-            
-            // 通过DictionaryService获取词典词汇
+
             dictionaryService.loadDictionary(fileName: dictionaryName)
                 .first()
                 .sink(
                     receiveCompletion: { completion in
                         guard !hasResumed else { return }
                         hasResumed = true
-                        
+
                         switch completion {
-                        case .failure(let error):
-                            print("❌ 获取词典词汇失败: \(error.localizedDescription)")
+                        case .failure:
                             continuation.resume(returning: nil)
                         case .finished:
-                            // 如果完成但没有收到值，返回nil
                             continuation.resume(returning: nil)
                         }
                     },
                     receiveValue: { dictionaryWords in
                         guard !hasResumed else { return }
                         hasResumed = true
-                        
+
                         let wordSet = Set(dictionaryWords.map { $0.word.lowercased() })
-                        
-                        // 缓存结果
                         self.dictionaryVocabularyCache[dictionaryName] = wordSet
-                        
                         continuation.resume(returning: wordSet)
                     }
                 )
@@ -490,9 +536,8 @@ class IntelligentRankingService: ObservableObject {
         
         let cacheKey = generateCacheKey(articles: articles, vocabulary: userVocabulary)
         
-        // 检查缓存
-        if let cached = rankingCache[cacheKey],
-           Date().timeIntervalSince(cached.timestamp) < cacheValidityDuration {
+        // 检查缓存有效性
+        if let cached = rankingCache[cacheKey], isCacheValid(for: cacheKey) {
             print("✅ [智能排序] 使用缓存结果，缓存时间: \(Date().timeIntervalSince(cached.timestamp))秒前")
             return cached.results
         }
@@ -856,10 +901,17 @@ class IntelligentRankingService: ObservableObject {
     // MARK: - 辅助方法
     // Removed createVocabularyMap, using sets instead
     
-    private func generateCacheKey(articles: [Article], vocabulary: [UserWord]) -> String {
+    private func generateCacheKey(articles: [Article], vocabulary: [UserWord], dictionaryName: String? = nil) -> String {
         let articleIds = articles.map { $0.id.uuidString }.sorted().joined(separator: ",")
         let vocabularyHash = vocabulary.map { "\($0.word):\($0.masteryLevel.rawValue)" }.sorted().joined(separator: ",")
-        return "\(articleIds.hashValue)_\(vocabularyHash.hashValue)"
+        let baseKey = "\(articleIds.hashValue)_\(vocabularyHash.hashValue)"
+        
+        // 如果指定了词典名称，包含在缓存键中以确保词典间缓存隔离
+        if let dictionaryName = dictionaryName {
+            return "dict_\(dictionaryName)_\(baseKey)"
+        } else {
+            return "general_\(baseKey)"
+        }
     }
     
     private func cacheResults(key: String, results: [ArticleMatchResult]) {
@@ -868,15 +920,42 @@ class IntelligentRankingService: ObservableObject {
             let oldestKey = rankingCache.min { $0.value.timestamp < $1.value.timestamp }?.key
             if let oldestKey = oldestKey {
                 rankingCache.removeValue(forKey: oldestKey)
+                cacheTimestamps.removeValue(forKey: oldestKey)
             }
         }
         
-        rankingCache[key] = (results, Date())
+        let timestamp = Date()
+        rankingCache[key] = (results, timestamp)
+        cacheTimestamps[key] = timestamp
     }
     
     // MARK: - 公共方法
     func clearCache() {
         rankingCache.removeAll()
+        dictionaryVocabularyCache.removeAll()
+        cacheTimestamps.removeAll()
+        print("✅ 已清理所有缓存")
+    }
+    
+    /// 清理指定词典的缓存
+    func clearDictionaryCache(for dictionaryName: String) {
+        // 清理排序结果缓存
+        let keysToRemove = rankingCache.keys.filter { $0.contains("dict_\(dictionaryName)_") }
+        for key in keysToRemove {
+            rankingCache.removeValue(forKey: key)
+            cacheTimestamps.removeValue(forKey: key)
+        }
+        
+        // 清理词典词汇缓存
+        dictionaryVocabularyCache.removeValue(forKey: dictionaryName)
+        
+        print("✅ 已清理词典 \(dictionaryName) 的缓存")
+    }
+    
+    /// 检查缓存是否有效
+    private func isCacheValid(for key: String) -> Bool {
+        guard let timestamp = cacheTimestamps[key] else { return false }
+        return Date().timeIntervalSince(timestamp) < cacheValidityDuration
     }
     
     // MARK: - 分阶段排序功能

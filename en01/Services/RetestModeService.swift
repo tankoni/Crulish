@@ -28,6 +28,7 @@ class RetestModeService: RetestModeServiceProtocol {
     private let dictionaryService: DictionaryServiceProtocol
     private let testDataService: TestDataService
     private var cancellables = Set<AnyCancellable>()
+    private var hasRunNormalization = false
     
     init(
         modelContext: ModelContext,
@@ -60,61 +61,86 @@ class RetestModeService: RetestModeServiceProtocol {
     
     /// 获取掌握程度统计信息
     func getMasteryStats() async -> [MasteryLevel: Int] {
-        do {
-            // 获取所有已测试的单词
-            let descriptor = FetchDescriptor<TestedWord>(
-                sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
-            )
-            let testedWords = try modelContext.fetch(descriptor)
-            
-            var stats: [MasteryLevel: Int] = [
-                .mastered: 0,
-                .familiar: 0,
-                .unfamiliar: 0
-            ]
-            
-            // 统计各掌握程度的单词数量
-            for testedWord in testedWords {
-                let masteryLevel = determineMasteryLevel(testedWord)
-                stats[masteryLevel, default: 0] += 1
-            }
-            
-            print("✅ [RetestModeService] 掌握程度统计: \(stats)")
-            return stats
-        } catch {
-            print("❌ [RetestModeService] 获取掌握程度统计失败: \(error.localizedDescription)")
-            return [
-                .mastered: 0,
-                .familiar: 0,
-                .unfamiliar: 0
-            ]
+        await runMasteryNormalizationIfNeeded()
+        let records = dictionaryService.getGeneralUserWordRecords()
+        var stats: [MasteryLevel: Int] = [
+            .mastered: 0,
+            .familiar: 0,
+            .unfamiliar: 0
+        ]
+        for r in records {
+            stats[r.masteryLevel, default: 0] += 1
         }
+        print("✅ [RetestModeService] 掌握程度统计: \(stats)")
+        return stats
     }
     
     /// 获取已测试的单词列表
     func getTestedWords(for dictionaryId: UUID) async throws -> [TestedWord] {
         do {
-            let descriptor = FetchDescriptor<TestedWord>(
+            // 获取词典信息以匹配词典ID
+            let dictionaries = try await getAvailableDictionaries()
+            guard let dictionary = dictionaries.first(where: { $0.id == dictionaryId }) else {
+                throw RetestError.dictionaryNotFound
+            }
+
+            // 查询链接到测试会话的记录（常规）
+            let linkedDescriptor = FetchDescriptor<TestedWord>(
                 predicate: #Predicate<TestedWord> { word in
-                    word.testSessionId != nil
+                    word.testSessionId != nil && word.dictionaryFileName == dictionary.fileName
                 },
                 sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
             )
-            
-            let testedWords = try modelContext.fetch(descriptor)
-            
-            // 获取词典信息以匹配词典ID
-            let dictionaries = try await getAvailableDictionaries()
-            
-            // 根据词典ID匹配词典
-            let targetDictionary = dictionaries.first { dictionary in
-                dictionary.id == dictionaryId
+            let linkedRecords = try modelContext.fetch(linkedDescriptor)
+
+            // 兼容导入生成的“孤立记录”：没有 testSessionId，但 dictionaryFileName 匹配
+            let orphanDescriptor = FetchDescriptor<TestedWord>(
+                predicate: #Predicate<TestedWord> { word in
+                    word.testSessionId == nil && word.dictionaryFileName == dictionary.fileName
+                }
+            )
+            let orphanRecords = try modelContext.fetch(orphanDescriptor)
+
+            // 纳入“总测试记录”：获取所有总测试会话并匹配对应 TestedWord
+            let generalTestsDescriptor = FetchDescriptor<VocabularyTest>(
+                predicate: #Predicate<VocabularyTest> { test in
+                    test.isDictionarySpecific == false
+                }
+            )
+            let generalTests = try modelContext.fetch(generalTestsDescriptor)
+            let generalTestIds = Set(generalTests.map { $0.id })
+
+            let allLinkedDescriptor = FetchDescriptor<TestedWord>(
+                predicate: #Predicate<TestedWord> { record in
+                    record.testSessionId != nil
+                },
+                sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
+            )
+            let allLinkedRecords = try modelContext.fetch(allLinkedDescriptor)
+            let generalLinkedRecords = allLinkedRecords.filter { rec in
+                guard let sid = rec.testSessionId else { return false }
+                return generalTestIds.contains(sid)
             }
-            guard let dictionary = targetDictionary else {
-                return []
+
+            // 合并并按单词去重（保留最近一次测试记录）
+            var merged: [String: TestedWord] = [:]
+            for record in linkedRecords + orphanRecords + generalLinkedRecords {
+                let key = record.word.lowercased()
+                if let existing = merged[key] {
+                    let lhs = record.lastTestedDate ?? record.testedAt
+                    let rhs = existing.lastTestedDate ?? existing.testedAt
+                    if lhs > rhs { merged[key] = record }
+                } else {
+                    merged[key] = record
+                }
             }
-            
-            return testedWords.filter { $0.dictionaryFileName == dictionary.fileName }
+
+            let result = Array(merged.values).sorted { 
+                ($0.lastTestedDate ?? Date.distantPast) > ($1.lastTestedDate ?? Date.distantPast) 
+            }
+
+            print("✅ [RetestModeService] 词典 \(dictionary.displayName) 已测试记录：链接 \(linkedRecords.count)，孤立 \(orphanRecords.count)，总记录 \(generalLinkedRecords.count)，合并后 \(result.count)")
+            return result
         } catch {
             print("❌ [RetestModeService] 获取已测试单词失败: \(error.localizedDescription)")
             throw RetestError.noWordsFound
@@ -188,6 +214,9 @@ class RetestModeService: RetestModeServiceProtocol {
         guard let dictionary = dictionaries.first(where: { $0.id == dictionaryId }) else {
             throw RetestError.dictionaryNotFound
         }
+
+        // 规范化掌握程度，避免筛选阶段受历史值影响
+        await runMasteryNormalizationIfNeeded()
         
         // 使用WordMasteryService获取已测试单词，确保正确处理词典专属记录
         let wordMasteryService = WordMasteryService(
@@ -198,6 +227,42 @@ class RetestModeService: RetestModeServiceProtocol {
         )
         
         let testedWords = try await wordMasteryService.getTestedWordsSync(for: dictionary.fileName)
+
+        let textProcessor = TextProcessor()
+        let userRecords = dictionary.isVirtual
+            ? dictionaryService.getGeneralUserWordRecords()
+            : dictionaryService.getDictionarySpecificUserWordRecords(for: dictionary.id)
+        var userMasteryMap: [String: MasteryLevel] = [:]
+        for r in userRecords {
+            userMasteryMap[textProcessor.cleanWord(r.word)] = r.masteryLevel
+        }
+
+        // 虚拟词典（我的学习记录）直接基于已测词构建条目
+        if dictionary.isVirtual {
+            var retestWords: [RetestWordItem] = []
+            for testedWord in testedWords {
+                let cleaned = textProcessor.cleanWord(testedWord.word)
+                let masteryLevel = userMasteryMap[cleaned] ?? determineMasteryLevel(testedWord)
+                if !masteryLevels.contains(masteryLevel) { continue }
+                let placeholder = DictionaryWord(
+                    word: cleaned,
+                    definitions: [WordDefinition(partOfSpeech: .noun, meaning: "学习记录中的测试词条")],
+                    frequency: 0,
+                    difficulty: .medium,
+                    tags: []
+                )
+                let item = RetestWordItem(
+                    word: placeholder,
+                    dictionaryName: dictionary.displayName,
+                    currentMasteryLevel: masteryLevel,
+                    lastTestDate: testedWord.lastTestedDate,
+                    testCount: testedWord.testCount
+                )
+                retestWords.append(item)
+            }
+            print("✅ [RetestModeService] 虚拟词典 \(dictionary.displayName) 生成重测词条: \(retestWords.count)")
+            return retestWords
+        }
         
         // 加载词典单词
             let words = try await withCheckedThrowingContinuation { continuation in
@@ -219,21 +284,28 @@ class RetestModeService: RetestModeServiceProtocol {
                     .store(in: &self.cancellables)
             }
             
-   // 创建单词字典以便快速查找，处理重复键的情况
+        // 创建规范化后的查找表（统一大小写与标点），重复键保留首个
         var wordDict = [String: DictionaryWord]()
-        for word in words {
-            // 如果存在重复键，保留第一个出现的单词
-            if wordDict[word.word] == nil {
-                wordDict[word.word] = word
-            }
+        for w in words {
+            let key = textProcessor.cleanWord(w.word)
+            if wordDict[key] == nil { wordDict[key] = w }
         }
         
         var retestWords: [RetestWordItem] = []
         
+        let morphology = WordMorphologyProcessor.shared
         for testedWord in testedWords {
-            guard let word = wordDict[testedWord.word] else { continue }
+            let testedKey = textProcessor.cleanWord(testedWord.word)
+            var matched = wordDict[testedKey]
+            if matched == nil {
+                let forms = morphology.getAllPossibleForms(for: testedKey)
+                for form in forms {
+                    if let candidate = wordDict[form] { matched = candidate; break }
+                }
+            }
+            guard let word = matched else { continue }
             
-            let masteryLevel = determineMasteryLevel(testedWord)
+            let masteryLevel = userMasteryMap[testedKey] ?? determineMasteryLevel(testedWord)
             
             // 筛选指定掌握程度的单词
             if masteryLevels.contains(masteryLevel) {
@@ -248,17 +320,13 @@ class RetestModeService: RetestModeServiceProtocol {
             }
         }
         
+        print("✅ [RetestModeService] 词典 \(dictionary.displayName) 匹配到重测词条: \(retestWords.count)/\(testedWords.count)")
         return retestWords
     }
     
     private func determineMasteryLevel(_ testedWord: TestedWord) -> MasteryLevel {
-        if testedWord.isKnown {
-            return .mastered
-        } else if testedWord.isFamiliar {
-            return .familiar
-        } else {
-            return .unfamiliar
-        }
+        // 直接基于 TestedWord 的枚举值进行判定，避免 isKnown 覆盖熟悉级别
+        return testedWord.masteryLevelEnum
     }
     
     // MARK: - 跨词典去重
@@ -492,7 +560,7 @@ class RetestModeService: RetestModeServiceProtocol {
     }
     
     private func mergeWithOriginalResults(_ retestWords: [TestedWord]) async throws {
-        // 实现合并结果的逻辑（保留更好的结果）
+        // 实现合并结果的逻辑（使用最新时间戳的记录）
         for testedWord in retestWords {
             let wordText = testedWord.word
             let dictionaryFileName = testedWord.dictionaryFileName
@@ -504,14 +572,14 @@ class RetestModeService: RetestModeServiceProtocol {
             
             let existingWords = try modelContext.fetch(wordDescriptor)
             if let existingWord = existingWords.first {
-                let originalLevel = determineMasteryLevel(existingWord)
-                let newLevel = determineMasteryLevel(testedWord)
+                // 使用最新时间戳的记录（重测结果更新）
+                let testedDate = testedWord.lastTestedDate ?? Date.distantPast
+                let existingDate = existingWord.lastTestedDate ?? Date.distantPast
                 
-                // 只有新结果更好时才更新
-                if masteryLevelPriority(newLevel) < masteryLevelPriority(originalLevel) {
+                if testedDate > existingDate {
                     existingWord.masteryLevel = testedWord.masteryLevel
                     existingWord.lastTestedDate = testedWord.lastTestedDate
-                    existingWord.testCount = testedWord.testCount
+                    existingWord.testCount = existingWord.testCount + testedWord.testCount
                 }
             }
         }
@@ -671,22 +739,38 @@ class MockRetestModeService: RetestModeServiceProtocol {
 // MARK: - 私有扩展
 
 private extension RetestModeService {
+    @MainActor
+    func runMasteryNormalizationIfNeeded() async {
+        guard !hasRunNormalization else { return }
+        do {
+            let migration = DataMigrationService()
+            _ = try migration.normalizeTestedWordMasteryLevels(context: modelContext)
+            hasRunNormalization = true
+        } catch {
+            print("⚠️ [RetestModeService] 规范化掌握程度失败: \(error.localizedDescription)")
+        }
+    }
     func getRetestWords(for configuration: RetestConfiguration) async throws -> [TestedWord] {
         var allRetestWords: [TestedWord] = []
-        
+
+        // 先取可用词典列表，按 id -> fileName 映射
+        let dictionaries = try await getAvailableDictionaries()
+
         for dictionaryId in configuration.selectedDictionaryIds {
-            // 获取指定词典的已测试单词
+            guard let dict = dictionaries.first(where: { $0.id == dictionaryId }) else { continue }
+
+            // 获取指定词典的已测试单词（按 fileName 匹配）
             let predicate = #Predicate<TestedWord> { word in
-                word.dictionaryFileName == dictionaryId.uuidString
+                word.dictionaryFileName == dict.fileName
             }
             let descriptor = FetchDescriptor<TestedWord>(predicate: predicate)
             let testedWords = try modelContext.fetch(descriptor)
-            
+
             // 根据掌握程度过滤
             let filteredWords = testedWords.filter { word in
                 configuration.selectedMasteryLevels.contains(word.masteryLevelEnum)
             }
-            
+
             allRetestWords.append(contentsOf: filteredWords)
         }
         

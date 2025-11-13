@@ -22,8 +22,6 @@ struct VocabularyView: View {
     @State private var selectedMastery: MasteryLevel?
     @State private var sortOption: VocabularySortOption = .recent
     @State private var isShowingFilters = false
-    @State private var myWords: [UserWord] = []
-    @State private var filteredWords: [UserWord] = []
     @State private var vocabularyStats: VocabularyStats?
     @State private var debounceTask: Task<Void, Never>? // 防抖任务
     @State private var isDataLoaded = false // 防止重复加载
@@ -129,7 +127,21 @@ struct VocabularyView: View {
                 .environmentObject(dictionaryService)
                 .environmentObject(appCoordinator)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartVocabularyTest"))) { _ in
+        // 监听标准词汇量测试启动通知
+        .onReceive(NotificationCenter.default.publisher(for: .startVocabularyTest)) { _ in
+            isShowingVocabularyTest = true
+        }
+        // 监听重测模式启动通知（携带 RetestConfig）
+        .onReceive(NotificationCenter.default.publisher(for: .startRetestVocabularyTest)) { notification in
+            if let info = notification.userInfo,
+               let config = info["retestConfig"] as? RetestConfig {
+                // 设置快速重测配置并展示统一测试界面
+                quickRetestConfig = config
+            } else {
+                quickRetestConfig = nil
+            }
+            // 确保重测选择弹窗关闭，避免与测试界面同时显示
+            isShowingRetestMode = false
             isShowingVocabularyTest = true
         }
         .sheet(isPresented: $isShowingDictionarySpecificImport) {
@@ -393,7 +405,7 @@ struct VocabularyView: View {
                     ForEach(personalDictionaries, id: \.id) { dictionary in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text(dictionary.name)
+                                Text(dictionary.displayName)
                                     .font(.headline)
                                     .fontWeight(.medium)
                                 
@@ -806,11 +818,11 @@ struct VocabularyView: View {
                 
                 // 单词列表
                 Group {
-                    if filteredWords.isEmpty {
+                    if filteredMyWords.isEmpty {
                         emptyWordsView
                     } else {
                         LazyVStack(spacing: 8) {
-                            ForEach(filteredWords) { wordRecord in
+                            ForEach(filteredMyWords) { wordRecord in
                                 WordRecordRow(wordRecord: wordRecord) {
                                     selectedWordForDetail = wordRecord
                                     showingWordDetail = true
@@ -1064,7 +1076,7 @@ struct VocabularyView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
                 StatCard(
                     title: "总词汇量",
-                    value: "\(myWords.count)",
+                    value: "\(viewModel.vocabulary.count)",
                     icon: "book.fill",
                     color: .blue
                 )
@@ -1537,8 +1549,9 @@ extension VocabularyView {
                 
                 // 使用统一的VocabularyTestView进行重测
                 await MainActor.run {
-                    // 设置重测配置并显示测试界面
+                    // 设置重测配置并显示测试界面；先关闭重测模式弹窗
                     self.quickRetestConfig = retestConfig
+                    isShowingRetestMode = false
                     isShowingVocabularyTest = true
                 }
                 

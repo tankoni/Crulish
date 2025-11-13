@@ -57,7 +57,7 @@ struct DictionaryModeSortSection: View {
                             Text("选中词典:")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text(dictionary.name)
+                            Text(dictionary.displayName)
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundColor(.blue)

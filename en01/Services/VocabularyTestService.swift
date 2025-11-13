@@ -142,6 +142,9 @@ struct WordStatistics {
     private var currentTestId: UUID?
     private var cancellables = Set<AnyCancellable>()
     
+    // 同步触发器管理器
+    private weak var syncTriggerManager: SyncTriggerManager?
+    
     // MARK: - Initialization
     init(
         dictionaryService: DictionaryServiceProtocol,
@@ -179,6 +182,13 @@ struct WordStatistics {
         )
     }
     
+    // MARK: - Dependency Injection
+    
+    func setSyncTriggerManager(_ manager: SyncTriggerManager) {
+        self.syncTriggerManager = manager
+        wordMasteryService.setSyncTriggerManager(manager)
+    }
+    
     // MARK: - Dictionary Management
     
     func getAvailableDictionaries() -> AnyPublisher<[DictionaryInfo], Error> {
@@ -213,10 +223,16 @@ struct WordStatistics {
     
     func completeTest(testId: UUID) -> AnyPublisher<VocabularyTest, Error> {
         return testSessionService.completeTest(testId: testId)
-            .handleEvents(receiveOutput: { [weak self] _ in
+            .handleEvents(receiveOutput: { [weak self] test in
                 if self?.currentTestId == testId {
                     self?.currentTestId = nil
                 }
+                // 触发测试会话完成同步
+                self?.syncTriggerManager?.triggerAfterTestSession(
+                    dictionaryFileName: test.dictionaryFileName,
+                    testSessionId: testId,
+                    wordsCount: test.totalWords
+                )
             })
             .eraseToAnyPublisher()
     }
@@ -464,9 +480,11 @@ struct WordStatistics {
                     }
                     
                     // 随机打乱并限制数量
+                    // 当 sampleSize < 0（例如 .all）时，表示取全部重测单词
                     let shuffledWords = retestWords.shuffled()
-                    let limitedWords = Array(shuffledWords.prefix(sampleSize))
-                    
+                    let effectiveCount = sampleSize < 0 ? retestWords.count : sampleSize
+                    let limitedWords = Array(shuffledWords.prefix(effectiveCount))
+
                     promise(.success(limitedWords))
                 } catch {
                     promise(.failure(error))

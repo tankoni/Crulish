@@ -42,7 +42,7 @@ class RetestModeViewModel: ObservableObject {
     
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
-    private var dictionaryWordCounts: [UUID: Int] = [:]
+    @Published private(set) var dictionaryWordCounts: [UUID: Int] = [:]
     
     // MARK: - Computed Properties
     
@@ -103,20 +103,20 @@ class RetestModeViewModel: ObservableObject {
     
     /// 加载可用词典
     func loadAvailableDictionaries() {
-        Task {
+        Task { @MainActor in
             isLoading = true
             defer { isLoading = false }
-            
+
             do {
                 let dictionaries = try await retestModeService.getAvailableDictionaries()
                 availableDictionaries = dictionaries
-                
+
                 // 加载每个词典的已测试单词数量
                 for dictionary in dictionaries {
                     let count = await getTestedWordsCount(for: dictionary.id)
                     dictionaryWordCounts[dictionary.id] = count
                 }
-                
+
                 print("✅ 成功加载 \(dictionaries.count) 个词典")
             } catch {
                 handleError(error, context: "加载词典列表")
@@ -285,15 +285,23 @@ class RetestModeViewModel: ObservableObject {
     
     /// 启动重测界面
     private func startRetestInterface(with session: RetestSession) async {
-        // 这里应该启动现有的测试界面，传入重测会话的单词
-        // 由于需要复用现有的测试界面，这里先设置状态
+        // 标记为重测激活
         isRetestActive = true
+
+        // 将当前选择映射为 VocabularyTestView 需要的 RetestConfig
+        let retestConfig = RetestConfig(
+            masteryLevels: selectedMasteryLevels,
+            selectedDictionaries: Set(selectedDictionaries.map { $0.uuidString }),
+            wordCount: session.totalWords,
+            randomOrder: true
+        )
+
+        // 通过协调器触发词汇测试界面（重测模式）
+        await MainActor.run {
+            appCoordinator.startRetestVocabularyTest(retestConfig: retestConfig)
+        }
         
-        // TODO: 集成现有的词汇量测试界面
-        // 需要将 session.words 转换为测试界面需要的格式
-        // 并在测试完成后调用 completeRetestSession
-        
-        print("🚀 启动重测界面，测试 \(session.totalWords) 个单词")
+        print("🚀 启动重测界面（复用词汇量测试视图），测试 \(session.totalWords) 个单词")
     }
     
     /// 完成重测会话

@@ -911,6 +911,7 @@ extension IntelligentRankingViewModel {
             }
             
             await MainActor.run {
+                self.availableDictionaries = dictionaries
                 self.dictionaryTestStates = testStates
                 print("✅ 成功加载词典测试状态，共\(testStates.count)个词典")
             }

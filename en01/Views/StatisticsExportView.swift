@@ -390,10 +390,10 @@ struct StatisticsExportView: View {
         let descriptor = FetchDescriptor<TestedWord>(sortBy: [SortDescriptor(\.testedAt, order: .reverse)])
         let testedWords = try modelContext.fetch(descriptor)
         
-        // 按掌握程度分类获取单词列表
-        let masteredWordsList = testedWords.filter { $0.masteryLevel == MasteryLevel.mastered.rawValue }.map { $0.word }
-        let learningWordsList = testedWords.filter { $0.masteryLevel == MasteryLevel.familiar.rawValue }.map { $0.word }
-        let reviewWordsList = testedWords.filter { $0.masteryLevel == MasteryLevel.unfamiliar.rawValue }.map { $0.word }
+        let bestMap = buildBestMasteryMap(from: testedWords)
+        let masteredWordsList = bestMap.filter { $0.value == .mastered }.map { $0.key }.sorted()
+        let learningWordsList = bestMap.filter { $0.value == .familiar }.map { $0.key }.sorted()
+        let reviewWordsList = bestMap.filter { $0.value == .unfamiliar }.map { $0.key }.sorted()
         
         // 生成已掌握单词文件
         let masteredContent = generateCategorizedContent(
@@ -456,18 +456,18 @@ struct StatisticsExportView: View {
             content += "生成时间：\(displayFormatter.string(from: exportDate))\n\n"
             content += "## 单词列表\n\n"
             content += "共 \(words.count) 个单词\n\n"
-            
             for (index, word) in words.enumerated() {
-                content += "\(index + 1). \(word)\n"
+                let clean = normalizeWordForExport(word)
+                content += "\(index + 1). \(clean)\n"
             }
         } else {
             content += "\(title)\n\n"
             content += "生成时间：\(displayFormatter.string(from: exportDate))\n\n"
             content += "单词列表\n\n"
             content += "共 \(words.count) 个单词\n\n"
-            
             for (index, word) in words.enumerated() {
-                content += "\(index + 1). \(word)\n"
+                let clean = normalizeWordForExport(word)
+                content += "\(index + 1). \(clean)\n"
             }
         }
         
@@ -639,41 +639,43 @@ struct StatisticsExportView: View {
                     // 获取所有已测试的单词
                     let descriptor = FetchDescriptor<TestedWord>(sortBy: [SortDescriptor(\.testedAt, order: .reverse)])
                     let testedWords = try modelContext.fetch(descriptor)
-                    
-                    // 按掌握程度分类
-                    let masteredWords = testedWords.filter { $0.masteryLevel == MasteryLevel.mastered.rawValue }
-                    let familiarWords = testedWords.filter { $0.masteryLevel == MasteryLevel.familiar.rawValue }
-                    let unfamiliarWords = testedWords.filter { $0.masteryLevel == MasteryLevel.unfamiliar.rawValue }
+                    let bestMap = buildBestMasteryMap(from: testedWords)
+                    let masteredList = bestMap.filter { $0.value == .mastered }.map { $0.key }.sorted()
+                    let familiarList = bestMap.filter { $0.value == .familiar }.map { $0.key }.sorted()
+                    let unfamiliarList = bestMap.filter { $0.value == .unfamiliar }.map { $0.key }.sorted()
                     
                     // 已掌握单词
                     content += "### 已掌握单词\n"
-                    if masteredWords.isEmpty {
+                    if masteredList.isEmpty {
                         content += "暂无已掌握单词\n\n"
                     } else {
-                        for word in masteredWords {
-                            content += "- \(word.word)\n"
+                        for w in masteredList {
+                            let clean = normalizeWordForExport(w)
+                            content += "- \(clean)\n"
                         }
                         content += "\n"
                     }
                     
                     // 熟悉单词
                     content += "### 熟悉单词\n"
-                    if familiarWords.isEmpty {
+                    if familiarList.isEmpty {
                         content += "暂无熟悉单词\n\n"
                     } else {
-                        for word in familiarWords {
-                            content += "- \(word.word)\n"
+                        for w in familiarList {
+                            let clean = normalizeWordForExport(w)
+                            content += "- \(clean)\n"
                         }
                         content += "\n"
                     }
                     
                     // 陌生单词
                     content += "### 陌生单词\n"
-                    if unfamiliarWords.isEmpty {
+                    if unfamiliarList.isEmpty {
                         content += "暂无陌生单词\n\n"
                     } else {
-                        for word in unfamiliarWords {
-                            content += "- \(word.word)\n"
+                        for w in unfamiliarList {
+                            let clean = normalizeWordForExport(w)
+                            content += "- \(clean)\n"
                         }
                         content += "\n"
                     }
@@ -695,6 +697,58 @@ struct StatisticsExportView: View {
         }
         
         return content
+    }
+
+    private func normalizeWordForExport(_ text: String) -> String {
+        var s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while s.hasPrefix("- ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("* ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("• ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        var idx = s.startIndex
+        var digitsCount = 0
+        while idx < s.endIndex, s[idx].isNumber { digitsCount += 1; idx = s.index(after: idx) }
+        if digitsCount > 0, idx < s.endIndex, s[idx] == "." {
+            let nextIdx = s.index(after: idx)
+            if nextIdx < s.endIndex, s[nextIdx] == " " {
+                s = String(s[nextIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if let start = s.range(of: "**"), let end = s.range(of: "**", range: start.upperBound..<s.endIndex) {
+            s = String(s[start.upperBound..<end.lowerBound])
+        }
+        return s
+    }
+
+    private func masteryRank(_ level: MasteryLevel) -> Int {
+        switch level {
+        case .mastered: return 2
+        case .familiar: return 1
+        case .unfamiliar: return 0
+        }
+    }
+
+    private func buildBestMasteryMap(from words: [TestedWord]) -> [String: MasteryLevel] {
+        var map: [String: (level: MasteryLevel, date: Date)] = [:]
+        for w in words {
+            let clean = normalizeWordForExport(w.word)
+            let key = clean.lowercased()
+            let level = MasteryLevel(rawValue: w.masteryLevel) ?? .unfamiliar
+            let date = w.lastTestedDate ?? w.testedAt
+            if let existing = map[key] {
+                let a = masteryRank(existing.level)
+                let b = masteryRank(level)
+                if b > a || (b == a && date > existing.date) {
+                    map[key] = (level, date)
+                }
+            } else {
+                map[key] = (level, date)
+            }
+        }
+        var result: [String: MasteryLevel] = [:]
+        for (key, value) in map {
+            result[key] = value.level
+        }
+        return result
     }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {

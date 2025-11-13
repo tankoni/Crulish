@@ -486,6 +486,20 @@ class MockDictionaryService: DictionaryServiceProtocol, @unchecked Sendable {
             return vocabulary
         }
     }
+
+    // 获取总记录（非词典专属）的用户词汇记录（Mock：直接返回所有记录）
+    func getGeneralUserWordRecords() -> [UserWord] {
+        return queue.sync {
+            return vocabulary
+        }
+    }
+
+    // 获取词典专属的用户词汇记录（Mock：未区分词典，返回所有记录）
+    func getDictionarySpecificUserWordRecords(for dictionaryId: UUID) -> [UserWord] {
+        return queue.sync {
+            return vocabulary
+        }
+    }
     
     func getWordsByMastery(_ mastery: MasteryLevel) -> [UserWord] {
         return queue.sync {

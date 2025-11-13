@@ -34,6 +34,9 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
     private let dictionaryLoader = DictionaryLoader()
     private let youdaoParser = YoudaoDictionaryParser()
     
+    // 同步触发器管理器
+    private weak var syncTriggerManager: SyncTriggerManager?
+    
     // 分批加载配置
     private let batchSize = 1000 // 每批加载1000个单词
     private let maxLoadTime: TimeInterval = 3.0 // 最大加载时间3秒
@@ -58,6 +61,13 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
         Task { @MainActor in
             await loadDictionary()
         }
+    }
+    
+    // MARK: - 同步触发器管理
+    
+    /// 设置同步触发器管理器
+    func setSyncTriggerManager(_ manager: SyncTriggerManager) {
+        self.syncTriggerManager = manager
     }
     
     // MARK: - 词典状态管理
@@ -119,9 +129,19 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
         return Future { [weak self] promise in
             Task {
                 do {
-                    // 改为轻量模式：仅加载词典信息，避免解析所有词条
-                    try await self?.dictionaryLoader.loadDictionaryInfosOnly()
-                    let dictionaries = self?.dictionaryLoader.getDictionaryInfos() ?? []
+                    let existingInfos = self?.dictionaryLoader.getDictionaryInfos() ?? []
+                    if existingInfos.isEmpty {
+                        try await self?.dictionaryLoader.loadDictionaryInfosOnly()
+                    }
+                    var dictionaries = self?.dictionaryLoader.getDictionaryInfos() ?? []
+                    
+                    // 添加"我的学习记录"虚拟词典
+                    if let strongSelf = self {
+                        let totalUserWords = strongSelf.getGeneralUserWordRecords().count
+                        let myLearningRecords = DictionaryInfo.myLearningRecords(totalWords: totalUserWords)
+                        dictionaries.insert(myLearningRecords, at: 0) // 插入到列表开头
+                    }
+                    
                     self?.logger.info("[DictionaryService] Infos-only dictionaries ready: \(dictionaries.count)")
                     promise(.success(dictionaries))
                 } catch {
@@ -510,7 +530,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
     
     // 记录用户查词 - 异步版本
     private func recordWordLookupAsync(for word: String, context: String?) async {
-        self.performSafeOperation("记录查词") {
+        let result = self.performSafeOperation("记录查词") {
             let cleanWord = self.textProcessor.cleanWord(word)
 
             // 检查是否已存在记录
@@ -545,9 +565,46 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
                 return newRecord
             }
         }
+        
+        // 触发查词同步 - 使用测试记录触发器，因为查词也是一种学习行为
+        if let userWord = result {
+            // 创建临时的TestedWord记录用于触发同步
+            let tempTestedWord = TestedWord(
+                word: userWord.word,
+                dictionaryName: userWord.testSource ?? "General",
+                dictionaryFileName: "",
+                masteryLevel: userWord.masteryLevel
+            )
+            
+            // 触发同步
+            await syncTriggerManager?.triggerAfterTestRecord(
+                word: userWord.word,
+                dictionaryFileName: userWord.testSource ?? "General",
+                testRecord: tempTestedWord
+            )
+        }
     }
     
     // 获取用户词汇记录
+    private func normalizeWordKey(_ text: String) -> String {
+        var s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while s.hasPrefix("- ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("* ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        while s.hasPrefix("• ") { s = String(s.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        var idx = s.startIndex
+        var digitsCount = 0
+        while idx < s.endIndex, s[idx].isNumber { digitsCount += 1; idx = s.index(after: idx) }
+        if digitsCount > 0, idx < s.endIndex, s[idx] == "." {
+            let nextIdx = s.index(after: idx)
+            if nextIdx < s.endIndex, s[nextIdx] == " " {
+                s = String(s[nextIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if let start = s.range(of: "**"), let end = s.range(of: "**", range: start.upperBound..<s.endIndex) {
+            s = String(s[start.upperBound..<end.lowerBound])
+        }
+        return s.trimmingCharacters(in: .punctuationCharacters).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
     func getUserWordRecords() -> [UserWord] {
         return self.performSafeOperation("获取用户词汇记录") {
             // 获取查词记录的UserWord
@@ -569,7 +626,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             
             // 首先添加所有查词记录
             for userWord in userWords {
-                wordMap[userWord.word.lowercased()] = userWord
+                wordMap[normalizeWordKey(userWord.word)] = userWord
             }
             
             // 处理测试记录
@@ -577,23 +634,30 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             var updatedExistingWords = 0
             
             for testedWord in testedWords {
-                let wordKey = testedWord.word.lowercased()
+                let wordKey = normalizeWordKey(testedWord.word)
                 
                 if let existingWord = wordMap[wordKey] {
-                    // 更新现有单词的测试信息
-                    existingWord.isFromTest = true
-                    existingWord.testID = testedWord.testSessionId?.uuidString
-                    existingWord.testSource = testedWord.dictionaryName
-                    
-                    // 如果测试时间更新，更新掌握程度
-                    if testedWord.testedAt > existingWord.lastLookupDate {
-                        existingWord.masteryLevel = testedWord.masteryLevelEnum
-                    }
-                    
-                    // 补充释义（如果缺失）
+                    var assignedDefinition: WordDefinition? = nil
                     if existingWord.selectedDefinition == nil {
-                        if let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试") {
-                            existingWord.selectedDefinition = dictWord.definitions.first
+                        assignedDefinition = self.lookupWord(testedWord.word, context: "词汇量测试")?.definitions.first
+                    }
+                    if Thread.isMainThread {
+                        existingWord.isFromTest = true
+                        existingWord.testID = testedWord.testSessionId?.uuidString
+                        existingWord.testSource = testedWord.dictionaryName
+                        existingWord.masteryLevel = testedWord.masteryLevelEnum
+                        if existingWord.selectedDefinition == nil, let def = assignedDefinition {
+                            existingWord.selectedDefinition = def
+                        }
+                    } else {
+                        DispatchQueue.main.sync {
+                            existingWord.isFromTest = true
+                            existingWord.testID = testedWord.testSessionId?.uuidString
+                            existingWord.testSource = testedWord.dictionaryName
+                            existingWord.masteryLevel = testedWord.masteryLevelEnum
+                            if existingWord.selectedDefinition == nil, let def = assignedDefinition {
+                                existingWord.selectedDefinition = def
+                            }
                         }
                     }
                     updatedExistingWords += 1
@@ -606,7 +670,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
                     )
                     
                     let userWord = UserWord(
-                        word: testedWord.word,
+                        word: normalizeWordKey(testedWord.word),
                         context: "词汇量测试",
                         sentence: "来自词汇量测试的单词",
                         selectedDefinition: definition
@@ -681,7 +745,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             
             // 添加查词记录
             for userWord in userWords {
-                wordMap[userWord.word.lowercased()] = userWord
+                wordMap[normalizeWordKey(userWord.word)] = userWord
             }
             
             // 处理词典专属测试记录
@@ -689,23 +753,30 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             var updatedExistingWords = 0
             
             for testedWord in dictionaryTestedWords {
-                let wordKey = testedWord.word.lowercased()
+                let wordKey = normalizeWordKey(testedWord.word)
                 
                 if let existingWord = wordMap[wordKey] {
-                    // 更新现有单词的测试信息
-                    existingWord.isFromTest = true
-                    existingWord.testID = testedWord.testSessionId?.uuidString
-                    existingWord.testSource = testedWord.dictionaryName
-                    
-                    // 如果测试时间更新，更新掌握程度
-                    if testedWord.testedAt > existingWord.lastLookupDate {
-                        existingWord.masteryLevel = testedWord.masteryLevelEnum
-                    }
-                    
-                    // 补充释义（如果缺失）
+                    var assignedDefinition: WordDefinition? = nil
                     if existingWord.selectedDefinition == nil {
-                        if let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试") {
-                            existingWord.selectedDefinition = dictWord.definitions.first
+                        assignedDefinition = self.lookupWord(testedWord.word, context: "词汇量测试")?.definitions.first
+                    }
+                    if Thread.isMainThread {
+                        existingWord.isFromTest = true
+                        existingWord.testID = testedWord.testSessionId?.uuidString
+                        existingWord.testSource = testedWord.dictionaryName
+                        existingWord.masteryLevel = testedWord.masteryLevelEnum
+                        if existingWord.selectedDefinition == nil, let def = assignedDefinition {
+                            existingWord.selectedDefinition = def
+                        }
+                    } else {
+                        DispatchQueue.main.sync {
+                            existingWord.isFromTest = true
+                            existingWord.testID = testedWord.testSessionId?.uuidString
+                            existingWord.testSource = testedWord.dictionaryName
+                            existingWord.masteryLevel = testedWord.masteryLevelEnum
+                            if existingWord.selectedDefinition == nil, let def = assignedDefinition {
+                                existingWord.selectedDefinition = def
+                            }
                         }
                     }
                     updatedExistingWords += 1
@@ -718,7 +789,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
                     )
                     
                     let userWord = UserWord(
-                        word: testedWord.word,
+                        word: normalizeWordKey(testedWord.word),
                         context: "词汇量测试",
                         sentence: "来自词汇量测试的单词",
                         selectedDefinition: definition
@@ -791,7 +862,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             
             // 添加查词记录
             for userWord in userWords {
-                wordMap[userWord.word.lowercased()] = userWord
+                wordMap[normalizeWordKey(userWord.word)] = userWord
             }
             
             // 处理总测试记录
@@ -799,23 +870,30 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             var updatedExistingWords = 0
             
             for testedWord in generalTestedWords {
-                let wordKey = testedWord.word.lowercased()
+                let wordKey = normalizeWordKey(testedWord.word)
                 
                 if let existingWord = wordMap[wordKey] {
-                    // 更新现有单词的测试信息
-                    existingWord.isFromTest = true
-                    existingWord.testID = testedWord.testSessionId?.uuidString
-                    existingWord.testSource = testedWord.dictionaryName
-                    
-                    // 如果测试时间更新，更新掌握程度
-                    if testedWord.testedAt > existingWord.lastLookupDate {
-                        existingWord.masteryLevel = testedWord.masteryLevelEnum
-                    }
-                    
-                    // 补充释义（如果缺失）
+                    var assignedDefinition: WordDefinition? = nil
                     if existingWord.selectedDefinition == nil {
-                        if let dictWord = self.lookupWord(testedWord.word, context: "词汇量测试") {
-                            existingWord.selectedDefinition = dictWord.definitions.first
+                        assignedDefinition = self.lookupWord(testedWord.word, context: "词汇量测试")?.definitions.first
+                    }
+                    if Thread.isMainThread {
+                        existingWord.isFromTest = true
+                        existingWord.testID = testedWord.testSessionId?.uuidString
+                        existingWord.testSource = testedWord.dictionaryName
+                        existingWord.masteryLevel = testedWord.masteryLevelEnum
+                        if existingWord.selectedDefinition == nil, let def = assignedDefinition {
+                            existingWord.selectedDefinition = def
+                        }
+                    } else {
+                        DispatchQueue.main.sync {
+                            existingWord.isFromTest = true
+                            existingWord.testID = testedWord.testSessionId?.uuidString
+                            existingWord.testSource = testedWord.dictionaryName
+                            existingWord.masteryLevel = testedWord.masteryLevelEnum
+                            if existingWord.selectedDefinition == nil, let def = assignedDefinition {
+                                existingWord.selectedDefinition = def
+                            }
                         }
                     }
                     updatedExistingWords += 1
@@ -828,7 +906,7 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
                     )
                     
                     let userWord = UserWord(
-                        word: testedWord.word,
+                        word: normalizeWordKey(testedWord.word),
                         context: "词汇量测试",
                         sentence: "来自词汇量测试的单词",
                         selectedDefinition: definition
