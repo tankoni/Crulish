@@ -154,7 +154,10 @@ class DictionarySpecificImportExportService: BaseService {
         let existingWords = try await getExistingWordsForDictionary(dictionaryFileName)
         
         for word in words {
-            let cleanWord = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWordString(trimmed)
+            let cleanWord = normalized.lowercased()
+            guard isValidEnglishWord(cleanWord) else { continue }
             
             // 跳过空单词
             guard !cleanWord.isEmpty else { continue }
@@ -173,7 +176,7 @@ class DictionarySpecificImportExportService: BaseService {
                     continue
                 }
             }
-            
+
             // 创建测试记录
             do {
                 try await createWordTestRecord(
@@ -514,27 +517,40 @@ class DictionarySpecificImportExportService: BaseService {
     
     /// 解析文本文件
     private func parseTextFile(_ content: String) -> [String] {
-        return content
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        let lines = content.components(separatedBy: .newlines)
+        var words: [String] = []
+        for raw in lines {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            guard !line.hasPrefix("#") else { continue }
+            guard !line.hasPrefix("|") else { continue }
+            guard line != "---" else { continue }
+            let normalized = normalizeWordString(line)
+            let lowered = normalized.lowercased()
+            if isValidEnglishWord(lowered) {
+                words.append(lowered)
+            }
+        }
+        return words
     }
     
     /// 解析CSV文件
     private func parseCSVFile(_ content: String) -> [String] {
         let lines = content.components(separatedBy: .newlines)
         var words: [String] = []
-        
-        for line in lines {
-            let columns = line.components(separatedBy: ",")
-            if let firstColumn = columns.first {
-                let word = firstColumn.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !word.isEmpty {
-                    words.append(word)
+        for raw in lines {
+            let columns = raw.components(separatedBy: ",")
+            if let first = columns.first {
+                let line = first.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !line.isEmpty else { continue }
+                guard !line.hasPrefix("#") else { continue }
+                let normalized = normalizeWordString(line)
+                let lowered = normalized.lowercased()
+                if isValidEnglishWord(lowered) {
+                    words.append(lowered)
                 }
             }
         }
-        
         return words
     }
     
@@ -594,7 +610,10 @@ class DictionarySpecificImportExportService: BaseService {
                     extracted = text.split(separator: " ").first.map { String($0) }
                 }
                 if let w = extracted?.trimmingCharacters(in: .whitespacesAndNewlines), !w.isEmpty, w != "-" {
-                    records.append(ImportedTestRecord(word: w, mastery: currentMastery))
+                    let normalized = normalizeWordString(w).lowercased()
+                    if isValidEnglishWord(normalized) {
+                        records.append(ImportedTestRecord(word: normalized, mastery: currentMastery))
+                    }
                 }
             }
         }
@@ -652,8 +671,10 @@ class DictionarySpecificImportExportService: BaseService {
         var duplicateWords: [String] = []
         let existingWords = try await getExistingWordsForDictionary(dictionaryFileName)
         var existingSet = existingWords
+        var overwriteGroups: [MasteryLevel: [String]] = [:]
         for record in records {
             let cleanWord = normalizeWordString(record.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+            guard isValidEnglishWord(cleanWord) else { continue }
             guard !cleanWord.isEmpty else { continue }
             if existingSet.contains(cleanWord) {
                 switch importMode {
@@ -672,6 +693,9 @@ class DictionarySpecificImportExportService: BaseService {
                 try await createWordTestRecord(word: cleanWord, dictionaryFileName: dictionaryFileName, mastery: record.mastery)
                 successCount += 1
                 existingSet.insert(cleanWord)
+                if importMode == .overwrite {
+                    overwriteGroups[record.mastery, default: []].append(cleanWord)
+                }
             } catch {
                 failedWords.append(cleanWord)
             }
@@ -695,6 +719,12 @@ class DictionarySpecificImportExportService: BaseService {
             )
         }
         Task { @MainActor in
+            if importMode == .overwrite {
+                let dataSync = ServiceContainer.shared.getDataSyncService()
+                for (level, words) in overwriteGroups where !words.isEmpty {
+                    await dataSync.forceSetMasteryForWordsAcrossAllDictionaries(words: words, newMastery: level)
+                }
+            }
             let syncTriggerManager = ServiceContainer.shared.getSyncTriggerManager()
             syncTriggerManager.triggerAfterDataImport(affectedDictionaries: [dictionaryFileName])
             logger.info("[DictionarySpecificImportExportService] 已触发导入后同步: \(dictionaryFileName)")
@@ -830,6 +860,30 @@ class DictionarySpecificImportExportService: BaseService {
             s = String(s[start.upperBound..<end.lowerBound])
         }
         return s
+    }
+
+    private func containsCJK(_ s: String) -> Bool {
+        for scalar in s.unicodeScalars {
+            let v = scalar.value
+            if (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) || (0x20000...0x2A6DF).contains(v) || (0x2A700...0x2B73F).contains(v) || (0x2B740...0x2B81F).contains(v) || (0x2B820...0x2CEAF).contains(v) || (0xF900...0xFAFF).contains(v) || (0x2F800...0x2FA1F).contains(v) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func isValidEnglishWord(_ s: String) -> Bool {
+        if s.isEmpty { return false }
+        if s.hasPrefix("#") { return false }
+        if containsCJK(s) { return false }
+        var hasLetter = false
+        for scalar in s.unicodeScalars {
+            let v = scalar.value
+            if v >= 97 && v <= 122 { hasLetter = true; continue }
+            if v == 39 || v == 45 || v == 32 { continue }
+            return false
+        }
+        return hasLetter
     }
 
     private func uniqueByWord(_ words: [TestedWord]) -> [TestedWord] {

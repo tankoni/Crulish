@@ -54,6 +54,8 @@ struct VocabularyView: View {
     @State private var isShowingDictionarySpecificImport = false // 控制词典专属导入界面显示
     @State private var isShowingDictionarySpecificExport = false // 控制词典专属导出界面显示
     @State private var selectedDictionaryForImportExport: PersonalDictionary? // 选中的词典
+    @State private var showingBatchUpdateDialog = false
+    @State private var batchSourceMastery: MasteryLevel?
     
     var body: some View {
         NavigationView {
@@ -98,12 +100,13 @@ struct VocabularyView: View {
                 errorHandler: errorHandler,
                 testResultExportService: appCoordinator.getTestResultExportService(),
                 appCoordinator: appCoordinator,
-                isRetestMode: quickRetestConfig != nil,
-                retestConfig: quickRetestConfig
+                isRetestMode: (quickRetestConfig ?? ServiceContainer.shared.getLastQuickRetestConfig()) != nil,
+                retestConfig: quickRetestConfig ?? ServiceContainer.shared.getLastQuickRetestConfig()
             )
             .onDisappear {
                 // 清除快速重测配置
                 quickRetestConfig = nil
+                ServiceContainer.shared.setLastQuickRetestConfig(nil)
             }
         }
         .sheet(isPresented: $isShowingRetestMode) {
@@ -127,6 +130,18 @@ struct VocabularyView: View {
                 .environmentObject(dictionaryService)
                 .environmentObject(appCoordinator)
         }
+        .confirmationDialog("批量修改为", isPresented: $showingBatchUpdateDialog) {
+            Button("已掌握") {
+                if let source = batchSourceMastery { viewModel.batchUpdateMasteryLevel(from: source, to: .mastered) }
+            }
+            Button("熟悉") {
+                if let source = batchSourceMastery { viewModel.batchUpdateMasteryLevel(from: source, to: .familiar) }
+            }
+            Button("不熟悉") {
+                if let source = batchSourceMastery { viewModel.batchUpdateMasteryLevel(from: source, to: .unfamiliar) }
+            }
+            Button("取消", role: .cancel) {}
+        }
         // 监听标准词汇量测试启动通知
         .onReceive(NotificationCenter.default.publisher(for: .startVocabularyTest)) { _ in
             isShowingVocabularyTest = true
@@ -137,8 +152,10 @@ struct VocabularyView: View {
                let config = info["retestConfig"] as? RetestConfig {
                 // 设置快速重测配置并展示统一测试界面
                 quickRetestConfig = config
+                ServiceContainer.shared.setLastQuickRetestConfig(config)
             } else {
                 quickRetestConfig = nil
+                ServiceContainer.shared.setLastQuickRetestConfig(nil)
             }
             // 确保重测选择弹窗关闭，避免与测试界面同时显示
             isShowingRetestMode = false
@@ -875,6 +892,10 @@ struct VocabularyView: View {
                 },
                 onQuickRetest: {
                     startQuickRetest(for: .mastered)
+                },
+                onBatchUpdate: {
+                    batchSourceMastery = .mastered
+                    showingBatchUpdateDialog = true
                 }
             )
             
@@ -889,6 +910,10 @@ struct VocabularyView: View {
                 },
                 onQuickRetest: {
                     startQuickRetest(for: .familiar)
+                },
+                onBatchUpdate: {
+                    batchSourceMastery = .familiar
+                    showingBatchUpdateDialog = true
                 }
             )
             
@@ -903,6 +928,10 @@ struct VocabularyView: View {
                 },
                 onQuickRetest: {
                     startQuickRetest(for: .unfamiliar)
+                },
+                onBatchUpdate: {
+                    batchSourceMastery = .unfamiliar
+                    showingBatchUpdateDialog = true
                 }
             )
         }
@@ -1551,6 +1580,7 @@ extension VocabularyView {
                 await MainActor.run {
                     // 设置重测配置并显示测试界面；先关闭重测模式弹窗
                     self.quickRetestConfig = retestConfig
+                    ServiceContainer.shared.setLastQuickRetestConfig(retestConfig)
                     isShowingRetestMode = false
                     isShowingVocabularyTest = true
                 }
@@ -1570,6 +1600,7 @@ struct MasteryLevelButton: View {
     let isSelected: Bool
     let action: () -> Void
     let onQuickRetest: (() -> Void)? // 新增快速重测回调
+    let onBatchUpdate: (() -> Void)?
     
     var body: some View {
         Button(action: action) {
@@ -1592,6 +1623,26 @@ struct MasteryLevelButton: View {
                             Image(systemName: "arrow.clockwise")
                                 .font(.caption2)
                             Text("重测")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : color.opacity(0.8))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(isSelected ? Color.white.opacity(0.2) : color.opacity(0.1))
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                if let onBatchUpdate = onBatchUpdate, count > 0 {
+                    Button {
+                        onBatchUpdate()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.caption2)
+                            Text("一键修改")
                                 .font(.caption2)
                         }
                         .foregroundColor(isSelected ? .white.opacity(0.8) : color.opacity(0.8))

@@ -54,6 +54,11 @@ import SwiftData
                         print("🔄 [TestSessionService] 删除词典 \(dictionary.name) 的现有测试记录")
                     }
                     
+                    // 在开始测试前触发轻量同步与去重，确保已测试与掌握词被排除
+                    await ServiceContainer.shared.getDataSyncService().syncDictionaryRecords(dictionary.fileName)
+                    await ServiceContainer.shared.getDataSyncService().deduplicateDictionaryRecords(dictionary.fileName)
+                    await ServiceContainer.shared.getDataSyncService().syncUserWordsToGeneral()
+
                     // 获取未测试单词（实现去重功能）
                     let untestedWords = try await self.getUntestedWordsSync(from: dictionary)
                     let testWords = self.selectTestWords(from: untestedWords, count: sampleSize)

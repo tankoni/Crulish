@@ -68,11 +68,12 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
         position: Int
     ) {
         performSafeOperation("记录单词点击") {
+            guard let valid = sanitizeWord(word) else { return }
             // 生成会话ID
             let sessionID = "session_\(Date().timeIntervalSince1970)"
             
             let clickRecord = WordClickRecord(
-                word: word.lowercased(),
+                word: valid,
                 context: context,
                 sentence: context, // 使用context作为sentence
                 clickPosition: position,
@@ -83,13 +84,13 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             )
             
             // 更新缓存
-            wordClickCache[word.lowercased()] = clickRecord
+            wordClickCache[valid] = clickRecord
             
             // 保存到数据库
             modelContext.insert(clickRecord)
             try modelContext.save()
             
-            logger.info("记录单词点击: \(word)")
+            logger.info("记录单词点击: \(valid)")
         }
     }
     
@@ -105,8 +106,9 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
         source: String = "reading"
     ) {
         performSafeOperation("更新单词掌握程度") {
+            guard let valid = sanitizeWord(word) else { return }
             // 查找或创建用户单词记录
-            let lowercasedWord = word.lowercased()
+            let lowercasedWord = valid
             let descriptor = FetchDescriptor<UserWord>(
                 predicate: #Predicate { userWord in
                     userWord.word == lowercasedWord
@@ -126,7 +128,7 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             } else {
                 previousMastery = .unfamiliar
                 userWord = UserWord(
-                    word: word.lowercased(),
+                    word: lowercasedWord,
                     context: "",
                     sentence: "",
                     selectedDefinition: nil,
@@ -143,7 +145,7 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             
             // 记录学习行为
             let learningRecord = LearningRecord(
-                word: word.lowercased(),
+                word: lowercasedWord,
                 previousMastery: previousMastery,
                 newMastery: masteryLevel,
                 source: source,
@@ -155,7 +157,7 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             
             try modelContext.save()
             
-            logger.info("更新单词掌握程度: \(word) -> \(masteryLevel.rawValue)")
+            logger.info("更新单词掌握程度: \(lowercasedWord) -> \(masteryLevel.rawValue)")
         }
     }
     
@@ -184,10 +186,11 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
         source: String = "reading"
     ) {
         performSafeOperation("条件更新单词掌握程度") {
+            guard let valid = sanitizeWord(word) else { return }
             let lowercasedWord = word.lowercased()
             let descriptor = FetchDescriptor<UserWord>(
                 predicate: #Predicate { userWord in
-                    userWord.word == lowercasedWord
+                    userWord.word == valid
                 }
             )
             let existingWords = try modelContext.fetch(descriptor)
@@ -198,7 +201,7 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             }
 
             // 否则执行正常更新逻辑
-            updateWordMastery(word: word, masteryLevel: masteryLevel, source: source)
+            updateWordMastery(word: valid, masteryLevel: masteryLevel, source: source)
         }
     }
     
@@ -207,7 +210,8 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
     /// - Returns: 学习记录列表
     func getWordLearningHistory(word: String) -> [LearningRecord] {
         return performSafeOperation("获取单词学习历史") {
-            let lowercasedWord = word.lowercased()
+            guard let valid = sanitizeWord(word) else { return [] }
+            let lowercasedWord = valid
             let predicate = #Predicate<LearningRecord> { record in
                 record.word == lowercasedWord
             }
@@ -233,6 +237,39 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
             
             return try modelContext.fetch(descriptor)
         } ?? []
+    }
+
+    private func containsCJK(_ s: String) -> Bool {
+        for scalar in s.unicodeScalars {
+            let v = scalar.value
+            if (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) || (0x20000...0x2A6DF).contains(v) || (0x2A700...0x2B73F).contains(v) || (0x2B740...0x2B81F).contains(v) || (0x2B820...0x2CEAF).contains(v) || (0xF900...0xFAFF).contains(v) || (0x2F800...0x2FA1F).contains(v) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func isValidEnglishWord(_ s: String) -> Bool {
+        if s.isEmpty { return false }
+        if s.hasPrefix("#") { return false }
+        if containsCJK(s) { return false }
+        let lower = s.lowercased()
+        var hasLetter = false
+        for scalar in lower.unicodeScalars {
+            let v = scalar.value
+            if v >= 97 && v <= 122 { hasLetter = true; continue }
+            if v == 39 || v == 45 || v == 32 { continue }
+            return false
+        }
+        return hasLetter
+    }
+
+    private func sanitizeWord(_ s: String) -> String? {
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        let lowered = trimmed.lowercased()
+        if !isValidEnglishWord(lowered) { return nil }
+        return lowered
     }
     
     /// 获取单词点击统计

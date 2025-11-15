@@ -211,7 +211,9 @@ class TestResultManager: ObservableObject {
     
     /// 添加测试结果
     func addTestResult(_ result: WordTestResult) {
-        testResults.append(result)
+        guard let sanitized = sanitizeWord(result.word) else { return }
+        let r = WordTestResult(word: sanitized, isKnown: result.isKnown, timestamp: result.timestamp)
+        testResults.append(r)
         
         // 延迟更新统计，避免频繁计算
         scheduleStatisticsUpdate()
@@ -237,8 +239,9 @@ class TestResultManager: ObservableObject {
     
     /// 记录单词掌握度
     func recordWordMastery(word: String, mastery: MasteryLevel, responseTime: TimeInterval, testId: UUID? = nil) {
+        guard let sanitized = sanitizeWord(word) else { return }
         let result = WordTestResult(
-            word: word,
+            word: sanitized,
             isKnown: mastery != .unfamiliar,
             timestamp: Date()
         )
@@ -256,7 +259,7 @@ class TestResultManager: ObservableObject {
         // 记录到服务层
         vocabularyTestService.recordWordMastery(
             testId: actualTestId,
-            word: word,
+            word: sanitized,
             masteryLevel: mastery,
             responseTime: responseTime
         )
@@ -267,7 +270,7 @@ class TestResultManager: ObservableObject {
                 }
             },
             receiveValue: { _ in
-                print("✅ [TestResultManager] 记录单词掌握度: \(word) - \(mastery)")
+                print("✅ [TestResultManager] 记录单词掌握度: \(sanitized) - \(mastery)")
                 // 记录成功后刷新统计数据
                 Task { @MainActor in
                     self.refreshStatistics()
@@ -412,6 +415,39 @@ class TestResultManager: ObservableObject {
         }
         
         return lastResult.timestamp.timeIntervalSince(firstResult.timestamp)
+    }
+
+    private func containsCJK(_ s: String) -> Bool {
+        for scalar in s.unicodeScalars {
+            let v = scalar.value
+            if (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) || (0x20000...0x2A6DF).contains(v) || (0x2A700...0x2B73F).contains(v) || (0x2B740...0x2B81F).contains(v) || (0x2B820...0x2CEAF).contains(v) || (0xF900...0xFAFF).contains(v) || (0x2F800...0x2FA1F).contains(v) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func isValidEnglishWord(_ s: String) -> Bool {
+        if s.isEmpty { return false }
+        if s.hasPrefix("#") { return false }
+        if containsCJK(s) { return false }
+        let lower = s.lowercased()
+        var hasLetter = false
+        for scalar in lower.unicodeScalars {
+            let v = scalar.value
+            if v >= 97 && v <= 122 { hasLetter = true; continue }
+            if v == 39 || v == 45 || v == 32 { continue }
+            return false
+        }
+        return hasLetter
+    }
+
+    private func sanitizeWord(_ s: String) -> String? {
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        let lowered = trimmed.lowercased()
+        if !isValidEnglishWord(lowered) { return nil }
+        return lowered
     }
     
     // MARK: - Test History Management

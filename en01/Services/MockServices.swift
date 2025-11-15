@@ -1215,6 +1215,32 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
         currentTest = test
         activeTests[test.id] = test
         testHistory.append(test)
+
+        // 为测试准备一组模拟未测试词
+        let mockWords: [DictionaryWord] = [
+            DictionaryWord(
+                word: "mockword1",
+                phonetic: nil,
+                definitions: [WordDefinition(partOfSpeech: .noun, meaning: "示例词1")],
+                frequency: 1,
+                difficulty: .basic
+            ),
+            DictionaryWord(
+                word: "mockword2",
+                phonetic: nil,
+                definitions: [WordDefinition(partOfSpeech: .verb, meaning: "示例词2")],
+                frequency: 1,
+                difficulty: .medium
+            ),
+            DictionaryWord(
+                word: "mockword3",
+                phonetic: nil,
+                definitions: [WordDefinition(partOfSpeech: .adjective, meaning: "示例词3")],
+                frequency: 1,
+                difficulty: .advanced
+            )
+        ]
+        testWords[test.id] = mockWords
         
         return Just(test)
             .setFailureType(to: Error.self)
@@ -1417,6 +1443,13 @@ class MockVocabularyTestService: VocabularyTestServiceProtocol {
             test.dictionaryFileName == dictionaryFileName && !test.isCompleted
         }
         return Just(currentTest)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+
+    func getTestWords(testId: UUID) -> AnyPublisher<[DictionaryWord], Error> {
+        let words = testWords[testId] ?? []
+        return Just(words)
             .setFailureType(to: Error.self)
             .eraseToAnyPublisher()
     }

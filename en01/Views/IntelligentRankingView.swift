@@ -27,6 +27,7 @@ struct IntelligentRankingView: View {
     @State private var isBatchSelectionMode: Bool = false
     @State private var selectedArticleIds: Set<UUID> = []
     @State private var showBatchLearningConfirmation: Bool = false
+    @State private var selectedExamCategory: IntelligentRankingViewModel.ExamCategory?
     
     // 导出相关状态
     @State private var showPDFExportDialog: Bool = false
@@ -81,13 +82,13 @@ struct IntelligentRankingView: View {
                 )
             }
             .alert("批量学习确认", isPresented: $showBatchLearningConfirmation) {
-                Button("确认学习") {
+                Button("确认添加为已掌握") {
                     Task {
                         await performBatchLearning()
                     }
                 }
             } message: {
-                Text("确定要将选中的 \(selectedArticleIds.count) 篇文章标记为已学习吗？")
+                Text("将选中的 \(selectedArticleIds.count) 篇文章/试卷的所有词添加为“已掌握”到“我的学习记录”。")
             }
             .fileExporter(
                 isPresented: $showPDFExportDialog,
@@ -390,12 +391,26 @@ struct IntelligentRankingView: View {
             }
             
             if !viewModel.rankedArticles.isEmpty {
-                let difficultyStats = viewModel.getRankingStatistics().difficultyDistribution
-                
+                let counts = viewModel.getExamCategoryCounts()
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
-                    ForEach(Array(difficultyStats.keys.sorted(by: { $0.rawValue < $1.rawValue })), id: \.self) { difficulty in
-                        DifficultyTag(difficulty: difficulty, count: difficultyStats[difficulty] ?? 0)
-                    }
+                    ExamCategoryTag(
+                        title: IntelligentRankingViewModel.ExamCategory.general.rawValue,
+                        count: counts[.general] ?? 0,
+                        isSelected: selectedExamCategory == .general,
+                        onToggle: { toggleExamCategory(.general) }
+                    )
+                    ExamCategoryTag(
+                        title: IntelligentRankingViewModel.ExamCategory.englishOne.rawValue,
+                        count: counts[.englishOne] ?? 0,
+                        isSelected: selectedExamCategory == .englishOne,
+                        onToggle: { toggleExamCategory(.englishOne) }
+                    )
+                    ExamCategoryTag(
+                        title: IntelligentRankingViewModel.ExamCategory.englishTwo.rawValue,
+                        count: counts[.englishTwo] ?? 0,
+                        isSelected: selectedExamCategory == .englishTwo,
+                        onToggle: { toggleExamCategory(.englishTwo) }
+                    )
                 }
             }
         }
@@ -721,6 +736,7 @@ struct IntelligentRankingView: View {
                 keywordOption: selectedKeywordSortOption,
                 basicOption: selectedBasicSortOption
             )
+            viewModel.applyExamCategoryFilter(selectedExamCategory)
         }
     }
     
@@ -742,19 +758,29 @@ struct IntelligentRankingView: View {
     private func performBatchLearning() async {
         let selectedArticles = viewModel.rankedArticles.filter { selectedArticleIds.contains($0.article.id) }
         
-        for result in selectedArticles {
-            result.article.markAsLearned()
-        }
+        await viewModel.markArticlesAsLearned(selectedArticles)
         
         await MainActor.run {
             selectedArticleIds.removeAll()
             isBatchSelectionMode = false
         }
         
-        print("✅ 批量学习完成: \(selectedArticles.count) 篇文章")
-        
-        // 重新加载文章列表
         await viewModel.loadRankedArticles()
+        
+        if let dict = viewModel.selectedDictionary {
+            await ServiceContainer.shared.getDataSyncService().syncDictionaryRecords(dict.fileName)
+            await ServiceContainer.shared.getDataSyncService().deduplicateDictionaryRecords(dict.fileName)
+        }
+        await ServiceContainer.shared.getDataSyncService().performFullSync()
+    }
+
+    private func toggleExamCategory(_ category: IntelligentRankingViewModel.ExamCategory) {
+        if selectedExamCategory == category {
+            selectedExamCategory = nil
+        } else {
+            selectedExamCategory = category
+        }
+        viewModel.applyExamCategoryFilter(selectedExamCategory)
     }
     
     private func exportTopArticles(format: ExportFormat) async {
@@ -997,6 +1023,34 @@ struct DictionaryTestStateRow: View {
         .onTapGesture {
             onToggle()
         }
+    }
+}
+
+struct ExamCategoryTag: View {
+    let title: String
+    let count: Int
+    let isSelected: Bool
+    let onToggle: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: onToggle) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .blue : .gray)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text("\(count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture { onToggle() }
     }
 }
 

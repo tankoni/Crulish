@@ -63,6 +63,27 @@ class DataSyncService: ObservableObject {
     func performFullSync() async {
         await performSync {
             try await self.performFullDataSync()
+            let syncedUserWords = try await self.syncUserWordsToGeneralTestedRecords()
+            print("✅ [DataSyncService] 用户学习记录同步到总测试记录: 更新 \(syncedUserWords) 条")
+        }
+    }
+
+    /// 将用户学习记录同步到通用测试记录（轻量入口）
+    func syncUserWordsToGeneral() async {
+        await performSync {
+            let _ = try await self.syncUserWordsToGeneralTestedRecords()
+        }
+    }
+
+    func propagateMasteryAcrossAllDictionaries(word: String, newMastery: MasteryLevel) async {
+        await performSync {
+            try await self.updateMasteryForAllDictionaries(word: word, newMastery: newMastery)
+        }
+    }
+
+    func forceSetMasteryForWordsAcrossAllDictionaries(words: [String], newMastery: MasteryLevel) async {
+        await performSync {
+            try await self.forceUpdateMasteryForWordsAcrossAllDictionaries(words: words, newMastery: newMastery)
         }
     }
     
@@ -202,10 +223,132 @@ class DataSyncService: ObservableObject {
         return changes
     }
 
+    /// 将用户学习记录(UserWord)同步为通用(General)测试记录，供未测试过滤使用
+    private func syncUserWordsToGeneralTestedRecords() async throws -> Int {
+        let context = modelContext
+        let userWords = try context.fetch(FetchDescriptor<UserWord>())
+        guard !userWords.isEmpty else { return 0 }
+        let generalTest = try await getOrCreateGeneralTest()
+        var updated = 0
+        for uw in userWords {
+            let word = uw.word.lowercased()
+            let existingRecords = try await getGeneralRecords(for: word)
+            if let existing = existingRecords.first {
+                let current = MasteryLevel(rawValue: existing.masteryLevel) ?? .unfamiliar
+                if uw.masteryLevel > current {
+                    existing.masteryLevel = uw.masteryLevel.rawValue
+                    existing.lastTestedDate = Date()
+                    existing.testCount = max(existing.testCount, 1)
+                    updated += 1
+                }
+            } else {
+                let newRecord = TestedWord(
+                    word: word,
+                    dictionaryName: "General",
+                    dictionaryFileName: "general",
+                    masteryLevel: uw.masteryLevel,
+                    testSessionId: generalTest.id
+                )
+                newRecord.testCount = 1
+                newRecord.correctCount = uw.masteryLevel == .mastered ? 1 : 0
+                newRecord.lastTestedDate = Date()
+                context.insert(newRecord)
+                updated += 1
+            }
+        }
+        try context.save()
+        invalidateRelatedCaches(for: "用户学习记录同步到总测试")
+        return updated
+    }
+
     private func getAllDictionaryNamesFromTestedWords() throws -> [String] {
         let descriptor = FetchDescriptor<TestedWord>()
         let records = try modelContext.fetch(descriptor)
         return Array(Set(records.map { $0.dictionaryFileName }))
+    }
+
+    private func getSingleTestedWord(word: String, dictionaryFileName: String) throws -> TestedWord? {
+        let lowercasedWord = word.lowercased()
+        let descriptor = FetchDescriptor<TestedWord>(
+            predicate: #Predicate<TestedWord> { r in
+                r.word == lowercasedWord && r.dictionaryFileName == dictionaryFileName
+            }
+        )
+        return try modelContext.fetch(descriptor).first
+    }
+
+    private func updateMasteryForAllDictionaries(word: String, newMastery: MasteryLevel) async throws {
+        var names: [String] = []
+        let fromTests = try await getAllDictionaryNames()
+        let fromRecords = try getAllDictionaryNamesFromTestedWords()
+        names = Array(Set(fromTests + fromRecords + ["general"]))
+        var updatedCount = 0
+        for name in names {
+            do {
+                if let existing = try getSingleTestedWord(word: word, dictionaryFileName: name) {
+                    let current = MasteryLevel(rawValue: existing.masteryLevel) ?? .unfamiliar
+                    if newMastery > current {
+                        existing.masteryLevel = newMastery.rawValue
+                        existing.lastTestedDate = Date()
+                        existing.testCount = max(existing.testCount, 1)
+                        updatedCount += 1
+                    }
+                } else {
+                    let record = TestedWord(
+                        word: word.lowercased(),
+                        dictionaryName: name == "general" ? "General" : name,
+                        dictionaryFileName: name,
+                        masteryLevel: newMastery
+                    )
+                    record.testCount = 1
+                    record.lastTestedDate = Date()
+                    modelContext.insert(record)
+                    updatedCount += 1
+                }
+            } catch {
+                continue
+            }
+        }
+        try modelContext.save()
+        invalidateRelatedCaches(for: "跨词典掌握同步")
+        print("✅ [DataSyncService] 跨词典掌握同步: \(word) -> \(newMastery.rawValue), 更新 \(updatedCount) 条")
+    }
+
+    private func forceUpdateMasteryForWordsAcrossAllDictionaries(words: [String], newMastery: MasteryLevel) async throws {
+        var names: [String] = []
+        let fromTests = try await getAllDictionaryNames()
+        let fromRecords = try getAllDictionaryNamesFromTestedWords()
+        names = Array(Set(fromTests + fromRecords + ["general"]))
+        var updatedCount = 0
+        let lowercasedWords = words.map { $0.lowercased() }
+        for word in lowercasedWords {
+            for name in names {
+                do {
+                    if let existing = try getSingleTestedWord(word: word, dictionaryFileName: name) {
+                        existing.masteryLevel = newMastery.rawValue
+                        existing.lastTestedDate = Date()
+                        existing.testCount = max(existing.testCount, 1)
+                        updatedCount += 1
+                    } else {
+                        let record = TestedWord(
+                            word: word,
+                            dictionaryName: name == "general" ? "General" : name,
+                            dictionaryFileName: name,
+                            masteryLevel: newMastery
+                        )
+                        record.testCount = 1
+                        record.lastTestedDate = Date()
+                        modelContext.insert(record)
+                        updatedCount += 1
+                    }
+                } catch {
+                    continue
+                }
+            }
+        }
+        try modelContext.save()
+        invalidateRelatedCaches(for: "跨词典批量掌握同步")
+        print("✅ [DataSyncService] 跨词典批量掌握同步: 目标 \(newMastery.rawValue), 处理 \(lowercasedWords.count) 个单词，更新 \(updatedCount) 条")
     }
     
     // MARK: - Intelligent Merge Logic

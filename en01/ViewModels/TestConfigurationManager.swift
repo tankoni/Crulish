@@ -31,7 +31,7 @@ class TestConfigurationManager: ObservableObject {
     @Published var testMode: TestMode = .adaptive
     
     /// 测试大小
-    @Published var testSize: TestSize = .medium
+    @Published var testSize: TestSize = .all
     
     /// 是否包含已测试单词
     @Published var includeTestedWords: Bool = false
@@ -291,7 +291,7 @@ class TestConfigurationManager: ObservableObject {
     /// 重置配置为默认值
     func resetToDefaults() {
         testMode = .adaptive
-        testSize = .medium
+        testSize = .all
         includeTestedWords = false
         randomOrder = true
         enableTimeLimit = false

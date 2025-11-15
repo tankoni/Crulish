@@ -61,7 +61,15 @@ struct VocabularyTestView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                if viewModel.isTestActive {
+                if isRetestMode && !viewModel.isTestActive {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                        Text("正在准备重测...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.isTestActive {
                     testActiveView
                 } else {
                     testPreparationView
@@ -70,15 +78,15 @@ struct VocabularyTestView: View {
             .navigationTitle(isRetestMode ? "重测模式" : "词汇量测试")
             .navigationBarTitleDisplayMode(.large)
         }
-        .alert("错误", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button("确定") {
-                viewModel.clearError()
+            .alert("错误", isPresented: Binding(get: { viewModel.errorMessage != nil }, set: { newValue in if !newValue { viewModel.clearError() } })) {
+                Button("确定") {
+                    viewModel.clearError()
+                }
+            } message: {
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                }
             }
-        } message: {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-            }
-        }
         .alert("继续测试", isPresented: Binding(
             get: { viewModel.testStateManager.showTestContinuationAlert },
             set: { viewModel.testStateManager.showTestContinuationAlert = $0 }
@@ -148,9 +156,10 @@ struct VocabularyTestView: View {
             }
         }
         .onDisappear {
-            // 取消所有异步任务
-            Task { @MainActor in
-                viewModel.cancelAllTasks()
+            if viewModel.isTestActive {
+                Task { @MainActor in
+                    viewModel.cancelAllTasks()
+                }
             }
         }
     }

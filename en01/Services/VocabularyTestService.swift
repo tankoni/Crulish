@@ -60,6 +60,7 @@ protocol VocabularyTestServiceProtocol {
     
     // 当前测试管理
     func getCurrentTestForDictionary(_ dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error>
+    func getTestWords(testId: UUID) -> AnyPublisher<[DictionaryWord], Error>
     
     // 测试统计
     func getTestStatistics() -> AnyPublisher<TestStatistics, Error>
@@ -196,6 +197,23 @@ struct WordStatistics {
     }
     
     func loadDictionaryWords(from dictionary: DictionaryInfo) -> AnyPublisher<[DictionaryWord], Error> {
+        if dictionary.isVirtual {
+            return Future { [weak self] promise in
+                guard let self = self else {
+                    promise(.failure(VocabularyTestError.serviceUnavailable))
+                    return
+                }
+                Task {
+                    do {
+                        let words = try await self.wordMasteryService.loadDictionaryWordsSync(from: dictionary)
+                        promise(.success(words))
+                    } catch {
+                        promise(.failure(error))
+                    }
+                }
+            }
+            .eraseToAnyPublisher()
+        }
         return dictionaryService.loadDictionary(fileName: dictionary.fileName)
     }
     
@@ -232,6 +250,14 @@ struct WordStatistics {
                     dictionaryFileName: test.dictionaryFileName,
                     testSessionId: testId,
                     wordsCount: test.totalWords
+                )
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("VocabularyTestCompleted"),
+                    object: nil,
+                    userInfo: [
+                        "testId": testId.uuidString,
+                        "dictionaryFileName": test.dictionaryFileName
+                    ]
                 )
             })
             .eraseToAnyPublisher()
@@ -325,6 +351,18 @@ struct WordStatistics {
     /// 获取词典的当前有效测试记录
     func getCurrentTestForDictionary(_ dictionaryFileName: String) -> AnyPublisher<VocabularyTest?, Error> {
         return testSessionService.getCurrentTestForDictionary(dictionaryFileName)
+    }
+    
+    func getTestWords(testId: UUID) -> AnyPublisher<[DictionaryWord], Error> {
+        return Future { [weak self] promise in
+            guard let self = self else {
+                promise(.failure(VocabularyTestError.serviceUnavailable))
+                return
+            }
+            let words = self.testSessionService.getTestWords(testId: testId)
+            promise(.success(words))
+        }
+        .eraseToAnyPublisher()
     }
     
     // MARK: - Tested Words Management

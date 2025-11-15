@@ -297,6 +297,7 @@ class VocabularyTestViewModel: ObservableObject {
     
     /// 当前测试任务
     private var currentTestTask: Task<Void, Never>?
+    private var hasAutoStartedRetest: Bool = false
     
     // MARK: - Computed Properties
     
@@ -417,6 +418,21 @@ class VocabularyTestViewModel: ObservableObject {
                 self.isLoading = false
                 self.logger.info("🔄 [VocabularyTestViewModel] 初始数据加载完成: 词典 \(self.availableDictionaries.count) 个, 历史 \(self.testHistory.count) 条")
             }
+            if self.isRetestMode && !self.isTestActive && !self.hasAutoStartedRetest {
+                var targetDictionary: DictionaryInfo?
+                if let selected = self.retestConfig?.selectedDictionaries {
+                    targetDictionary = self.availableDictionaries.first { selected.contains($0.id.uuidString) }
+                }
+                if targetDictionary == nil {
+                    targetDictionary = self.availableDictionaries.first { $0.isVirtual && $0.name == "my_learning_records" } ?? self.availableDictionaries.first
+                }
+                if let dict = targetDictionary {
+                    await self.configurationManager.selectDictionary(dict)
+                    self.configurationManager.setTestSize(.all)
+                    self.hasAutoStartedRetest = true
+                    self.startTest()
+                }
+            }
         }
     }
     
@@ -498,8 +514,36 @@ class VocabularyTestViewModel: ObservableObject {
             let test = try await createVocabularyTest()
             test.isNewSession = true  // 标记为新会话
             
-            // 加载测试单词
-            let testWords = try await loadTestWords()
+            // 加载测试单词（使用 TestSessionService 生成的未测试词集合）
+            let testWords: [TestWord]
+            if isRetestMode, let retestConfig = retestConfig, let dictionary = configurationManager.selectedDictionary {
+                testWords = try await loadRetestWords(dictionary: dictionary, masteryLevels: retestConfig.masteryLevels)
+            } else {
+                testWords = try await withCheckedThrowingContinuation { continuation in
+                    vocabularyTestService.getTestWords(testId: test.id)
+                        .sink(
+                            receiveCompletion: { completion in
+                                if case .failure(let error) = completion {
+                                    continuation.resume(throwing: error)
+                                }
+                            },
+                            receiveValue: { words in
+                                let mapped = words.map { word in
+                                    TestWord(
+                                        word: word.word,
+                                        pronunciation: word.phonetic,
+                                        definitions: word.definitions.map { $0.meaning },
+                                        examples: word.definitions.flatMap { $0.examples },
+                                        difficulty: word.difficulty,
+                                        frequency: word.frequency
+                                    )
+                                }
+                                continuation.resume(returning: mapped)
+                            }
+                        )
+                        .store(in: &cancellables)
+                }
+            }
             
             // 根据历史记录更新单词掌握状态（会话隔离：新测试跳过历史加载）
             await updateWordMasteryFromHistoryForNewTest(testWords: testWords, skipHistoryLoading: true)
@@ -619,47 +663,13 @@ class VocabularyTestViewModel: ObservableObject {
         }
     }
     
-    /// 加载测试单词
-    private func loadTestWords() async throws -> [TestWord] {
-        guard let dictionary = configurationManager.selectedDictionary else {
-            throw TestError.noDictionarySelected
-        }
-        
-        // 重测模式：只加载指定掌握度的单词
-        if isRetestMode, let retestConfig = retestConfig {
-            return try await loadRetestWords(dictionary: dictionary, masteryLevels: retestConfig.masteryLevels)
-        }
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            vocabularyTestService.loadDictionaryWords(from: dictionary)
-                .sink(
-                    receiveCompletion: { completion in
-                        if case .failure(let error) = completion {
-                            continuation.resume(throwing: error)
-                        }
-                    },
-                    receiveValue: { words in
-                        let testWords = words.map { word in
-                            TestWord(
-                                word: word.word,
-                                pronunciation: word.phonetic,
-                                definitions: word.definitions.map { $0.meaning },
-                                examples: word.definitions.flatMap { $0.examples },
-                                difficulty: word.difficulty,
-                                frequency: word.frequency
-                            )
-                        }
-                        continuation.resume(returning: testWords)
-                    }
-                )
-                .store(in: &cancellables)
-        }
-    }
+    // 移除旧的加载测试单词方法，改为从当前测试会话获取单词
     
     /// 加载重测单词
     private func loadRetestWords(dictionary: DictionaryInfo, masteryLevels: Set<MasteryLevel>) async throws -> [TestWord] {
+        let sampleSize = configurationManager.testSize.wordCount
         return try await withCheckedThrowingContinuation { continuation in
-            vocabularyTestService.loadWordsForRetest(dictionary: dictionary, masteryLevels: Array(masteryLevels), sampleSize: 100)
+            vocabularyTestService.loadWordsForRetest(dictionary: dictionary, masteryLevels: Array(masteryLevels), sampleSize: sampleSize)
                 .sink(
                     receiveCompletion: { completion in
                         if case .failure(let error) = completion {
@@ -971,8 +981,31 @@ class VocabularyTestViewModel: ObservableObject {
                 // 使用当前有效的测试记录，如果没有则使用传入的测试记录
                 let testToUse = currentTest ?? test
                 
-                // 重新加载测试单词
-                let testWords = try await loadTestWords()
+                // 重新加载测试单词（来自当前测试会话的未测试集合）
+                let testWords: [TestWord] = try await withCheckedThrowingContinuation { continuation in
+                    vocabularyTestService.getTestWords(testId: testToUse.id)
+                        .sink(
+                            receiveCompletion: { completion in
+                                if case .failure(let error) = completion {
+                                    continuation.resume(throwing: error)
+                                }
+                            },
+                            receiveValue: { words in
+                                let mapped = words.map { word in
+                                    TestWord(
+                                        word: word.word,
+                                        pronunciation: word.phonetic,
+                                        definitions: word.definitions.map { $0.meaning },
+                                        examples: word.definitions.flatMap { $0.examples },
+                                        difficulty: word.difficulty,
+                                        frequency: word.frequency
+                                    )
+                                }
+                                continuation.resume(returning: mapped)
+                            }
+                        )
+                        .store(in: &cancellables)
+                }
                 
                 // 重新加载测试状态
                 testStateManager.loadTestState(from: testToUse)

@@ -221,16 +221,15 @@ class TextProcessor: TextProcessorProtocol, ObservableObject {
     
     /// 执行实际的词干提取
     private func performStemming(_ word: String) -> String {
-        // 使用NLTagger进行词干提取
-        tagger.string = word
-        let _ = word.startIndex..<word.endIndex
-        
-        if let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue {
+        if word.isEmpty { return word }
+        let cleaned = String(word.unicodeScalars.filter { CharacterSet.letters.contains($0) })
+        if cleaned.isEmpty { return word }
+        let localTagger = NLTagger(tagSchemes: [.lemma])
+        localTagger.string = cleaned
+        if let lemma = localTagger.tag(at: cleaned.startIndex, unit: .word, scheme: .lemma).0?.rawValue, !lemma.isEmpty {
             return lemma.lowercased()
         }
-        
-        // 如果NLTagger失败，使用简单的词干提取
-        return simpleStem(word)
+        return simpleStem(cleaned)
     }
     
     /// 检查内存压力并清理缓存

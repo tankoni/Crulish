@@ -62,6 +62,9 @@ class SyncTriggerManager: ObservableObject {
         if config.enableMasterySync {
             dataSyncService.debouncedSync(for: dictionaryFileName)
         }
+        Task {
+            await dataSyncService.propagateMasteryAcrossAllDictionaries(word: word, newMastery: newMastery)
+        }
         
         print("🔄 [SyncTrigger] 掌握度更新同步触发: \(word) -> \(newMastery.rawValue)")
     }

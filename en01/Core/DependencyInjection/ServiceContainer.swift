@@ -51,6 +51,7 @@ class ServiceContainer {
     private var syncTriggerManager: SyncTriggerManager?
     private var cacheSyncManager: CacheSyncManager?
     private var wordMasteryService: WordMasteryService?
+    private var lastQuickRetestConfig: RetestConfig?
     
     // MARK: - 模型上下文
     private var modelContext: ModelContext?
@@ -626,6 +627,14 @@ class ServiceContainer {
             fatalError("WordMasteryService not initialized. Call configure(with:) first.")
         }
         return service
+    }
+
+    // MARK: - 快速重测配置缓存
+    func setLastQuickRetestConfig(_ config: RetestConfig?) {
+        lastQuickRetestConfig = config
+    }
+    func getLastQuickRetestConfig() -> RetestConfig? {
+        return lastQuickRetestConfig
     }
     
     /// 手动触发数据同步

@@ -1136,7 +1136,7 @@ class IntelligentRankingService: ObservableObject {
         case .matchScore:
             return results.sorted { $0.matchScore > $1.matchScore }
         case .difficulty:
-            return results.sorted { $0.difficulty.rawValue < $1.difficulty.rawValue }
+            return results.sorted { $0.difficulty.sortOrder < $1.difficulty.sortOrder }
         case .recommendation:
             return results.sorted { $0.recommendation.priority > $1.recommendation.priority }
         case .unknownWords:

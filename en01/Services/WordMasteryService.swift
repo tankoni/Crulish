@@ -55,6 +55,11 @@ class WordMasteryService: BaseService {
             
             Task { @MainActor in
                 do {
+                    let sanitized = self.sanitizeWord(word)
+                    guard let validWord = sanitized else {
+                        promise(.success(()))
+                        return
+                    }
                     let context = self.modelContext
                     
                     // 查找或创建测试记录
@@ -70,7 +75,7 @@ class WordMasteryService: BaseService {
                     let dictionaryFileName = test.dictionaryFileName
                     let wordDescriptor = FetchDescriptor<TestedWord>(
                         predicate: #Predicate<TestedWord> { testedWord in
-                            testedWord.word == word
+                            testedWord.word == validWord
                         }
                     )
                     
@@ -85,7 +90,7 @@ class WordMasteryService: BaseService {
                     } else {
                         // 创建新记录
                         let testedWord = TestedWord(
-                            word: word,
+                            word: validWord,
                             dictionaryName: test.dictionaryName,
                             dictionaryFileName: test.dictionaryFileName,
                             masteryLevel: masteryLevel,
@@ -103,16 +108,16 @@ class WordMasteryService: BaseService {
                     // 触发数据同步
                     if !existingWords.isEmpty {
                         self.syncTriggerManager?.triggerAfterMasteryUpdate(
-                            word: word,
+                            word: validWord,
                             dictionaryFileName: test.dictionaryFileName,
                             newMastery: masteryLevel
                         )
                     } else {
                         // 新记录，触发测试记录同步
-                        let testedWord = allMatchingWords.first { $0.word == word && $0.dictionaryFileName == test.dictionaryFileName }
+                        let testedWord = allMatchingWords.first { $0.word == validWord && $0.dictionaryFileName == test.dictionaryFileName }
                         if let newRecord = testedWord {
                             self.syncTriggerManager?.triggerAfterTestRecord(
-                                word: word,
+                                word: validWord,
                                 dictionaryFileName: test.dictionaryFileName,
                                 testRecord: newRecord
                             )
@@ -214,6 +219,39 @@ class WordMasteryService: BaseService {
             errorHandler.handle(error, context: "获取测试统计")
             return TestStatistics(totalTests: 0, averageScore: 0.0, bestScore: 0, improvementRate: 0.0)
         }
+    }
+
+    private func containsCJK(_ s: String) -> Bool {
+        for scalar in s.unicodeScalars {
+            let v = scalar.value
+            if (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) || (0x20000...0x2A6DF).contains(v) || (0x2A700...0x2B73F).contains(v) || (0x2B740...0x2B81F).contains(v) || (0x2B820...0x2CEAF).contains(v) || (0xF900...0xFAFF).contains(v) || (0x2F800...0x2FA1F).contains(v) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func isValidEnglishWord(_ s: String) -> Bool {
+        if s.isEmpty { return false }
+        if s.hasPrefix("#") { return false }
+        if containsCJK(s) { return false }
+        let lower = s.lowercased()
+        var hasLetter = false
+        for scalar in lower.unicodeScalars {
+            let v = scalar.value
+            if v >= 97 && v <= 122 { hasLetter = true; continue }
+            if v == 39 || v == 45 || v == 32 { continue }
+            return false
+        }
+        return hasLetter
+    }
+
+    private func sanitizeWord(_ s: String) -> String? {
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        let lowered = trimmed.lowercased()
+        if !isValidEnglishWord(lowered) { return nil }
+        return lowered
     }
     
     /// 计算改进率

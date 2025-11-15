@@ -346,6 +346,39 @@ class IntelligentRankingViewModel: ObservableObject {
             return getSoloStatistics()
         }
     }
+
+    enum ExamCategory: String, CaseIterable {
+        case general = "通用"
+        case englishOne = "英语一"
+        case englishTwo = "英语二"
+    }
+
+    func getExamCategoryCounts() -> [ExamCategory: Int] {
+        var counts: [ExamCategory: Int] = [:]
+        for result in allRankedResults {
+            let cat = getExamCategory(for: result.article)
+            counts[cat, default: 0] += 1
+        }
+        return counts
+    }
+
+    func applyExamCategoryFilter(_ category: ExamCategory?) {
+        let base = rankedArticles
+        let filtered: [ArticleMatchResult]
+        if let category = category {
+            filtered = base.filter { getExamCategory(for: $0.article) == category }
+        } else {
+            filtered = base
+        }
+        rankedArticles = filtered
+    }
+
+    private func getExamCategory(for article: Article) -> ExamCategory {
+        let t = article.examType
+        if t.contains("英语一") || t.contains("考研一") { return .englishOne }
+        if t.contains("英语二") || t.contains("考研二") { return .englishTwo }
+        return .general
+    }
     
     /// 切换排序反向状态
     @MainActor
@@ -448,11 +481,10 @@ class IntelligentRankingViewModel: ObservableObject {
                 return first.matchScore > second.matchScore
             }
         case .difficulty:
-            // 难度：掌握词比例高的文章优先（容易理解的优先，保证更佳流畅的阅读体验）
             return articles.sorted { first, second in
-                let firstMasteredRatio = first.totalWords > 0 ? Double(first.masteredWords) / Double(first.totalWords) : 0
-                let secondMasteredRatio = second.totalWords > 0 ? Double(second.masteredWords) / Double(second.totalWords) : 0
-                return firstMasteredRatio > secondMasteredRatio // 掌握词比例高的（容易理解的）排在前面
+                let firstRatio = first.unknownWords > 0 ? Double(first.masteredWords) / Double(first.unknownWords) : Double.infinity
+                let secondRatio = second.unknownWords > 0 ? Double(second.masteredWords) / Double(second.unknownWords) : Double.infinity
+                return firstRatio > secondRatio
             }
         case .recommendation:
             // 推荐度：综合考虑匹配度、难度、生词数量占比、文章长度等所有因素
@@ -482,14 +514,13 @@ class IntelligentRankingViewModel: ObservableObject {
     
     /// 计算推荐度分数（词典模式专用）
     private func calculateRecommendationScore(_ result: ArticleMatchResult) -> Double {
-        // 权重配置
-        let matchWeight = 0.3      // 匹配度权重
-        let difficultyWeight = 0.25 // 难度权重
-        let unknownWordsWeight = 0.25 // 生词数量权重
-        let lengthWeight = 0.2     // 文章长度权重
+        let matchWeight = 0.4
+        let difficultyWeight = 0.3
+        let unknownWordsWeight = 0.2
+        let lengthWeight = 0.1
         
         // 匹配度分数（0-1）
-        let matchScore = result.totalWords > 0 ? Double(result.totalWords) / 100.0 : 0 // 假设100为满分
+        let matchScore = result.totalWords > 0 ? Double(result.totalWords) / 100.0 : 0
         let normalizedMatchScore = min(matchScore, 1.0)
         
         // 难度分数（掌握词比例，0-1）- 只考虑masteredWords，与排序逻辑保持一致
@@ -567,13 +598,6 @@ class IntelligentRankingViewModel: ObservableObject {
     func markArticlesAsLearned(_ articles: [ArticleMatchResult]) async {
         print("📚 开始批量学习 \(articles.count) 篇文章")
         
-        // 获取当前选中的词典名称
-        guard let selectedDictionary = selectedDictionary else {
-            print("❌ 批量学习失败：未选择词典")
-            return
-        }
-        
-        // 获取学习跟踪服务：用于仅在掌握程度提升时写回用户词汇
         let learningTrackingService = ServiceContainer.shared.getLearningTrackingService()
         
         var totalWordsProcessed = 0
@@ -598,7 +622,7 @@ class IntelligentRankingViewModel: ObservableObject {
                     }
                     
                     // 优先更新词典测试结果中的词汇
-                    if !dictionaryWords.isEmpty {
+                    if let selectedDictionary = selectedDictionary, !dictionaryWords.isEmpty {
                         do {
                             // 批量更新词典测试结果：仅更新生词为掌握状态
                             _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -654,6 +678,34 @@ class IntelligentRankingViewModel: ObservableObject {
                             source: "reading"
                         )
                         generalWordsUpdated += 1
+                    }
+
+                    // 追加写入通用测试记录(General)，确保跨词典去重生效
+                    do {
+                        let wmService = ServiceContainer.shared.getWordMasteryService()
+                        for word in articleWords {
+                            _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                                var cancellable: AnyCancellable?
+                                cancellable = wmService.updateWordMastery(
+                                    word: word,
+                                    dictionaryFileName: "general",
+                                    mastery: .mastered
+                                )
+                                .sink(
+                                    receiveCompletion: { completion in
+                                        if case .failure(let error) = completion {
+                                            continuation.resume(throwing: error)
+                                        } else {
+                                            continuation.resume(returning: ())
+                                        }
+                                        cancellable?.cancel()
+                                    },
+                                    receiveValue: { _ in }
+                                )
+                            }
+                        }
+                    } catch {
+                        print("⚠️ 同步到通用测试记录失败: \(error.localizedDescription)")
                     }
 
                     totalWordsProcessed += articleWords.count

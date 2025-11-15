@@ -416,6 +416,26 @@ class VocabularyViewModel: ObservableObject {
             errorHandler.logSuccess("更新单词掌握度: \(word.word) -> \(mastery.rawValue)")
         }
     }
+
+    func batchUpdateMasteryLevel(from source: MasteryLevel, to target: MasteryLevel) {
+        Task {
+            let words = dictionaryService.getWordsByMastery(source)
+            guard !words.isEmpty else { return }
+            for w in words {
+                dictionaryService.updateMasteryLevel(w, level: target)
+            }
+            await MainActor.run {
+                self.vocabularyCache = nil
+                self.statsCache = nil
+                self.filterVocabulary()
+                self.loadStatistics()
+                self.onWordMasteryUpdated?()
+            }
+            let list = words.map { $0.word }
+            await ServiceContainer.shared.getDataSyncService().forceSetMasteryForWordsAcrossAllDictionaries(words: list, newMastery: target)
+            errorHandler.logSuccess("批量更新单词掌握度: \(source.rawValue) -> \(target.rawValue), 数量 \(words.count)")
+        }
+    }
     
     // 修正：确保标记为需要复习而不是切换
     func markWordForReview(_ word: UserWord) {
