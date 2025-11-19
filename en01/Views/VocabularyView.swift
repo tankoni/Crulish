@@ -107,6 +107,8 @@ struct VocabularyView: View {
                 // 清除快速重测配置
                 quickRetestConfig = nil
                 ServiceContainer.shared.setLastQuickRetestConfig(nil)
+                // 测试界面关闭后刷新“我的单词”与统计
+                viewModel.refreshVocabulary()
             }
         }
         .sheet(isPresented: $isShowingRetestMode) {

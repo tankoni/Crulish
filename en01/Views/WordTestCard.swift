@@ -42,6 +42,9 @@ struct WordTestCard: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                 isAnimating = true
             }
+            if testMode == VocabularyTestMode.chineseToEnglish {
+                showDefinition = true
+            }
         }
         .onChange(of: word.word) { _, _ in
             // 重置状态
@@ -53,6 +56,9 @@ struct WordTestCard: View {
             isAnimating = false
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 isAnimating = true
+            }
+            if testMode == VocabularyTestMode.chineseToEnglish {
+                showDefinition = true
             }
         }
     }
@@ -95,50 +101,51 @@ struct WordTestCard: View {
     
     private var wordDetailsSection: some View {
         VStack(spacing: 16) {
-            // 释义区域
-            if !word.definitions.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showDefinition.toggle()
-                        }
-                    }) {
-                        HStack {
-                            Text("释义")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                            
-                            Spacer()
-                            
-                            Image(systemName: showDefinition ? "chevron.up" : "chevron.down")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
+            VStack(alignment: .leading, spacing: 8) {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showDefinition.toggle()
                     }
-                    .foregroundColor(.primary)
-                    
-                    if showDefinition {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(word.definitions, id: \.self) { definition in
+                }) {
+                    HStack {
+                        Text("释义")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                        
+                        Image(systemName: showDefinition ? "chevron.up" : "chevron.down")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .foregroundColor(.primary)
+                
+                if showDefinition {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array((word.definitions.isEmpty ? ["暂无释义"] : word.definitions).enumerated()), id: \.offset) { _, definition in
                                 Text(definition)
                                     .font(.body)
                                     .foregroundColor(.secondary)
-                                    .lineLimit(nil)
                                     .multilineTextAlignment(.leading)
+                                    .lineLimit(4)
+                                    .minimumScaleFactor(0.9)
                             }
                         }
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .top)),
-                            removal: .opacity.combined(with: .move(edge: .top))
-                        ))
                     }
+                    .frame(maxHeight: 180)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .top)),
+                        removal: .opacity.combined(with: .move(edge: .top))
+                    ))
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.1))
-                )
             }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.1))
+            )
             
             // 例句区域
             if let examples = word.examples, !examples.isEmpty {
@@ -164,7 +171,7 @@ struct WordTestCard: View {
                     
                     if showExample {
                         VStack(alignment: .leading, spacing: 4) {
-                            ForEach(examples, id: \.self) { example in
+                            ForEach(Array(examples.enumerated()), id: \.offset) { _, example in
                                 Text(example)
                                     .font(.body)
                                     .foregroundColor(.secondary)

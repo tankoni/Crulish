@@ -380,10 +380,15 @@ class ServiceContainer {
     }
     
     /// 设置服务间的依赖关系
-    private func setupServiceDependencies() {
-        // 服务间依赖关系已通过构造函数注入完成
-        // 所有服务都共享相同的 ModelContext、CacheManager 和 ErrorHandler
-        // 这确保了数据一致性和统一的错误处理
+    @MainActor private func setupServiceDependencies() {
+        guard let manager = syncTriggerManager else { return }
+        if let ds = dictionaryService as? DictionaryService {
+            ds.setSyncTriggerManager(manager)
+        }
+        if let vts = vocabularyTestService as? VocabularyTestService {
+            vts.setSyncTriggerManager(manager)
+        }
+        wordMasteryService?.setSyncTriggerManager(manager)
     }
     
     // MARK: - 服务获取方法

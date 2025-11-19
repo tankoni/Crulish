@@ -13,7 +13,9 @@ class DataSyncService: ObservableObject {
     private let cacheSyncManager: CacheSyncManager
     private var syncQueue = DispatchQueue(label: "com.crulish.datasync", qos: .utility)
     private var debounceTimer: Timer?
+    private var masteryPropagationDebounceTimer: Timer?
     private let debounceInterval: TimeInterval = 0.3
+    private let masteryPropagationDebounceInterval: TimeInterval = 1.0
     
     // 同步状态跟踪
     @Published var isSyncing = false
@@ -21,6 +23,8 @@ class DataSyncService: ObservableObject {
     
     // 同步统计
     private var syncStats = SyncStatistics()
+    private var pendingMasteredWords = Set<String>()
+    private var pendingUnfamiliarWords = Set<String>()
     
     // MARK: - Initialization
     
@@ -48,6 +52,27 @@ class DataSyncService: ObservableObject {
         debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { _ in
             Task { @MainActor in
                 await self.syncDictionaryRecords(dictionaryFileName)
+            }
+        }
+    }
+
+    func enqueueMasteryPropagation(word: String, newMastery: MasteryLevel) {
+        let w = word.lowercased()
+        switch newMastery {
+        case .mastered:
+            pendingMasteredWords.insert(w)
+            pendingUnfamiliarWords.remove(w)
+        case .familiar:
+            pendingUnfamiliarWords.remove(w)
+        case .unfamiliar:
+            if !pendingMasteredWords.contains(w) {
+                pendingUnfamiliarWords.insert(w)
+            }
+        }
+        masteryPropagationDebounceTimer?.invalidate()
+        masteryPropagationDebounceTimer = Timer.scheduledTimer(withTimeInterval: masteryPropagationDebounceInterval, repeats: false) { _ in
+            Task { @MainActor in
+                await self.flushMasteryPropagation()
             }
         }
     }
@@ -107,6 +132,19 @@ class DataSyncService: ObservableObject {
             errorHandler.handle(error, context: "数据同步失败")
         }
         isSyncing = false
+    }
+
+    private func flushMasteryPropagation() async {
+        let mastered = Array(pendingMasteredWords)
+        let unfamiliar = Array(pendingUnfamiliarWords)
+        pendingMasteredWords.removeAll()
+        pendingUnfamiliarWords.removeAll()
+        if !mastered.isEmpty {
+            await self.forceSetMasteryForWordsAcrossAllDictionaries(words: mastered, newMastery: .mastered)
+        }
+        if !unfamiliar.isEmpty {
+            await self.forceSetMasteryForWordsAcrossAllDictionaries(words: unfamiliar, newMastery: .unfamiliar)
+        }
     }
     
     private func syncSingleTestRecord(_ testRecord: TestedWord, dictionaryFileName: String) async throws {

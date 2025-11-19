@@ -185,6 +185,26 @@ class TestResultManager: ObservableObject {
         self.unfamiliarCount = unfamiliarCount
         print("📊 [TestResultManager] 恢复会话统计数据: 掌握(\(masteredCount)) 熟悉(\(familiarCount)) 陌生(\(unfamiliarCount))")
     }
+
+    func getWordMastery(word: String, dictionaryFileName: String) -> MasteryLevel? {
+        guard let sanitized = sanitizeWord(word) else { return nil }
+        do {
+            let descriptor = FetchDescriptor<TestedWord>(
+                predicate: #Predicate<TestedWord> { tw in
+                    tw.word == sanitized && tw.dictionaryFileName == dictionaryFileName
+                },
+                sortBy: [SortDescriptor(\.lastTestedDate, order: .reverse)]
+            )
+            let records = try modelContext.fetch(descriptor)
+            if let first = records.first {
+                return first.masteryLevelEnum
+            }
+            return nil
+        } catch {
+            print("❌ [TestResultManager] 获取单词掌握度失败: \(error)")
+            return nil
+        }
+    }
     
     // MARK: - Initialization
     
@@ -213,13 +233,12 @@ class TestResultManager: ObservableObject {
     func addTestResult(_ result: WordTestResult) {
         guard let sanitized = sanitizeWord(result.word) else { return }
         let r = WordTestResult(word: sanitized, isKnown: result.isKnown, timestamp: result.timestamp)
+        if let last = testResults.last, last.word == r.word && last.isKnown == r.isKnown {
+            return
+        }
         testResults.append(r)
         
-        // 延迟更新统计，避免频繁计算
         scheduleStatisticsUpdate()
-        
-        // 刷新统计数据
-        refreshStatistics()
         
         print("✅ [TestResultManager] 添加测试结果: \(result.word)")
     }
@@ -228,11 +247,7 @@ class TestResultManager: ObservableObject {
     func addTestResults(_ results: [WordTestResult]) {
         testResults.append(contentsOf: results)
         
-        // 延迟更新统计
         scheduleStatisticsUpdate()
-        
-        // 刷新统计数据
-        refreshStatistics()
         
         print("✅ [TestResultManager] 批量添加测试结果: \(results.count) 个")
     }
@@ -271,10 +286,7 @@ class TestResultManager: ObservableObject {
             },
             receiveValue: { _ in
                 print("✅ [TestResultManager] 记录单词掌握度: \(sanitized) - \(mastery)")
-                // 记录成功后刷新统计数据
-                Task { @MainActor in
-                    self.refreshStatistics()
-                }
+                Task { @MainActor in }
             }
         )
         .store(in: &cancellables)

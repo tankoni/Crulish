@@ -59,12 +59,7 @@ class SyncTriggerManager: ObservableObject {
     func triggerAfterMasteryUpdate(word: String, dictionaryFileName: String, newMastery: MasteryLevel) {
         recordTrigger(.masteryUpdate)
         
-        if config.enableMasterySync {
-            dataSyncService.debouncedSync(for: dictionaryFileName)
-        }
-        Task {
-            await dataSyncService.propagateMasteryAcrossAllDictionaries(word: word, newMastery: newMastery)
-        }
+        dataSyncService.enqueueMasteryPropagation(word: word, newMastery: newMastery)
         
         print("🔄 [SyncTrigger] 掌握度更新同步触发: \(word) -> \(newMastery.rawValue)")
     }

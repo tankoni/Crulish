@@ -45,6 +45,9 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
     private var kaoyanWordsCache: [KaoyanWord] = []
     private var kaoyanCacheLastUpdated: Date?
     private let kaoyanCacheValidityDuration: TimeInterval = 300 // 5分钟缓存有效期
+    private var generalUserWordsCache: ([UserWord], Date)?
+    private let generalUserWordsCacheTTL: TimeInterval = 300
+    private var lastGeneralCacheLogAt: Date?
     
     init(
         modelContext: ModelContext,
@@ -823,6 +826,13 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
     
     /// 获取总记录（非词典专属）的用户词汇记录
     func getGeneralUserWordRecords() -> [UserWord] {
+        if let cache = generalUserWordsCache, Date().timeIntervalSince(cache.1) < generalUserWordsCacheTTL {
+            if shouldLogGeneralCacheHit() {
+                lastGeneralCacheLogAt = Date()
+                print("[DEBUG][DictionaryService] [DictionaryService] 总用户词汇记录缓存命中: \(cache.0.count)")
+            }
+            return cache.0
+        }
         return self.performSafeOperation("获取总用户词汇记录") {
             // 获取查词记录的UserWord
             let userWordDescriptor = FetchDescriptor<UserWord>(
@@ -934,8 +944,18 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
             }
             
             print("✅ [DictionaryService] 最终返回 \(allWords.count) 个总词汇记录")
+            self.generalUserWordsCache = (allWords, Date())
             return allWords
         } ?? []
+    }
+    
+    private func shouldLogGeneralCacheHit() -> Bool {
+        guard let last = lastGeneralCacheLogAt else { return true }
+        return Date().timeIntervalSince(last) > generalUserWordsCacheTTL
+    }
+    
+    func clearGeneralUserWordsCache() {
+        generalUserWordsCache = nil
     }
     
     // 获取需要复习的单词
@@ -1085,40 +1105,25 @@ class DictionaryService: BaseService, DictionaryServiceProtocol { // 移除冗�
     
     // 获取词汇统计
     func getVocabularyStats() -> VocabularyStats {
-        let userRecords = getUserWordRecords()
-        
+        let userRecords = getGeneralUserWordRecords()
         let totalWords = userRecords.count
-        
-        // 使用基于答题比例的实时计算，与VocabularyView保持一致
-        let masteredWords = userRecords.filter { $0.correctAnswers >= 3 && $0.incorrectAnswers == 0 }.count
-        
-        let familiarWords = userRecords.filter { word in
-            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
-            return ratio >= 0.6 && ratio < 1.0
-        }.count
-        
-        let unfamiliarWords = userRecords.filter { word in
-            let ratio = word.correctAnswers > 0 ? Double(word.correctAnswers) / Double(word.correctAnswers + word.incorrectAnswers) : 0
-            return ratio < 0.6
-        }.count
-        
-        // 今日查词数
+        let masteredWords = userRecords.filter { $0.masteryLevel == .mastered }.count
+        let familiarWords = userRecords.filter { $0.masteryLevel == .familiar }.count
+        let unfamiliarWords = userRecords.filter { $0.masteryLevel == .unfamiliar }.count
+
         let today = Calendar.current.startOfDay(for: Date())
         let todayLookups = userRecords.filter {
             Calendar.current.isDate($0.lastLookupDate, inSameDayAs: today)
         }.count
-        
-        // 本周查词数
+
         let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
         let weeklyLookups = userRecords.filter { $0.lastLookupDate >= weekAgo }.count
-        
-        // 平均每日查词数
+
         let studyDays = userRecords.isEmpty ? 1 : max(1, Calendar.current.dateComponents([.day], from: userRecords.last?.firstLookupDate ?? Date(), to: Date()).day!)
         let averageLookupPerDay = Double(totalWords) / Double(studyDays)
-        
-        // 最常查询的单词
+
         let mostLookedUpWords = userRecords.sorted { $0.lookupCount > $1.lookupCount }.prefix(10)
-        
+
         return VocabularyStats(
             totalWords: totalWords,
             unfamiliarWords: unfamiliarWords,

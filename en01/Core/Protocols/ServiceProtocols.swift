@@ -78,6 +78,9 @@ protocol DictionaryServiceProtocol {
     
     // 统计信息
     func getVocabularyStats() -> VocabularyStats
+
+    // 缓存管理
+    func clearGeneralUserWordsCache()
     
     // 数据初始化
     func initializeDictionary() async throws

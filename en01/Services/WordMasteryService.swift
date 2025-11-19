@@ -322,14 +322,72 @@ class WordMasteryService: BaseService {
             
             Task { @MainActor in
                 do {
-                    // 获取指定掌握程度的已测试单词
+                    if let ds = self.dictionaryService as? DictionaryService {
+                        if ds.isBaseDictionaryLoaded == false {
+                            try? await ds.initializeDictionary()
+                        }
+                    }
                     let testedWords = try await self.getTestedWordsSync(for: dictionaryFileName)
-                    let filteredWords = testedWords.filter { $0.masteryLevelEnum == mastery }
-                    
-                    // 转换为DictionaryWord格式
-                    let dictionaryWords = filteredWords.map { testedWord in
-                        DictionaryWord(
-                            word: testedWord.word,
+                    var fileWordMap: [String: DictionaryWord] = [:]
+                    if dictionaryFileName.hasSuffix(".json") {
+                        do {
+                            let fileWords: [DictionaryWord] = try await withCheckedThrowingContinuation { continuation in
+                                self.dictionaryService.loadDictionary(fileName: dictionaryFileName)
+                                    .first()
+                                    .sink(
+                                        receiveCompletion: { completion in
+                                            if case .failure(let error) = completion {
+                                                continuation.resume(throwing: error)
+                                            }
+                                        },
+                                        receiveValue: { words in
+                                            continuation.resume(returning: words)
+                                        }
+                                    )
+                                    .store(in: &self.cancellables)
+                            }
+                            for w in fileWords { fileWordMap[w.word.lowercased()] = w }
+                        } catch {
+                            // 文件未找到或解析失败时不阻断流程，继续使用其他来源
+                        }
+                    }
+                    let filtered = testedWords.filter { $0.masteryLevelEnum == mastery }
+                    var results: [DictionaryWord] = []
+                    results.reserveCapacity(filtered.count)
+                    for tw in filtered {
+                        let base = self.dictionaryService.lookupWord(tw.word, context: "重测模式")
+                        if let bw = base {
+                            results.append(bw)
+                            continue
+                        }
+                        if let ky = self.dictionaryService.getKaoyanWordDetails(tw.word) {
+                            let defs = ky.translations.map { t in
+                                WordDefinition(
+                                    partOfSpeech: PartOfSpeech.fromString(t.pos) ?? .noun,
+                                    meaning: t.tranCn,
+                                    englishMeaning: t.tranOther,
+                                    examples: ky.sentences.map { $0.sContent },
+                                    contextKeywords: []
+                                )
+                            }
+                            let word = DictionaryWord(
+                                word: ky.word,
+                                phonetic: ky.usPhone ?? ky.ukPhone,
+                                definitions: defs,
+                                frequency: 1,
+                                difficulty: .basic,
+                                tags: [],
+                                categories: nil
+                            )
+                            results.append(word)
+                            continue
+                        }
+                        if let fw = fileWordMap[tw.word.lowercased()] {
+                            results.append(fw)
+                            continue
+                        }
+                        let placeholder = DictionaryWord(
+                            word: tw.word,
                             phonetic: nil,
                             definitions: [WordDefinition(partOfSpeech: .noun, meaning: "暂无定义")],
                             frequency: 1,
@@ -337,9 +395,9 @@ class WordMasteryService: BaseService {
                             tags: [],
                             categories: nil
                         )
+                        results.append(placeholder)
                     }
-                    
-                    promise(.success(dictionaryWords))
+                    promise(.success(results))
                 } catch {
                     self.errorHandler.handle(error, context: "根据掌握程度获取单词")
                     promise(.failure(error))

@@ -239,9 +239,11 @@ class VocabularyTestViewModel: ObservableObject {
         currentTest.currentWordIndex = testStateManager.currentWordIndex
         
         // 更新会话统计数据
-        currentTest.sessionMasteredCount = resultManager.masteredCount
-        currentTest.sessionFamiliarCount = resultManager.familiarCount
-        currentTest.sessionUnfamiliarCount = resultManager.unfamiliarCount
+        if let ct = testStateManager.currentTest {
+            currentTest.sessionMasteredCount = ct.sessionMasteredCount
+            currentTest.sessionFamiliarCount = ct.sessionFamiliarCount
+            currentTest.sessionUnfamiliarCount = ct.sessionUnfamiliarCount
+        }
         
         // 通过服务层保存到数据库
         do {
@@ -298,6 +300,7 @@ class VocabularyTestViewModel: ObservableObject {
     /// 当前测试任务
     private var currentTestTask: Task<Void, Never>?
     private var hasAutoStartedRetest: Bool = false
+    private var dictionaryWordsCache: [String: [DictionaryWord]] = [:]
     
     // MARK: - Computed Properties
     
@@ -340,19 +343,41 @@ class VocabularyTestViewModel: ObservableObject {
         return String(format: "%.1f%%", progress)
     }
     
+    private var statsCache: (VocabularyStats, Date)?
+    private let statsCacheValidity: TimeInterval = 300
+    private var masteryCache: [String: (MasteryLevel, Date)] = [:]
+    private let masteryCacheValidity: TimeInterval = 300
+    private func getVocabularyStatsCached() -> VocabularyStats {
+        if let c = statsCache, Date().timeIntervalSince(c.1) < statsCacheValidity {
+            return c.0
+        }
+        let s = dictionaryService.getVocabularyStats()
+        statsCache = (s, Date())
+        return s
+    }
+    private var progressSaveTimer: Timer?
+    private var progressPendingCount: Int = 0
+    
     /// 掌握的单词数
     var masteredCount: Int {
-        return resultManager.masteredCount
+        if isTestActive, let ct = testStateManager.currentTest {
+            return ct.sessionMasteredCount
+        }
+        return getVocabularyStatsCached().masteredWords
     }
     
-    /// 熟悉的单词数
     var familiarCount: Int {
-        return resultManager.familiarCount
+        if isTestActive, let ct = testStateManager.currentTest {
+            return ct.sessionFamiliarCount
+        }
+        return getVocabularyStatsCached().familiarWords
     }
     
-    /// 不熟悉的单词数
     var unfamiliarCount: Int {
-        return resultManager.unfamiliarCount
+        if isTestActive, let ct = testStateManager.currentTest {
+            return ct.sessionUnfamiliarCount
+        }
+        return getVocabularyStatsCached().unfamiliarWords
     }
     
     // MARK: - Initialization
@@ -528,16 +553,7 @@ class VocabularyTestViewModel: ObservableObject {
                                 }
                             },
                             receiveValue: { words in
-                                let mapped = words.map { word in
-                                    TestWord(
-                                        word: word.word,
-                                        pronunciation: word.phonetic,
-                                        definitions: word.definitions.map { $0.meaning },
-                                        examples: word.definitions.flatMap { $0.examples },
-                                        difficulty: word.difficulty,
-                                        frequency: word.frequency
-                                    )
-                                }
+                                let mapped = words.map { w in self.toTestWord(w) }
                                 continuation.resume(returning: mapped)
                             }
                         )
@@ -677,16 +693,7 @@ class VocabularyTestViewModel: ObservableObject {
                         }
                     },
                     receiveValue: { words in
-                        let testWords = words.map { word in
-                            TestWord(
-                                word: word.word,
-                                pronunciation: word.phonetic,
-                                definitions: word.definitions.map { $0.meaning },
-                                examples: word.definitions.flatMap { $0.examples },
-                                difficulty: word.difficulty,
-                                frequency: word.frequency
-                            )
-                        }
+                        let testWords = words.map { w in self.toTestWord(w) }
                         continuation.resume(returning: testWords)
                     }
                 )
@@ -746,24 +753,28 @@ class VocabularyTestViewModel: ObservableObject {
     
     /// 生成问题
     private func generateQuestion(for word: TestWord) async throws -> TestQuestion {
-        // 获取所有词典单词用于生成干扰项
         guard let dictionary = configurationManager.selectedDictionary else {
             throw TestError.noDictionarySelected
         }
-        
-        let allWords = try await withCheckedThrowingContinuation { continuation in
-            vocabularyTestService.loadDictionaryWords(from: dictionary)
-                .sink(
-                    receiveCompletion: { completion in
-                        if case .failure(let error) = completion {
-                            continuation.resume(throwing: error)
+        let allWords: [DictionaryWord]
+        if let cached = dictionaryWordsCache[dictionary.fileName] {
+            allWords = cached
+        } else {
+            allWords = try await withCheckedThrowingContinuation { continuation in
+                vocabularyTestService.loadDictionaryWords(from: dictionary)
+                    .sink(
+                        receiveCompletion: { completion in
+                            if case .failure(let error) = completion {
+                                continuation.resume(throwing: error)
+                            }
+                        },
+                        receiveValue: { words in
+                            continuation.resume(returning: words)
                         }
-                    },
-                    receiveValue: { words in
-                        continuation.resume(returning: words)
-                    }
-                )
-                .store(in: &cancellables)
+                    )
+                    .store(in: &cancellables)
+            }
+            dictionaryWordsCache[dictionary.fileName] = allWords
         }
         
         let correctAnswer = getCorrectAnswer(for: word, mode: selectedTestMode)
@@ -827,8 +838,7 @@ class VocabularyTestViewModel: ObservableObject {
         // 记录测试结果
         recordTestResult(option)
         
-        // 延迟移动到下一题
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        DispatchQueue.main.async {
             self.moveToNextQuestion()
         }
     }
@@ -848,9 +858,17 @@ class VocabularyTestViewModel: ObservableObject {
         // 记录到服务层
         recordWordMastery(word: currentWord, isCorrect: selectedOption.isCorrect)
         
-        // 自动保存测试进度
-        Task {
-            await saveTestProgress()
+        progressPendingCount += 1
+        if progressPendingCount >= 3 {
+            progressSaveTimer?.invalidate()
+            progressPendingCount = 0
+            Task { await saveTestProgress() }
+        } else {
+            progressSaveTimer?.invalidate()
+            progressSaveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
+                Task { await self.saveTestProgress() }
+                Task { @MainActor in self.progressPendingCount = 0 }
+            }
         }
     }
     
@@ -861,19 +879,39 @@ class VocabularyTestViewModel: ObservableObject {
         let masteryLevel = calculateNewMastery(currentMastery, correct: isCorrect)
         
         // 获取当前测试ID
-        let testId = testStateManager.currentTest?.id
+        let testId = testStateManager.currentTest?.id ?? testStateManager.currentSessionId
         
         // 统一通过 TestResultManager 处理，确保测试ID正确传递
         resultManager.recordWordMastery(word: word.word, mastery: masteryLevel, responseTime: 0.0, testId: testId)
+        statsCache = nil
+        masteryCache.removeAll()
+        if let ct = testStateManager.currentTest {
+            switch masteryLevel {
+            case .mastered:
+                ct.sessionMasteredCount += 1
+            case .familiar:
+                ct.sessionFamiliarCount += 1
+            case .unfamiliar:
+                ct.sessionUnfamiliarCount += 1
+            }
+        }
         
         print("✅ [VocabularyTestViewModel] 单词掌握度记录: \(word.word) -> \(masteryLevel)")
     }
     
     /// 获取当前单词的掌握度
     private func getCurrentWordMastery(word: String) -> MasteryLevel {
-        // 从结果管理器中查找该单词的历史掌握度
-        // 如果没有记录，默认为unfamiliar
-        return .unfamiliar // 简化实现，实际应该查询历史记录
+        let key = word.lowercased()
+        if let entry = masteryCache[key], Date().timeIntervalSince(entry.1) < masteryCacheValidity {
+            return entry.0
+        }
+        let dictionaryFileName = testStateManager.currentTest?.dictionaryFileName ?? configurationManager.selectedDictionary?.fileName
+        if let fileName = dictionaryFileName, let level = resultManager.getWordMastery(word: word, dictionaryFileName: fileName) {
+            masteryCache[key] = (level, Date())
+            return level
+        }
+        masteryCache[key] = (.unfamiliar, Date())
+        return .unfamiliar
     }
     
     /// 根据答案正确性计算新的掌握度
@@ -981,8 +1019,7 @@ class VocabularyTestViewModel: ObservableObject {
                 // 使用当前有效的测试记录，如果没有则使用传入的测试记录
                 let testToUse = currentTest ?? test
                 
-                // 重新加载测试单词（来自当前测试会话的未测试集合）
-                let testWords: [TestWord] = try await withCheckedThrowingContinuation { continuation in
+                var testWords: [TestWord] = try await withCheckedThrowingContinuation { continuation in
                     vocabularyTestService.getTestWords(testId: testToUse.id)
                         .sink(
                             receiveCompletion: { completion in
@@ -991,20 +1028,31 @@ class VocabularyTestViewModel: ObservableObject {
                                 }
                             },
                             receiveValue: { words in
-                                let mapped = words.map { word in
-                                    TestWord(
-                                        word: word.word,
-                                        pronunciation: word.phonetic,
-                                        definitions: word.definitions.map { $0.meaning },
-                                        examples: word.definitions.flatMap { $0.examples },
-                                        difficulty: word.difficulty,
-                                        frequency: word.frequency
-                                    )
-                                }
+                                let mapped = words.map { w in self.toTestWord(w) }
                                 continuation.resume(returning: mapped)
                             }
                         )
                         .store(in: &cancellables)
+                }
+
+                if testWords.isEmpty, let dictionary = configurationManager.availableDictionaries.first(where: { $0.fileName == testToUse.dictionaryFileName }) {
+                    let untested: [DictionaryWord] = try await withCheckedThrowingContinuation { continuation in
+                        vocabularyTestService.getUntestedWords(from: dictionary)
+                            .sink(
+                                receiveCompletion: { completion in
+                                    if case .failure(let error) = completion {
+                                        continuation.resume(throwing: error)
+                                    }
+                                },
+                                receiveValue: { words in
+                                    continuation.resume(returning: words)
+                                }
+                            )
+                            .store(in: &cancellables)
+                    }
+                    let targetCount = testToUse.totalWords > 0 ? testToUse.totalWords : (testToUse.sampleSize > 0 ? testToUse.sampleSize : configurationManager.testSize.wordCount)
+                    let selected = Array(untested.shuffled().prefix(max(0, targetCount)))
+                    testWords = selected.map { self.toTestWord($0) }
                 }
                 
                 // 重新加载测试状态
@@ -1032,6 +1080,22 @@ class VocabularyTestViewModel: ObservableObject {
             errorMessage = "继续测试失败: \(error.localizedDescription)"
             errorHandler.handle(AppError.unknown(error))
         }
+    }
+
+    private func toTestWord(_ word: DictionaryWord) -> TestWord {
+        let defsCN = word.definitions.map { $0.meaning.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let defsEN = word.definitions.compactMap { $0.englishMeaning?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let defs = defsCN.isEmpty ? defsEN : defsCN
+        let exs = word.definitions.flatMap { $0.examples }.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let finalDefs = defs.isEmpty ? ["暂无释义"] : defs
+        return TestWord(
+            word: word.word,
+            pronunciation: word.phonetic,
+            definitions: finalDefs,
+            examples: exs.isEmpty ? nil : exs,
+            difficulty: word.difficulty,
+            frequency: word.frequency
+        )
     }
     
     /// 根据历史记录更新单词掌握状态
@@ -1346,10 +1410,23 @@ class VocabularyTestViewModel: ObservableObject {
     /// 记录单词掌握程度
     private func recordWordMastery(word: TestWord, masteryLevel: MasteryLevel) {
         // 获取当前测试ID
-        let testId = testStateManager.currentTest?.id
+        let testId = testStateManager.currentTest?.id ?? testStateManager.currentSessionId
         
         // 更新结果管理器，传递测试ID
         resultManager.recordWordMastery(word: word.word, mastery: masteryLevel, responseTime: 0.0, testId: testId)
+        dictionaryService.clearGeneralUserWordsCache()
+        statsCache = nil
+        masteryCache.removeAll()
+        if let ct = testStateManager.currentTest {
+            switch masteryLevel {
+            case .mastered:
+                ct.sessionMasteredCount += 1
+            case .familiar:
+                ct.sessionFamiliarCount += 1
+            case .unfamiliar:
+                ct.sessionUnfamiliarCount += 1
+            }
+        }
         
         // 如果有学习跟踪服务，记录学习数据
         if let trackingService = learningTrackingService {

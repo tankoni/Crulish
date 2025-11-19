@@ -619,6 +619,10 @@ class MockDictionaryService: DictionaryServiceProtocol, @unchecked Sendable {
         }
     }
     
+    func clearGeneralUserWordsCache() {
+        // no-op for mock
+    }
+    
     // MARK: - Private Methods
     private func clearAllData() {
         mockWords.removeAll()

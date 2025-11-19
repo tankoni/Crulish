@@ -1,5 +1,5 @@
 Command line invocation:
-    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme en01 -project en01.xcodeproj -sdk iphonesimulator -configuration Debug -destination "platform=iOS Simulator,name=iPhone 16 Pro" build
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project en01.xcodeproj -scheme en01 -sdk iphonesimulator -destination "platform=iOS Simulator,name=iPhone 16 Pro" -configuration Debug build
 
 Build settings from command line:
     SDKROOT = iphonesimulator18.4
@@ -33,19 +33,30 @@ ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeD
 
 ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
 
-Build description signature: 0a03e22b9c12cdd24e5b91fcafaa40d1
-Build description path: /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/XCBuildData/0a03e22b9c12cdd24e5b91fcafaa40d1.xcbuilddata
+Build description signature: f57d91414ce1f15ad2bc315e9199d320
+Build description path: /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/XCBuildData/f57d91414ce1f15ad2bc315e9199d320.xcbuilddata
 ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01.xcodeproj
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache
 
-WriteAuxiliaryFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftConstValuesFileList (in target 'en01' from project 'en01')
+ProcessProductPackaging /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/en01.entitlements /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    write-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftConstValuesFileList
+    
+    Entitlements:
+    
+    {
+    "application-identifier" = "6HRY9ZWA53.com.crulish.en01";
+}
+    
+    builtin-productPackagingUtility /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/en01.entitlements -entitlements -format xml -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent
 
 WriteAuxiliaryFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     write-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList
+
+WriteAuxiliaryFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftConstValuesFileList (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    write-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftConstValuesFileList
 
 WriteAuxiliaryFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.LinkFileList (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
@@ -61,24 +72,13 @@ ProcessProductPackaging /Users/tankonitk/Library/Mobile\ Documents/com~apple~Clo
     
     builtin-productPackagingUtility /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/en01.entitlements -entitlements -format xml -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent
 
-ProcessProductPackaging /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/en01.entitlements /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent (in target 'en01' from project 'en01')
+ProcessProductPackagingDER /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent.der (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-    Entitlements:
-    
-    {
-    "application-identifier" = "6HRY9ZWA53.com.crulish.en01";
-}
-    
-    builtin-productPackagingUtility /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/en01.entitlements -entitlements -format xml -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent
+    /usr/bin/derq query -f xml -i /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent.der --raw
 
 ProcessProductPackagingDER /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent.der (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     /usr/bin/derq query -f xml -i /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app.xcent.der --raw
-
-ProcessProductPackagingDER /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent.der (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    /usr/bin/derq query -f xml -i /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.app-Simulated.xcent.der --raw
 
 SwiftDriver en01 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
@@ -88,9 +88,9 @@ ProcessInfoPlistFile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-a
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     builtin-infoPlistUtility /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish/en01/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/assetcatalog_generated_info.plist -o /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/Info.plist
 
-SwiftCompile normal arm64 Compiling\ WordMasteryService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/WordMasteryService.swift (in target 'en01' from project 'en01')
+SwiftCompile normal arm64 Compiling\ VocabularyTestViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyTestViewModel.swift (in target 'en01' from project 'en01')
 
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/WordMasteryService.swift (in target 'en01' from project 'en01')
+SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyTestViewModel.swift (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     
 
@@ -99,150 +99,17 @@ EmitSwiftModule normal arm64 (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     
 
-SwiftCompile normal arm64 Compiling\ IntelligentRankingViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/IntelligentRankingViewModel.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/IntelligentRankingViewModel.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ DictionarySpecificImportExportService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DictionarySpecificImportExportService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DictionarySpecificImportExportService.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ IntelligentRankingService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/IntelligentRankingService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/IntelligentRankingService.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling WordMasteryService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 Compiling\ TestSessionService.swift,\ VocabularyViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestSessionService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyViewModel.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/TestSessionService.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyViewModel.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ ServiceManager.swift,\ DataSyncService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/ServiceManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DataSyncService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/ServiceManager.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/DataSyncService.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ StagedRankingView.swift,\ PersonalDictionaryManager.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StagedRankingView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/PersonalDictionaryManager.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/StagedRankingView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/PersonalDictionaryManager.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ PDFReaderView.swift,\ IntelligentRankingView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PDFReaderView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/IntelligentRankingView.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/PDFReaderView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/IntelligentRankingView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ DictionarySpecificExportView.swift,\ AppCoordinator.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionarySpecificExportView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Coordinators/AppCoordinator.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionarySpecificExportView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Coordinators/AppCoordinator.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ VocabularyView.swift,\ RetestModeService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/VocabularyView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/RetestModeService.swift (in target 'en01' from project 'en01')
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/VocabularyView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/RetestModeService.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 Compiling\ DictionarySpecificImportView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionarySpecificImportView.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/DictionarySpecificImportView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling IntelligentRankingService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 Compiling\ VocabularyTestService.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/VocabularyTestService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Services/VocabularyTestService.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling IntelligentRankingViewModel.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 Compiling\ ContentView.swift,\ VocabularyTestViewModel.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ContentView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyTestViewModel.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ContentView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/ViewModels/VocabularyTestViewModel.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling DictionarySpecificImportExportService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 Compiling\ SettingsView.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/SettingsView.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Views/SettingsView.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling VocabularyTestService.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 Compiling\ ServiceContainer.swift /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/DependencyInjection/ServiceContainer.swift (in target 'en01' from project 'en01')
-
-SwiftCompile normal arm64 /Users/tankonitk/Library/Mobile\ Documents/com~apple~CloudDocs/xcode/Crulish/en01/Core/DependencyInjection/ServiceContainer.swift (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling ServiceManager.swift, DataSyncService.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling TestSessionService.swift, VocabularyViewModel.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling ServiceContainer.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling DictionarySpecificImportView.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling StagedRankingView.swift, PersonalDictionaryManager.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling DictionarySpecificExportView.swift, AppCoordinator.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling SettingsView.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling ContentView.swift, VocabularyTestViewModel.swift (in target 'en01' from project 'en01')
-
-SwiftDriverJobDiscovery normal arm64 Compiling PDFReaderView.swift, IntelligentRankingView.swift (in target 'en01' from project 'en01')
+SwiftDriverJobDiscovery normal arm64 Compiling VocabularyTestViewModel.swift (in target 'en01' from project 'en01')
 
 SwiftDriverJobDiscovery normal arm64 Emitting module for en01 (in target 'en01' from project 'en01')
 
 SwiftDriver\ Compilation\ Requirements en01 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name en01 -Onone -enforce-exclusivity\=checked @/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -target arm64-apple-ios17.6-simulator -g -module-cache-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Index.noindex/DataStore -swift-version 5 -I /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -F /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64 -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache -output-file-map /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01_const_extract_protocols.json -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-generated-files.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-own-target-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-all-target-headers.hmap -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-project-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources-normal/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-Swift.h -working-directory /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish -experimental-emit-module-separately -disable-cmo
+
+SwiftDriver\ Compilation en01 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'en01' from project 'en01')
+    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name en01 -Onone -enforce-exclusivity\=checked @/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -target arm64-apple-ios17.6-simulator -g -module-cache-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Index.noindex/DataStore -swift-version 5 -I /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -F /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64 -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache -output-file-map /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01_const_extract_protocols.json -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-generated-files.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-own-target-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-all-target-headers.hmap -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-project-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources-normal/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-Swift.h -working-directory /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish -experimental-emit-module-separately -disable-cmo
 
 Copy /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.swiftmodule (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
@@ -259,12 +126,6 @@ Copy /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufis
 Copy /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.swiftsourceinfo (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.swiftsourceinfo /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
-
-SwiftDriverJobDiscovery normal arm64 Compiling VocabularyView.swift, RetestModeService.swift (in target 'en01' from project 'en01')
-
-SwiftDriver\ Compilation en01 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'en01' from project 'en01')
-    cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
-    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name en01 -Onone -enforce-exclusivity\=checked @/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk -target arm64-apple-ios17.6-simulator -g -module-cache-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Index.noindex/DataStore -swift-version 5 -I /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -F /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64 -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator18.4-22E235-71825a6d136aa4733edcbe86ece5525b.sdkstatcache -output-file-map /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01_const_extract_protocols.json -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-generated-files.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-own-target-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-all-target-headers.hmap -Xcc -iquote -Xcc /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01-project-headers.hmap -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources-normal/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources/arm64 -Xcc -I/Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01-Swift.h -working-directory /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish -experimental-emit-module-separately -disable-cmo
 
 Ld /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/en01.debug.dylib normal (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
@@ -286,8 +147,8 @@ CopySwiftLibs /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkf
 ExtractAppIntentsMetadata (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name en01 --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.4.sdk --xcode-version 16E140 --platform-family iOS --deployment-target 17.6 --bundle-identifier com.crulish.en01 --output /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app --target-triple arm64-apple-ios17.6-simulator --binary-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/en01 --dependency-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01_dependency_info.dat --stringsdata-file /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftFileList --metadata-file-list /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.DependencyMetadataFileList --static-metadata-file-list /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/en01.DependencyStaticMetadataFileList --swift-const-vals-list /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Intermediates.noindex/en01.build/Debug-iphonesimulator/en01.build/Objects-normal/arm64/en01.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
-2025-11-15 21:26:31.085 appintentsmetadataprocessor[17413:220666] Starting appintentsmetadataprocessor export
-2025-11-15 21:26:31.086 appintentsmetadataprocessor[17413:220666] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+2025-11-19 18:40:12.980 appintentsmetadataprocessor[22702:316729] Starting appintentsmetadataprocessor export
+2025-11-19 18:40:12.981 appintentsmetadataprocessor[22702:316729] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
 
 CodeSign /Users/tankonitk/Library/Developer/Xcode/DerivedData/en01-ansyddkftxpufufiswdighzryqrt/Build/Products/Debug-iphonesimulator/en01.app/en01.debug.dylib (in target 'en01' from project 'en01')
     cd /Users/tankonitk/Library/Mobile\ Documents/com\~apple\~CloudDocs/xcode/Crulish

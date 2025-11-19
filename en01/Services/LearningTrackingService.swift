@@ -187,7 +187,6 @@ class LearningTrackingService: BaseService { // 移除冗余的ObservableObject
     ) {
         performSafeOperation("条件更新单词掌握程度") {
             guard let valid = sanitizeWord(word) else { return }
-            let lowercasedWord = word.lowercased()
             let descriptor = FetchDescriptor<UserWord>(
                 predicate: #Predicate { userWord in
                     userWord.word == valid
